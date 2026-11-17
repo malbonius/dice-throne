@@ -1,23 +1,20 @@
-# Dice Throne Playtest 0.13.2
+# Dice Throne Playtest 0.13.4
 
-This release adds Treant to the installable playtest. For an existing installation, replace the files on the same publishing branch, let GitHub Pages finish deploying, then reopen the app online and check that it shows Playtest 0.13.2.
+This is an update for the working 0.13.3 installation. It reorganises the app's JavaScript and keeps the existing hero and card IDs, autosave key and offline setup.
 
-For browser uploads, extract the ZIP and include all nine artwork scripts alongside the updated index and service worker in the same commit.
+- `docs/heroes/` contains one file per Season One ReRolled hero for their board, dice, deck, upgrades, defence and hero-specific effect handlers.
+- `docs/engine.js` handles match flow, card legality, timing and shared rules. `docs/app.js` handles the browser interface and autosave.
+- The hero files and engine use classic scripts so the browser can load them from local files as well as GitHub Pages. Keep the script order in `docs/index.html`.
 
-## Publish on GitHub Pages
+## Update an existing 0.13.3 installation
 
-1. Extract this archive into the root of a dedicated repository so the layout includes `docs/index.html`.
-2. Commit the files and push them to your publishing branch.
-3. In the repository, open **Settings → Pages**. Choose **Deploy from a branch**, select your branch and **/docs**, then save.
-4. Once the deployment completes, open the HTTPS URL shown by GitHub Pages.
+1. Extract this ZIP over your 0.13.3 repository or assembled release. Keep the existing artwork, icons, manifest and install script in `docs/`.
+2. Upload the extracted files to their existing paths on the same GitHub Pages branch in one commit. Keep the same Pages URL and `/docs` publish folder.
+3. Once Pages has deployed, open the app online in the browser profile that holds your save. Check for **Playtest 0.13.4** and **Ready for offline play**.
+4. Close the app, disable networking, then reopen it and advance the saved match.
 
-The site contains the board and card images used by the playtest. Standard GitHub Pages publication makes those assets accessible at the site URL. See [GitHub’s publishing source guide](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site).
+The patch contains the README, HTML, service worker, engine, browser interface and all eight hero scripts. For a fresh deployment, assemble all five 0.13.2 archives first, then overlay this patch.
 
-## Install and verify
+## Verification
 
-1. Open the Pages URL in Chrome on Android or Edge or Chrome on Windows 11.
-2. Wait for **Ready for offline play**. Choose **Install app** if shown or use the browser’s installation menu.
-3. Open the installed app, start a match and make a move. Close the app, disable networking and launch it again from the home screen or Start menu.
-4. Check that the same match and last move are still there.
-
-Earlier downloaded HTML files use separate browser storage. The new HTTPS address starts its own local autosave, and each device saves its own match. Keep the same URL and browser profile for later updates. Reopen while online to fetch a new version.
+The 0.13.4 engine matched 0.13.3 across 320 seeded matches and all 64 ordered pairings. The comparison checked game state, logs, legal actions and card choices. Scripted checks covered Barbarian action cards, both Overpower thresholds, Thick Skin II status prevention, Reckless recoil and Stun. The offline harness verified cache replacement, loaded the updated interface and advanced an in-progress 0.13.3 autosave with its network disabled. This build still needs an on-device check on Android and Windows 11.
