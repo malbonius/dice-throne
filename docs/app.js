@@ -29,6 +29,8 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  bounty: 'When attacked, take 1 additional damage and give the attacker 1 CP. Persistent. Stack limit 1.',
+  reload: 'Spend after activating an attack and roll one die. Add half its value, rounded up, as damage. Stack limit 2.',
   bloodPower: 'Stack limit 5. Once per turn per effect, spend 1 to add 3 attack damage, 2 to remove a status in your Main Phase, 3 to draw 2 cards, or 4 to heal the attack damage you successfully deal.',
   bleed: 'Stack limit 2. In upkeep roll one die per token. A 1–4 deals 1 damage and a 5–6 removes the token.',
   mesmerize: 'Roll one die. On a 5 or 6, force the opponent to reroll one die.',
@@ -72,7 +74,12 @@ const statusNotes = {
 };
 const token = (seat,key,label,suffix=key) => {
   const id = `status-${seat}-${suffix}`;
-  return `<span class="token-help">${button('status',`<span class="token"><img src="${art[heroId(state,seat)===seraph.id&&key==='cleanse'?'seraphCleanse':heroId(state,seat)===seraph.id&&key==='blessing'?'seraphBlessing':key]}" alt="">${label}</span>`,
+  const hero=heroId(state,seat);
+  const tokenArt=hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
+    hero===gunslinger.id&&key==='knockdown'?'gunslingerKnockdown':
+    hero===seraph.id&&key==='cleanse'?'seraphCleanse':
+    hero===seraph.id&&key==='blessing'?'seraphBlessing':key;
+  return `<span class="token-help">${button('status',`<span class="token"><img src="${art[tokenArt]}" alt="">${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
 function hero(seat) {
@@ -85,6 +92,7 @@ function hero(seat) {
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+    p.reload&&token(seat,'reload',`Reload ×${p.reload}`),p.bounty&&token(seat,'bounty','Bounty'),
     p.synth&&token(seat,'synth',`Synth ×${p.synth}`),p.nanite&&token(seat,'nanite',`Nanite ×${p.nanite}`),
     ...Object.entries(p.bots??{}).map(([bot,level])=>`<span class="token"><img src="${art.artificerBots[bot][level-1]}" alt="">${level===2?'Advanced':'Basic'} ${artificer.bots[bot]}</span>`),
     p.barbed&&token(seat,'barbed','Barbed Vine'),p.wellspring&&token(seat,'wellspring','Wellspring'),
@@ -150,6 +158,10 @@ function rerollDice(dice,max,filter=()=>true){
     ${dice.map((v,i)=>`<label><input type="checkbox" name="ability-reroll" value="${i}" ${filter(v)?'':'disabled'}> Die ${i+1} (${v})</label>`).join('')}
     </div>${button('abilityReroll',`Reroll up to ${max}`)}`;
 }
+function rollDisplay(context){
+  if(!context.owners)return tray(context.dice,context.seat,false);
+  return context.dice.map((value,i)=>`<div><strong>${names[dieOwner(context,i)]}</strong>${tray([value],dieOwner(context,i),false)}</div>`).join('');
+}
 function arena() {
   const allowed=legal(state), seat=actor(state), p=state.pending, responding=cardActor(state);
   const activeName=names[state.active], actingName=names[seat];
@@ -166,9 +178,9 @@ function arena() {
     content=growthChoices(state).map(status=>button('growSpirit',status==='seedling'?'Gain Seedling':`Grow ${statusLabel(spiritTypes[spiritTypes.indexOf(status)-1])} into ${statusLabel(status)}`,`data-status="${status}"`)).join('');
     if(allowed.finishGrowth)content+=button('finishGrowth','Finish growing','class="primary"');
   } else if(state.retry) {
-    const {dice,seat:roller}=rollContext(state);
-    phase='Try, Try Again!'; heading=`${names[roller]} can reroll once more`;
-    content=tray(dice,roller,false)+`<div class="controls">${dice.map((value,i)=>button('retryDie',`Reroll die ${i+1} (${value})`,`data-index="${i}"`)).join('')}
+    const context=rollContext(state);
+    phase='Try, Try Again!'; heading=`${actingName} can reroll once more`;
+    content=rollDisplay(context)+`<div class="controls">${diceOwnedBy(context,seat).map((value,i)=>button('retryDie',`Reroll die ${i+1} (${value})`,`data-index="${i}"`)).join('')}
       ${button('finishRetry','Keep this roll','class="primary"')}</div>`;
   } else if(state.mainChoice) {
     const {seat,id}=state.mainChoice;
@@ -179,7 +191,7 @@ function arena() {
     phase='Card response'; heading=`${names[responding]} can respond`;
     const context=rollContext(state);
     detail='Play an eligible card, use an available ability or token, or pass to continue.';
-    content=(context?tray(context.dice,context.seat,false):'')+`<div class="controls">
+    content=(context?rollDisplay(context):'')+`<div class="controls">
       ${allowed.evade?button('evade','Spend Evasive'):''}${allowed.evadeReturn?button('evadeReturn','Spend Evasive'):''}
       ${button('passResponse','Pass','class="primary"')}</div>`;
   } else if(state.mesmerizeRoll){
@@ -187,7 +199,7 @@ function arena() {
     phase='Status effect roll'; heading='Mesmerize';
     if(effect.choosing){
       const context=rollContext({...state,stage:effect.resume,mesmerizeRoll:null});
-      content=tray(context.dice,context.seat,false)+context.dice.map((value,index)=>
+      content=rollDisplay(context)+diceOwnedBy(context,1-effect.seat).map((value,index)=>
         button('rerollMesmerized',`Reroll die ${index+1} (${value})`,`data-index="${index}"`)).join('')+
         button('rerollMesmerized','Keep the current roll','data-index="-1"');
     } else {
@@ -202,6 +214,19 @@ function arena() {
     phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,seat,state.cardRoll.id).name;
     detail=`${names[seat]} can modify the roll before it resolves.`;
     content=tray(state.cardRoll.dice,seat,false)+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
+  } else if(state.stage==='gunContest') {
+    const contest=state.gunContest;
+    phase=contest.kind==='duel'?'Defensive Roll':'Ability roll';
+    heading=contest.kind==='duel'?defenceName(state,contest.seat):p.name;
+    content=rollDisplay(rollContext(state))+
+      (allowed.rerollDuel?button('rerollDuel','Reroll the defence die'):'')+
+      button('resolveGunContest','Resolve roll-off','class="primary"');
+  } else if(state.stage==='gunReload') {
+    phase='Attack Modifier'; heading='Reload';
+    detail='Add half the die value, rounded up.';
+    content=rollDisplay(rollContext(state))+reloadRerolls(state).map(([key,label])=>
+      button('rerollReload',`${label} · reroll`,`data-status="${key}"`)).join('')+
+      button('resolveReload','Apply Reload damage','class="primary"');
   } else if(state.seraphRoll) {
     const {kind,dice,seat:roller}=state.seraphRoll;
     phase='Status effect roll'; heading=kind==='blinding'?'Blinding Light':'Flight';
@@ -235,6 +260,11 @@ function arena() {
       phase='Blind check'; heading=`${actingName} checks Blind`;
       detail='A 1 or 2 cancels the ability.';
       content=tray([state.effectDie],seat,false)+button('resolveBlind','Resolve Blind','class="primary"'); break;
+    case 'gunDuelChoice':
+      phase='Defensive Roll'; heading=defenceName(state,seat);
+      content=button('chooseDuel','Deal 3 damage','data-choice="0"')+
+        button('chooseDuel','Prevent half the incoming damage','data-choice="1"');
+      break;
     case 'vampireSearch': {
       phase='Ability choice'; heading=p.name;
       detail='Choose one card to put into your hand. The rest of the deck will be shuffled.';
@@ -262,7 +292,7 @@ function arena() {
     case 'upkeep': {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
-      detail=[hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
+      detail=[heroId(state,state.active)===gunslinger.id&&hero.reload!==2&&!state.quickDrawChecked?'Quick Draw grants Reload.':'',hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
       content=(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Roll to clear Nanites'):'')+
         (allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):'')+(allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
       break;
@@ -438,6 +468,7 @@ function arena() {
   const tokens=tokenChoices(state,responding);
   const tokenActions=[
     ...artificerActions(state,responding).map(({key,label})=>button('artificerAction',label,`data-status="${key}"`)),
+    ...(canReload(state,responding)?[button('spendReload','Spend Reload')]:[]),
     ...(canMesmerize(state,responding)?[button('mesmerize','Spend Mesmerize')]:[]),
     ...bloodPowerChoices(state,responding).map(({cost,label},index)=>
       button('bloodPower',`${cost} Blood Power · ${label}`,`data-choice="${index}"`)),
