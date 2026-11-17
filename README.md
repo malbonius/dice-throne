@@ -1,17 +1,16 @@
-# Dice Throne Playtest 0.17.0
+# Dice Throne Playtest 0.18.0
 
-Vampire Lord joins **Season Two** in both player selectors. The update includes her board, both sides of the leaflet, dice, status tokens and unique card artwork. Her deck has 33 standard cards and the optional **Blood Tide!** promo.
+Gunslinger joins **Season Two** in both player selectors. The update includes her board, both sides of the leaflet, dice, status tokens and unique card artwork. Her deck has 32 standard cards and the optional **Run and Gun!** promo.
 
-## Update from 0.16.0
+## Update from 0.17.0
 
-1. Extract this ZIP over your working 0.16.0 repository or assembled release.
+1. Extract this ZIP over your working 0.17.0 repository or assembled release.
 2. Upload the extracted files to the existing GitHub Pages branch. Keep the rest of the repository and the existing `/docs` publish folder.
-3. Open the app online and wait for **Playtest 0.17.0** and **Ready for offline play**.
-4. Choose **Season Two → Vampire Lord** from either player selector and start a match.
+3. Open the app online and wait for **Playtest 0.18.0** and **Ready for offline play**.
+4. Choose **Season Two → Gunslinger** and start a match.
 
 ## Rules covered
 
-- Blood Power tracks each of its four spending options separately for the current turn. When a gain would exceed the cap, spend eligible tokens before collecting the new ones.
-- Bleed rolls one die per token during upkeep. Mesmerize lets the holder attempt to reroll an opponent's die.
-- Immortal Flesh steals Health immediately. A lethal steal can end the match before the attack damage resolves.
-- Exsanguinate! lets you choose a card from the remaining deck and then shuffles it.
+- Showdown and Duel show the die each player rolled. Cards and statuses that modify dice follow the normal ownership rules.
+- Quick Draw grants Reload during upkeep. Reload damage is based on the final die result after any rerolls from Quick Draw II, Wild West! or the Ultimate.
+- Bounty awards 1 CP when the attack is resolved up to the start of defence. Removing Bounty before damage resolves cancels its damage bonus. The attacker keeps any CP already gained.
