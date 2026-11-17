@@ -50,7 +50,7 @@ const barbarian = (() => {
         attacker.hand.includes(headBashId);
     },
 
-    applyCard(id, opponent, grantStatus) {
+    applyCardAfterShared({id, opponent, grantStatus}) {
       if (id !== concussId && id !== headBashId) return false;
       grantStatus(opponent, 'concussion');
       return true;
@@ -62,39 +62,38 @@ const barbarian = (() => {
       return 0;
     },
 
-    resolveCardRoll({id, p, opponent, counts, hit, state, bounded, updateDamage, grantAttackStatus}) {
+    resolveCardRoll({id, p, opponent, counts, hit, s, bounded, updateDamage, grantAttackStatus}) {
       if (id === getSomeId) {
         hit.grossDamage += counts.Sword ?? 0;
         updateDamage(hit);
-        grantAttackStatus(state, opponent, 'concussion');
+        grantAttackStatus(s, opponent, 'concussion');
       }
       if (id === feelinGoodId) p.hp = bounded(p.hp + 1 + 2 * (counts.Life ?? 0), 60);
     },
 
-    resolvePromo(player, opponent, {bounded, grantStatus}) {
-      player.hp = bounded(player.hp + 2, 60);
+    resolvePromo({p, opponent, bounded, grantStatus}) {
+      p.hp = bounded(p.hp + 2, 60);
       grantStatus(opponent, 'concussion');
     },
 
-    overpower: {
-      effect: 'overpower',
-      diceCount: 3,
-      resolve(pending) {
+    effects: {
+      overpower(pending) {
         pending.damage = pending.effectDice.reduce((sum, value) => sum + value, 0);
         pending.concussion = pending.damage >= pending.threshold;
       }
     },
+    effectDiceCount: {overpower: 3},
 
     defenceDiceCount(defender) {
       return defender.upgrades?.defence ? 4 : 3;
     },
 
-    resolveDefence(defender, counts, pending, {bounded, add}) {
+    resolveDefence({state, defender, counts, bounded, add}) {
       const old = defender.hp;
       defender.hp = bounded(old + 2 * (counts.Life ?? 0), 60);
       if (defender.hp > old) add(`Thick Skin heals ${defender.hp - old}.`);
-      return defender.upgrades?.defence && (counts.Life ?? 0) >= 2 &&
-        pending.incomingStatus?.length;
+      if (defender.upgrades?.defence && (counts.Life ?? 0) >= 2 &&
+          state.pending.incomingStatus?.length) return 'preventStatus';
     }
   };
 })();
