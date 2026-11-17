@@ -29,6 +29,8 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  tactical: 'Spend for CP, a reroll of one of your dice, a card, Targeted, Protect or a status transfer. Transfers are only available in your Main Phase.',
+  constrict: 'Pay 1 CP for each Roll Attempt after your first. Remove Constrict at the end of that Roll Phase.',
   honor: 'Spend 1 Honor for +1 attack damage or 2 Honor together for +3. Stack limit 2.',
   shame: 'Each Shame reduces your next normal or undefendable attack by 1. A damaging offensive ability consumes Shame even if its damage type is unaffected. Stack limit 2.',
   backStrike: 'When damage is incoming from an opposing offensive ability, spend to roll a die and deal half its value back, rounded up. Ultimates prevent responding with Back Strike.',
@@ -80,6 +82,8 @@ const token = (seat,key,label,suffix=key) => {
   const hero=heroId(state,seat);
   const tokenArt=hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
     hero===gunslinger.id&&key==='knockdown'?'gunslingerKnockdown':
+    hero===tactician.id&&key==='targeted'?'tacticianTargeted':
+    hero===tactician.id&&key==='protect'?'tacticianProtect':
     hero===seraph.id&&key==='cleanse'?'seraphCleanse':
     hero===seraph.id&&key==='blessing'?'seraphBlessing':key;
   return `<span class="token-help">${button('status',`<span class="token"><img src="${art[tokenArt]}" alt="">${label}</span>`,
@@ -95,6 +99,8 @@ function hero(seat) {
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+    p.tactical&&token(seat,'tactical',`Tactical Advantage ${p.tactical}/${statusCap(p,'tactical')}`),
+    p.constrict&&token(seat,'constrict','Constrict'),
     p.honor&&token(seat,'honor',`Honor ×${p.honor}`),p.shame&&token(seat,'shame',`Shame ×${p.shame}`),
     p.backStrike&&token(seat,'backStrike','Back Strike'),
     p.reload&&token(seat,'reload',`Reload ×${p.reload}`),p.bounty&&token(seat,'bounty','Bounty'),
@@ -172,7 +178,15 @@ function arena() {
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
-  if(state.honorOverflow){
+  if(state.tacticalOverflow){
+    phase='Tactical Advantage'; heading=`${actingName} is about to gain Tactical Advantage`;
+    detail=`Gain ${state.tacticalOverflow.amount} together. Spend your current tokens first if you want to make room.`;
+    content=button('collectTactical','Collect Tactical Advantage','class="primary"');
+  } else if(state.tacticalRemoval){
+    phase='Status effect response'; heading=`${actingName} may spend Tactical Advantage`;
+    detail='Buh, Bye! removes one token if you have any left.';
+    content=button('resolveTacticalRemoval','Resolve Buh, Bye!','class="primary"');
+  } else if(state.honorOverflow){
     phase='Honor'; heading=`${actingName} is about to gain Honor`;
     detail='Spend Honor on this attack before collecting the new token.';
     content=button('collectHonor','Collect Honor','class="primary"');
@@ -255,12 +269,16 @@ function arena() {
     detail=`${seatCard(state,state.mainAction.seat,state.mainAction.id).name} is pending.`;
     content=button('finishMainCard','Pass and resolve','class="primary"');
   } else switch (state.stage) {
+    case 'tacticalRestart':
+      phase='Offensive Roll'; heading='Profiteer';
+      content=button('restartTacticalOffence','Begin additional Offensive Roll Phase','class="primary"');
+      break;
     case 'offence':
       phase='Offensive Roll';
       heading=`${actingName} rolls`;
       detail=state.attempts ? 'Tap dice to keep them, reroll the rest, or announce an available ability.' : 'Roll all five dice to begin.';
       content=tray(state.dice.length ? state.dice : Array(5).fill(null),seat,!!allowed.hold,state.held)
-        + `<div class="controls">${button('roll',state.attempts?'Reroll':'Roll dice',`class="primary" ${allowed.roll?'':'disabled'}`)}
+        + `<div class="controls">${button('roll',state.attempts?(constrictCost(state)?'Reroll · 1 CP':'Reroll'):'Roll dice',`class="primary" ${allowed.roll?'':'disabled'}`)}
         ${button('end','End without an ability',allowed.end?'':'disabled')}</div>`
         + `<div class="abilities">${abilitiesFor(state,seat).map((a,i)=>button('declare',`<strong>${a.label??a.name}</strong><small>${a.text}</small>`,
           `class="ability" data-ability="${i}" ${allowed.declare.includes(a.name)?'':'disabled'}`)).join('')}</div>`;
@@ -479,7 +497,10 @@ function arena() {
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
   const tokens=tokenChoices(state,responding);
-  const tokenActions=[
+  const tacticalActions=tacticalChoices(state,responding).map(({cost,label},index)=>
+    button('spendTactical',`${cost} Tactical Advantage · ${label}`,`data-choice="${index}"`));
+  const tokenActions=state.tacticalOverflow||state.tacticalRemoval?tacticalActions:[
+    ...tacticalActions,
     ...artificerActions(state,responding).map(({key,label})=>button('artificerAction',label,`data-status="${key}"`)),
     ...(canBackStrike(state,responding)?[button('backStrike','Spend Back Strike')]:[]),
     ...Array.from({length:honorChoices(state,responding)},(_,i)=>button('spendHonor',
