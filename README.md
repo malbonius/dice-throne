@@ -1,20 +1,16 @@
-# Dice Throne Playtest 0.13.4
+# Dice Throne Playtest 0.14.0
 
-This is an update for the working 0.13.3 installation. It reorganises the app's JavaScript and keeps the existing hero and card IDs, autosave key and offline setup.
+Cursed Pirate joins **Season Two** in both player selectors. The update includes both sides of her board, the human-to-cursed flip, the 33-card standard deck and optional Heave-Ho!, dice, leaflet and four status tokens. All her scans are cached for offline use.
 
-- `docs/heroes/` contains one file per Season One ReRolled hero for their board, dice, deck, upgrades, defence and hero-specific effect handlers.
-- `docs/engine.js` handles match flow, card legality, timing and shared rules. `docs/app.js` handles the browser interface and autosave.
-- The hero files and engine use classic scripts so the browser can load them from local files as well as GitHub Pages. Keep the script order in `docs/index.html`.
+## Update from 0.13.4
 
-## Update an existing 0.13.3 installation
+1. Extract this ZIP over the working 0.13.4 repository or assembled release.
+2. Upload the extracted files together to the same GitHub Pages branch. Keep the existing files, `/docs` publish folder and Pages URL.
+3. Open the deployed app online and wait for **Playtest 0.14.0** and **Ready for offline play**.
+4. Start a new match with **Season Two → Cursed Pirate**. Save progress, then reopen offline and resume.
 
-1. Extract this ZIP over your 0.13.3 repository or assembled release. Keep the existing artwork, icons, manifest and install script in `docs/`.
-2. Upload the extracted files to their existing paths on the same GitHub Pages branch in one commit. Keep the same Pages URL and `/docs` publish folder.
-3. Once Pages has deployed, open the app online in the browser profile that holds your save. Check for **Playtest 0.13.4** and **Ready for offline play**.
-4. Close the app, disable networking, then reopen it and advance the saved match.
-
-The patch contains the README, HTML, service worker, engine, browser interface and all eight hero scripts. For a fresh deployment, assemble all five 0.13.2 archives first, then overlay this patch.
+The largest file in the update is `docs/art-hero-9.js` at about 7 MiB.
 
 ## Verification
 
-The 0.13.4 engine matched 0.13.3 across 320 seeded matches and all 64 ordered pairings. The comparison checked game state, logs, legal actions and card choices. Scripted checks covered Barbarian action cards, both Overpower thresholds, Thick Skin II status prevention, Reckless recoil and Stun. The offline harness verified cache replacement, loaded the updated interface and advanced an in-progress 0.13.3 autosave with its network disabled. This build still needs an on-device check on Android and Windows 11.
+Engine checks covered all 16 Pirate-specific cards including the promo, both defences, the flip, the four status effects and ownership of Doubloons in a mirror match. Cursed Pirate completed 85 seeded matches across all 17 ordered pairings involving her. The 320 Season One seeded matches matched 0.13.4 for state, logs, legal actions and card choices. The offline harness tested cache replacement, Pirate artwork and save restoration. Android and Windows installed-app testing is pending.
