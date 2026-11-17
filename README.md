@@ -1,6 +1,6 @@
-# Dice Throne Playtest 0.8.1
+# Dice Throne Playtest 0.9
 
-This release adds an installable web app and offline caching to the Barbarian, Moon Elf and Pyromancer playtest.
+This release adds Shadow Thief to the installable playtest.
 
 ## Publish on GitHub Pages
 
