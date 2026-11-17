@@ -29,6 +29,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  synth: 'Stack limit 7. Build a Basic Bot for 2 Synth, upgrade one for 3, or spend 4 to inflict a Nanite.',
+  nanite: 'Roll one die per Nanite during upkeep and remove one for each 6. A detonation deals 1, 3 or 5 damage for 1, 2 or 3 Nanites.',
+
   doubloon: 'Your own Doubloons delay the board flip. Each Doubloon inflicted by an opponent deals 1 upkeep damage. Unique.',
   powderKeg: 'Roll during upkeep. A 1–2 explodes for 3 undefendable damage. On a 6 you may pass the token. A second Keg detonates the first.',
   wither: 'Each token reduces normal or undefendable attack damage by 1. Persistent. Stack limit 2.',
@@ -74,6 +77,8 @@ function hero(seat) {
     p.pirateCoins?.[seat]&&token(seat,'doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`),
     p.pirateCoins?.[1-seat]&&token(seat,'doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent'),
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
+    p.synth&&token(seat,'synth',`Synth ×${p.synth}`),p.nanite&&token(seat,'nanite',`Nanite ×${p.nanite}`),
+    ...Object.entries(p.bots??{}).map(([bot,level])=>`<span class="token"><img src="${art.artificerBots[bot][level-1]}" alt="">${level===2?'Advanced':'Basic'} ${artificer.bots[bot]}</span>`),
     p.barbed&&token(seat,'barbed','Barbed Vine'),p.wellspring&&token(seat,'wellspring','Wellspring'),
     ...spiritTypes.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ×${p[key]}`)),
     p.delayedPoison&&token(seat,'delayedPoison',`Delayed Poison ×${p.delayedPoison}`),
@@ -169,6 +174,11 @@ function arena() {
     phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,seat,state.cardRoll.id).name;
     detail=`${names[seat]} can modify the roll before it resolves.`;
     content=tray(state.cardRoll.dice,seat,false)+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
+  } else if(state.artRoll) {
+    const {kind,dice,seat:roller}=state.artRoll;
+    phase=state.artRoll.resume==='upkeep'?'Upkeep':'Bot activation';
+    heading={scrap:'Scrap Collector II',nanites:'Clear Nanites',heal:'Heal Bot',freeHeal:'Heal Bot'}[kind];
+    content=tray(dice,roller,false)+button('resolveArtRoll','Resolve roll','class="primary"');
   } else if(state.mainAction) {
     phase='Main Phase response'; heading=`${actingName} can respond`;
     detail=`${seatCard(state,state.mainAction.seat,state.mainAction.id).name} is pending.`;
@@ -196,9 +206,23 @@ function arena() {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
       detail=[heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
-      content=`${allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):''}${button('resolveUpkeep','Resolve upkeep','class="primary"')}`;
+      content=(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Roll to clear Nanites'):'')+
+        (allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):'')+(allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
       break;
     }
+    case 'artSpanner':
+      phase='Ability roll'; heading=p.name;
+      content=button('chooseSpanner','Roll one die','data-choice="0"')+button('chooseSpanner','Spend 1 Synth to roll three dice','data-choice="1"');
+      break;
+    case 'artBuild':
+      phase='Ability choice'; heading=p.name;
+      content=artificer.buildChoices(state.players[state.active]).map(bot=>button('scratchBuild',`Make Advanced ${artificer.bots[bot]}`,`data-status="${bot}"`)).join('');
+      break;
+    case 'artFreeBots':
+      phase='Ability choice'; heading=p.name;
+      content=artificer.freeChoices(state).map(bot=>button('chooseFreeBot',`Activate ${artificer.bots[bot]}`,`data-status="${bot}"`)).join('')+
+        (p.freeRequired?'':button('chooseFreeBot','Finish bot activation','data-status="done"'));
+      break;
     case 'pirateKegRoll':
       phase='Upkeep'; heading='Powder Keg';
       detail='A 1–2 detonates the keg. A 6 lets you pass it.';
@@ -356,6 +380,7 @@ function arena() {
   }
   const tokens=tokenChoices(state,responding);
   const tokenActions=[
+    ...artificerActions(state,responding).map(({key,label})=>button('artificerAction',label,`data-status="${key}"`)),
     ...tokens.seedling.map((v,i)=>button('seedling',`Seedling · reroll die ${i+1} (${v})`,`data-index="${i}"`)),
     ...(tokens.sapling?[button('sapling','Sapling · heal 1 and gain 1 CP')]:[]),
     ...(tokens.saplingDraw?[button('saplingDraw','Sapling · draw for 1 CP')]:[]),
