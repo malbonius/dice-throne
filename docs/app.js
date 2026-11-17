@@ -29,6 +29,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  flight: 'Spend during a Roll Phase and roll two dice. On any 6, make your attack undefendable or avoid the incoming damage as defender. Stack limit 3.',
+  blindingLight: 'After locking in an offensive ability, roll one die. A 1 cancels all effects. A 2 or 3 reduces your final damage by half, rounding the reduction up. An Ultimate uses up the token and resolves normally.',
+  holyPresence: 'Deal 1 undefendable damage to the opponent per token during your upkeep. Can be removed. Stack limit 2.',
   synth: 'Stack limit 7. Build a Basic Bot for 2 Synth, upgrade one for 3, or spend 4 to inflict a Nanite.',
   nanite: 'Roll one die per Nanite during upkeep and remove one for each 6. A detonation deals 1, 3 or 5 damage for 1, 2 or 3 Nanites.',
 
@@ -66,7 +69,7 @@ const statusNotes = {
 };
 const token = (seat,key,label,suffix=key) => {
   const id = `status-${seat}-${suffix}`;
-  return `<span class="token-help">${button('status',`<span class="token"><img src="${art[key]}" alt="">${label}</span>`,
+  return `<span class="token-help">${button('status',`<span class="token"><img src="${art[heroId(state,seat)===seraph.id&&key==='cleanse'?'seraphCleanse':heroId(state,seat)===seraph.id&&key==='blessing'?'seraphBlessing':key]}" alt="">${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
 function hero(seat) {
@@ -77,6 +80,7 @@ function hero(seat) {
     p.pirateCoins?.[seat]&&token(seat,'doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`),
     p.pirateCoins?.[1-seat]&&token(seat,'doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent'),
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
+    ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     p.synth&&token(seat,'synth',`Synth ×${p.synth}`),p.nanite&&token(seat,'nanite',`Nanite ×${p.nanite}`),
     ...Object.entries(p.bots??{}).map(([bot,level])=>`<span class="token"><img src="${art.artificerBots[bot][level-1]}" alt="">${level===2?'Advanced':'Basic'} ${artificer.bots[bot]}</span>`),
     p.barbed&&token(seat,'barbed','Barbed Vine'),p.wellspring&&token(seat,'wellspring','Wellspring'),
@@ -174,6 +178,11 @@ function arena() {
     phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,seat,state.cardRoll.id).name;
     detail=`${names[seat]} can modify the roll before it resolves.`;
     content=tray(state.cardRoll.dice,seat,false)+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
+  } else if(state.seraphRoll) {
+    const {kind,dice,seat:roller}=state.seraphRoll;
+    phase='Status effect roll'; heading=kind==='blinding'?'Blinding Light':'Flight';
+    detail=kind==='blinding'?'A 1 cancels the ability. On 2 or 3, halve final damage.':'Roll at least one 6.';
+    content=tray(dice,roller,false)+button('resolveSeraphRoll','Resolve roll','class="primary"');
   } else if(state.artRoll) {
     const {kind,dice,seat:roller}=state.artRoll;
     phase=state.artRoll.resume==='upkeep'?'Upkeep':'Bot activation';
@@ -202,10 +211,20 @@ function arena() {
       phase='Blind check'; heading=`${actingName} checks Blind`;
       detail='A 1 or 2 cancels the ability.';
       content=tray([state.effectDie],seat,false)+button('resolveBlind','Resolve Blind','class="primary"'); break;
+    case 'seraphTarget':
+      phase='Ability choice'; heading=p.name;
+      content=names.map((name,target)=>button('chooseSeraphTarget',name,`data-target="${target}"`)).join('');
+      break;
+    case 'purify':
+      phase='Ability choice'; heading=p.name;
+      detail=`Choose a status to remove from ${names[p.seraphTarget]}.`;
+      content=statusKeys.filter(key=>state.players[p.seraphTarget][key]).map(status=>button('resolvePurify',`Remove ${statusLabel(status)}`,`data-status="${status}"`)).join('')+
+        button('resolvePurify','Continue without removing a status','class="primary"');
+      break;
     case 'upkeep': {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
-      detail=[heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
+      detail=[hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
       content=(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Roll to clear Nanites'):'')+
         (allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):'')+(allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
       break;
@@ -331,7 +350,7 @@ function arena() {
     case 'defenceResponse':
       phase='Defensive Roll'; heading=`${actingName} reviews the defence roll`;
       content=tray(state.defenceDice,seat,false);
-      if(allowed.abilityReroll)content+=rerollDice(state.defenceDice,p.ninjaDefenceRerolls);
+      if(allowed.abilityReroll)content+=rerollDice(state.defenceDice,p.seraphDefenceReroll??p.ninjaDefenceRerolls);
       if(allowed.extraDefence)content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="defence-reroll" value="${i}"> Die ${i+1}</label>`).join('')}</div>`+button('extraDefence','Reroll selected dice');
       if(allowed.evade)content+=button('evade','Spend Evasive before resolving defence');
       content+=button('resolveDefence','Resolve defence','class="primary"');break;
@@ -381,6 +400,7 @@ function arena() {
   const tokens=tokenChoices(state,responding);
   const tokenActions=[
     ...artificerActions(state,responding).map(({key,label})=>button('artificerAction',label,`data-status="${key}"`)),
+    ...(tokens.flight?[button('flight',tokens.flight==='attack'?'Flight · make the attack undefendable':'Flight · avoid incoming damage')]:[]),
     ...tokens.seedling.map((v,i)=>button('seedling',`Seedling · reroll die ${i+1} (${v})`,`data-index="${i}"`)),
     ...(tokens.sapling?[button('sapling','Sapling · heal 1 and gain 1 CP')]:[]),
     ...(tokens.saplingDraw?[button('saplingDraw','Sapling · draw for 1 CP')]:[]),
