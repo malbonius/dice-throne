@@ -1,6 +1,6 @@
 const scope = self.registration.scope;
 const cachePrefix = 'dice-throne:' + scope + ':';
-const cacheName = cachePrefix + '0.10.0';
+const cacheName = cachePrefix + '0.11.0';
 const shell = new URL('index.html', scope).href;
 const assets = ['index.html', 'manifest.webmanifest', 'install.js', 'icons/die-192.png', 'icons/die-512.png'].map(path => new URL(path, scope).href);
 
