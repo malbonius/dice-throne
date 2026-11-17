@@ -15,14 +15,24 @@ const handDialog=document.getElementById('hand-dialog');
 const handTitle=document.getElementById('hand-title');
 const handContent=document.getElementById('hand-content');
 const button = (action,label,attrs='') => `<button type="button" data-action="${action}" ${attrs}>${label}</button>`;
+function boardImage(state,seat,full=false) {
+  const id=heroId(state,seat);
+  if(id===cursedPirate.id && state.players[seat].cursed)
+    return full?art.cursedPirateFullBoard:art.cursedPirateBoard;
+  return (full?art.fullBoards:art.boards)[id];
+}
 function board(seat) {
   const upgrades=Object.values(state.players[seat].upgrades??{});
   return `<figure class="board-panel">${button('inspect-board',
-    `<img src="${art.boards[heroId(state,seat)]}" alt="">`,`class="board-open" data-index="${seat}" aria-label="Zoom ${names[seat]} board"`)}
+    `<img src="${boardImage(state,seat)}" alt="">`,`class="board-open" data-index="${seat}" aria-label="Zoom ${names[seat]} board"`)}
     ${upgrades.length?`<details class="board-upgrades" data-seat="${seat}"><summary>Equipped upgrades (${upgrades.length})</summary>
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  doubloon: 'Your own Doubloons delay the board flip. Each Doubloon inflicted by an opponent deals 1 upkeep damage. Unique.',
+  powderKeg: 'Roll during upkeep. A 1–2 explodes for 3 undefendable damage. On a 6 you may pass the token. A second Keg detonates the first.',
+  wither: 'Each token reduces normal or undefendable attack damage by 1. Persistent. Stack limit 2.',
+  parlay: 'Your Offensive Roll Phase deals no damage. Other ability effects still resolve. Remove Parlay when the phase ends.',
   delayedPoison: 'At the end of your turn, remove all Delayed Poison and take 3 damage per token. Stack limit 2.',
   smoke: 'Spend while avoidable damage is pending. Roll a die. A 1–3 avoids the damage.',
   ninjutsu: 'Spend to modify your attack. Roll 1–3 for +1 damage, 4–5 for +2, or 6 for a choice. Stack limit 3.',
@@ -51,8 +61,8 @@ const statusNotes = {
   entangle: 'One fewer attempt in your next Offensive Roll Phase. Remove at the end of that Roll Phase. Stack limit 1.',
   blind: 'Check before resolving your next offensive ability. A 1 or 2 cancels it. Remove Blind if you end the phase without an ability. Stack limit 1.'
 };
-const token = (seat,key,label) => {
-  const id = `status-${seat}-${key}`;
+const token = (seat,key,label,suffix=key) => {
+  const id = `status-${seat}-${suffix}`;
   return `<span class="token-help">${button('status',`<span class="token"><img src="${art[key]}" alt="">${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
@@ -61,6 +71,9 @@ function hero(seat) {
   return `<section class="hero" aria-label="${names[seat]}" style="--hero:${seat ? '#91ddff' : '#ffad86'}">
     <div class="hero-head"><h2>${names[seat]}</h2><span class="vitals"><strong>${p.hp} health</strong><strong>${p.cp} CP</strong></span>
     <div class="tokens">${[p.evasive && token(seat,'evasive',`Evasive ×${p.evasive}`),p.entangle && token(seat,'entangle','Entangle'),p.blind && token(seat,'blind','Blind'),p.targeted && token(seat,'targeted','Targeted'),
+    p.pirateCoins?.[seat]&&token(seat,'doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`),
+    p.pirateCoins?.[1-seat]&&token(seat,'doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent'),
+    ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     p.barbed&&token(seat,'barbed','Barbed Vine'),p.wellspring&&token(seat,'wellspring','Wellspring'),
     ...spiritTypes.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ×${p[key]}`)),
     p.delayedPoison&&token(seat,'delayedPoison',`Delayed Poison ×${p.delayedPoison}`),
@@ -182,8 +195,20 @@ function arena() {
     case 'upkeep': {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
-      detail=[heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
+      detail=[heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
       content=`${allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):''}${button('resolveUpkeep','Resolve upkeep','class="primary"')}`;
+      break;
+    }
+    case 'pirateKegRoll':
+      phase='Upkeep'; heading='Powder Keg';
+      detail='A 1–2 detonates the keg. A 6 lets you pass it.';
+      content=tray([state.effectDie],seat,false)+button('resolvePirateKeg','Resolve Powder Keg','class="primary"'); break;
+    case 'pirateChoice': {
+      const {kind,seat: chooser}=state.pirateChoice;
+      const titles={coins:'Gain Cursed Doubloons',remove:'Shiver Me Timbers',plank:'Walk the Plank',discard:'Choose a card to discard',inspect:'Crow’s Nest!',yoHo:'Yo Ho!',ransom:'Ransom!',passKeg:'Powder Keg'};
+      phase='Choice'; heading=titles[kind]; detail=`${actingName} chooses.`;
+      if(kind==='inspect')detail=state.players[1-chooser].hand.map(id=>seatCard(state,1-chooser,id).name).join(' · ')||'Opponent’s hand is empty.';
+      content=cursedPirate.choices(state).map((label,i)=>button('resolvePirateChoice',label,`data-choice="${i}"`)).join('');
       break;
     }
     case 'knockdown':
@@ -243,7 +268,7 @@ function arena() {
       phase='Attack modifier'; heading='Choose a Ninjutsu effect';
       content=tray([state.effectDie],seat,false)+ninjutsuOutcomes(state).map(status=>button('chooseNinjutsu',ninjutsuLabel(status),`data-status="${status}"`)).join(''); break;
     case 'sideDamage':
-      phase=state.sideDamage.endTurn?'End of turn':state.sideDamage.source==='Barbed Vine'?'End of Roll Phase':'Main Phase damage';
+      phase=state.sideDamage.endTurn?'End of turn':state.sideDamage.source==='Barbed Vine'?'End of Roll Phase':state.sideDamage.source==='Powder Keg'?'Powder Keg damage':'Main Phase damage';
       heading=state.sideDamage.source;
       detail=`${actingName} has ${sideIncoming(state.sideDamage)} incoming damage.`;
       content=button('resolveSideDamage','Resolve damage','class="primary"'); break;
@@ -444,7 +469,7 @@ function setZoom(value) {
 function showScan(side) {
   const reference = viewerLeaflet ? `leaflet, ${side ? 'back' : 'front'}` : 'board';
   viewerImage.alt=`${names[viewerSeat]} ${reference}`;
-  viewerImage.src=viewerLeaflet ? art.leaflets[heroId(state,viewerSeat)][side] : art.fullBoards[heroId(state,viewerSeat)];
+  viewerImage.src=viewerLeaflet ? art.leaflets[heroId(state,viewerSeat)][side] : boardImage(state,viewerSeat,true);
   if(viewerCard){
     viewerImage.alt=seatCard(state,viewerSeat,viewerCard).name;
     viewerImage.src=viewerCard<=18?art.sharedCards[viewerCard-1]:art.uniqueCards[heroId(state,viewerSeat)][viewerCard-19];
