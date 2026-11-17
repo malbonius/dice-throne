@@ -29,6 +29,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  bloodPower: 'Stack limit 5. Once per turn per effect, spend 1 to add 3 attack damage, 2 to remove a status in your Main Phase, 3 to draw 2 cards, or 4 to heal the attack damage you successfully deal.',
+  bleed: 'Stack limit 2. In upkeep roll one die per token. A 1–4 deals 1 damage and a 5–6 removes the token.',
+  mesmerize: 'Roll one die. On a 5 or 6, force the opponent to reroll one die.',
   flight: 'Spend during a Roll Phase and roll two dice. On any 6, make your attack undefendable or avoid the incoming damage as defender. Stack limit 3.',
   blindingLight: 'After locking in an offensive ability, roll one die. A 1 cancels all effects. A 2 or 3 reduces your final damage by half, rounding the reduction up. An Ultimate uses up the token and resolves normally.',
   holyPresence: 'Deal 1 undefendable damage to the opponent per token during your upkeep. Can be removed. Stack limit 2.',
@@ -81,6 +84,7 @@ function hero(seat) {
     p.pirateCoins?.[1-seat]&&token(seat,'doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent'),
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
+    ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
     p.synth&&token(seat,'synth',`Synth ×${p.synth}`),p.nanite&&token(seat,'nanite',`Nanite ×${p.nanite}`),
     ...Object.entries(p.bots??{}).map(([bot,level])=>`<span class="token"><img src="${art.artificerBots[bot][level-1]}" alt="">${level===2?'Advanced':'Basic'} ${artificer.bots[bot]}</span>`),
     p.barbed&&token(seat,'barbed','Barbed Vine'),p.wellspring&&token(seat,'wellspring','Wellspring'),
@@ -151,7 +155,11 @@ function arena() {
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
-  if(state.growth) {
+  if(state.bloodOverflow){
+    phase='Blood Power'; heading=`${actingName} is about to gain Blood Power`;
+    detail=`Gain ${state.bloodOverflow.amount}. You can spend Blood Power before collecting it.`;
+    content=button('collectBloodPower','Collect Blood Power','class="primary"');
+  } else if(state.growth) {
     const g=state.growth;
     phase='Grow Spirits'; heading=g.source;
     detail=g.original?'Grow each original Spirit at most once.':`${g.left} growth ${g.left===1?'step':'steps'} left.`;
@@ -174,6 +182,22 @@ function arena() {
     content=(context?tray(context.dice,context.seat,false):'')+`<div class="controls">
       ${allowed.evade?button('evade','Spend Evasive'):''}${allowed.evadeReturn?button('evadeReturn','Spend Evasive'):''}
       ${button('passResponse','Pass','class="primary"')}</div>`;
+  } else if(state.mesmerizeRoll){
+    const effect=state.mesmerizeRoll;
+    phase='Status effect roll'; heading='Mesmerize';
+    if(effect.choosing){
+      const context=rollContext({...state,stage:effect.resume,mesmerizeRoll:null});
+      content=tray(context.dice,context.seat,false)+context.dice.map((value,index)=>
+        button('rerollMesmerized',`Reroll die ${index+1} (${value})`,`data-index="${index}"`)).join('')+
+        button('rerollMesmerized','Keep the current roll','data-index="-1"');
+    } else {
+      detail='A 5 or 6 lets you reroll one of the opponent’s dice.';
+      content=tray(effect.dice,effect.seat,false)+button('resolveMesmerize','Resolve Mesmerize','class="primary"');
+    }
+  } else if(state.bleedRoll&&!state.cardRoll){
+    phase='Upkeep'; heading='Bleed';
+    detail='On 1–4, take 1 damage. On 5–6, remove one Bleed.';
+    content=tray(state.bleedRoll,state.active,false)+button('resolveBleed','Resolve Bleed','class="primary"');
   } else if(state.cardRoll) {
     phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,seat,state.cardRoll.id).name;
     detail=`${names[seat]} can modify the roll before it resolves.`;
@@ -211,6 +235,20 @@ function arena() {
       phase='Blind check'; heading=`${actingName} checks Blind`;
       detail='A 1 or 2 cancels the ability.';
       content=tray([state.effectDie],seat,false)+button('resolveBlind','Resolve Blind','class="primary"'); break;
+    case 'vampireSearch': {
+      phase='Ability choice'; heading=p.name;
+      detail='Choose one card to put into your hand. The rest of the deck will be shuffled.';
+      const deck=state.players[state.active].deck.slice().sort((a,b)=>seatCard(state,seat,a).name.localeCompare(seatCard(state,seat,b).name));
+      content=deck.map(id=>button('searchVampireDeck',seatCard(state,seat,id).name,`data-index="${id}"`)).join('');
+      break;
+    }
+    case 'vampireChoice':
+      phase='Ability choice'; heading=p.name;
+      content=p.possessChoice?button('chooseVampireBenefit','Inflict Bleed','data-choice="0"')+
+        button('chooseVampireBenefit','Gain Mesmerize','data-choice="1"'):
+        button('chooseVampireBenefit','Keep Mesmerize','data-choice="0"')+
+        button('chooseVampireBenefit','Spend Mesmerize · make undefendable','data-choice="1"');
+      break;
     case 'seraphTarget':
       phase='Ability choice'; heading=p.name;
       content=names.map((name,target)=>button('chooseSeraphTarget',name,`data-target="${target}"`)).join('');
@@ -224,7 +262,7 @@ function arena() {
     case 'upkeep': {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
-      detail=[hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
+      detail=[hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
       content=(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Roll to clear Nanites'):'')+
         (allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):'')+(allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
       break;
@@ -400,6 +438,9 @@ function arena() {
   const tokens=tokenChoices(state,responding);
   const tokenActions=[
     ...artificerActions(state,responding).map(({key,label})=>button('artificerAction',label,`data-status="${key}"`)),
+    ...(canMesmerize(state,responding)?[button('mesmerize','Spend Mesmerize')]:[]),
+    ...bloodPowerChoices(state,responding).map(({cost,label},index)=>
+      button('bloodPower',`${cost} Blood Power · ${label}`,`data-choice="${index}"`)),
     ...(tokens.flight?[button('flight',tokens.flight==='attack'?'Flight · make the attack undefendable':'Flight · avoid incoming damage')]:[]),
     ...tokens.seedling.map((v,i)=>button('seedling',`Seedling · reroll die ${i+1} (${v})`,`data-index="${i}"`)),
     ...(tokens.sapling?[button('sapling','Sapling · heal 1 and gain 1 CP')]:[]),

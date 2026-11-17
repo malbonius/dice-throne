@@ -1,8 +1,8 @@
 const scope = self.registration.scope;
 const cachePrefix = 'dice-throne:' + scope + ':';
-const cacheName = cachePrefix + '0.16.0';
+const cacheName = cachePrefix + '0.17.0';
 const shell = new URL('index.html', scope).href;
-const assets = ['index.html', 'manifest.webmanifest', 'install.js', 'heroes/barbarian.js', 'heroes/moon-elf.js', 'heroes/pyromancer.js', 'heroes/shadow-thief.js', 'heroes/monk.js', 'heroes/paladin.js', 'heroes/ninja.js', 'heroes/treant.js', 'heroes/cursed-pirate.js', 'heroes/artificer.js', 'heroes/seraph.js', 'engine.js', 'app.js', 'art-shared.js', 'art-hero-1.js', 'art-hero-2.js', 'art-hero-3.js', 'art-hero-4.js', 'art-hero-5.js', 'art-hero-6.js', 'art-hero-7.js', 'art-hero-8.js', 'art-hero-9.js', 'art-hero-10.js', 'art-hero-11.js', 'icons/die-192.png', 'icons/die-512.png'].map(path => new URL(path, scope).href);
+const assets = ['index.html', 'manifest.webmanifest', 'install.js', 'heroes/barbarian.js', 'heroes/moon-elf.js', 'heroes/pyromancer.js', 'heroes/shadow-thief.js', 'heroes/monk.js', 'heroes/paladin.js', 'heroes/ninja.js', 'heroes/treant.js', 'heroes/cursed-pirate.js', 'heroes/artificer.js', 'heroes/seraph.js', 'heroes/vampire-lord.js', 'engine.js', 'app.js', 'art-shared.js', 'art-hero-1.js', 'art-hero-2.js', 'art-hero-3.js', 'art-hero-4.js', 'art-hero-5.js', 'art-hero-6.js', 'art-hero-7.js', 'art-hero-8.js', 'art-hero-9.js', 'art-hero-10.js', 'art-hero-11.js', 'art-hero-12.js', 'icons/die-192.png', 'icons/die-512.png'].map(path => new URL(path, scope).href);
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
