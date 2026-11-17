@@ -29,6 +29,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  honor: 'Spend 1 Honor for +1 attack damage or 2 Honor together for +3. Stack limit 2.',
+  shame: 'Each Shame reduces your next normal or undefendable attack by 1. A damaging offensive ability consumes Shame even if its damage type is unaffected. Stack limit 2.',
+  backStrike: 'When damage is incoming from an opposing offensive ability, spend to roll a die and deal half its value back, rounded up. Ultimates prevent responding with Back Strike.',
   bounty: 'When attacked, take 1 additional damage and give the attacker 1 CP. Persistent. Stack limit 1.',
   reload: 'Spend after activating an attack and roll one die. Add half its value, rounded up, as damage. Stack limit 2.',
   bloodPower: 'Stack limit 5. Once per turn per effect, spend 1 to add 3 attack damage, 2 to remove a status in your Main Phase, 3 to draw 2 cards, or 4 to heal the attack damage you successfully deal.',
@@ -92,6 +95,8 @@ function hero(seat) {
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+    p.honor&&token(seat,'honor',`Honor ×${p.honor}`),p.shame&&token(seat,'shame',`Shame ×${p.shame}`),
+    p.backStrike&&token(seat,'backStrike','Back Strike'),
     p.reload&&token(seat,'reload',`Reload ×${p.reload}`),p.bounty&&token(seat,'bounty','Bounty'),
     p.synth&&token(seat,'synth',`Synth ×${p.synth}`),p.nanite&&token(seat,'nanite',`Nanite ×${p.nanite}`),
     ...Object.entries(p.bots??{}).map(([bot,level])=>`<span class="token"><img src="${art.artificerBots[bot][level-1]}" alt="">${level===2?'Advanced':'Basic'} ${artificer.bots[bot]}</span>`),
@@ -167,7 +172,11 @@ function arena() {
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
-  if(state.bloodOverflow){
+  if(state.honorOverflow){
+    phase='Honor'; heading=`${actingName} is about to gain Honor`;
+    detail='Spend Honor on this attack before collecting the new token.';
+    content=button('collectHonor','Collect Honor','class="primary"');
+  } else if(state.bloodOverflow){
     phase='Blood Power'; heading=`${actingName} is about to gain Blood Power`;
     detail=`Gain ${state.bloodOverflow.amount}. You can spend Blood Power before collecting it.`;
     content=button('collectBloodPower','Collect Blood Power','class="primary"');
@@ -227,6 +236,10 @@ function arena() {
     content=rollDisplay(rollContext(state))+reloadRerolls(state).map(([key,label])=>
       button('rerollReload',`${label} · reroll`,`data-status="${key}"`)).join('')+
       button('resolveReload','Apply Reload damage','class="primary"');
+  } else if(state.stage==='samuraiRoll') {
+    phase='Status effect roll'; heading='Back Strike';
+    detail='Deal half the die value back to the attacker, rounding up.';
+    content=rollDisplay(rollContext(state))+button('resolveBackStrike','Apply Back Strike','class="primary"');
   } else if(state.seraphRoll) {
     const {kind,dice,seat:roller}=state.seraphRoll;
     phase='Status effect roll'; heading=kind==='blinding'?'Blinding Light':'Flight';
@@ -468,6 +481,9 @@ function arena() {
   const tokens=tokenChoices(state,responding);
   const tokenActions=[
     ...artificerActions(state,responding).map(({key,label})=>button('artificerAction',label,`data-status="${key}"`)),
+    ...(canBackStrike(state,responding)?[button('backStrike','Spend Back Strike')]:[]),
+    ...Array.from({length:honorChoices(state,responding)},(_,i)=>button('spendHonor',
+      `Spend ${i+1} Honor · +${i===0?1:3} damage`,`data-amount="${i+1}"`)),
     ...(canReload(state,responding)?[button('spendReload','Spend Reload')]:[]),
     ...(canMesmerize(state,responding)?[button('mesmerize','Spend Mesmerize')]:[]),
     ...bloodPowerChoices(state,responding).map(({cost,label},index)=>
