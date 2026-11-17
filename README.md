@@ -1,6 +1,6 @@
-# Dice Throne Playtest 0.10
+# Dice Throne Playtest 0.11
 
-This release adds Monk to the installable playtest.
+This release adds Paladin to the installable playtest. For an existing installation, replace the files on the same publishing branch, let GitHub Pages finish deploying, then reopen the app online and check that it shows Playtest 0.11.
 
 ## Publish on GitHub Pages
 
