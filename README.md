@@ -1,16 +1,17 @@
-# Dice Throne Playtest 0.15.0
+# Dice Throne Playtest 0.16.0
 
-Artificer joins **Season Two** in both player selectors. This update includes the board, both leaflet sides, dice, Synth and Nanite tokens, and Basic and Advanced artwork for Nanobot, Shock Bot and Heal Bot. The deck includes 32 standard cards and the optional Synthesize! promo.
+Seraph joins **Season Two** in both player selectors. Her board, both sides of her leaflet, dice, unique cards and status artwork are included. The deck has 32 standard cards and the optional **Holier Than Thou!** promo.
 
-## Update from 0.14.0
+## Update from 0.15.0
 
-1. Extract this ZIP over the working 0.14.0 repository or assembled release.
-2. Upload the extracted files together to the same GitHub Pages branch. Keep the existing files, the `/docs` publish folder and the Pages URL.
-3. Open the deployed app online and wait for **Playtest 0.15.0** and **Ready for offline play**.
-4. Start a match with **Season Two → Artificer**. Reopen offline to resume the match.
+1. Extract this ZIP over the working 0.15.0 repository or assembled release.
+2. Upload the extracted files to the existing GitHub Pages branch. Keep the rest of the repository and the existing `/docs` publish folder.
+3. Open the app online and wait for **Playtest 0.16.0** and **Ready for offline play**.
+4. Choose **Season Two → Seraph** in either player selector and start a new match.
 
-Heal Bot follows the updated healing timing. It heals when its roll resolves and qualifies based on modified attack damage before prevention. Free bot activations resolve in time to affect the attack.
+## Seraph rules
 
-## Verification
-
-Scripted checks cover Synth, upgrades and action cards, both defence levels, all three bots, free activations, the Heal Bot threshold, and simultaneous Nanobot damage. The regression harness compared 405 seeded matches across the 81 ordered pairings from 0.14.0. The new roster completed 95 seeded matches across all 19 ordered pairings involving Artificer. The offline harness tested cache replacement, Artificer artwork and save restoration. Installed-app checks on Android and Windows are pending.
+- Flight rolls two dice. A 6 makes your attack undefendable on offence or avoids incoming damage on defence.
+- Blinding Light checks once the offensive ability is locked in. A 1 cancels the ability. A 2 or 3 reduces damage by half, rounding the reduction up. An Ultimate resolves normally and consumes the token.
+- Holy Presence deals 1 damage per token during upkeep. Blessing of Divinity triggers on lethal damage, including an Ultimate.
+- Purify lets you choose a player and a removable status. The targeted player can respond before the choice resolves.
