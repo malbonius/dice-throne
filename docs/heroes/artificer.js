@@ -52,7 +52,7 @@ const artificer = (() => {
       state.players[seat].synth=3;
       state.players[seat].bots={};
     },
-    actions(s,seat,{isMain,attackLocked}) {
+    actions(s,seat,{isMain,attackLocked,modifiedAttackDamage}) {
       const p=s.players[seat], hit=s.pending, active=s.active===seat;
       if(!s.cards||s.retry||s.growth||s.mainChoice||s.pirateChoice||s.artRoll||s.cardRoll||
          ['finished','discard','artBuild','artSpanner'].includes(s.stage)||
@@ -70,7 +70,7 @@ const artificer = (() => {
       if(p.bots?.shockbot&&active&&(attackWindow||s.stage==='locked')&&hit?.attack&&!hit.pure&&!hit.evaded&&!hit.parlayBlocked&&
          p.shockTurn!==s.turn&&p.synth>=cost(p,'shockbot'))
         options.push({key:'shock',label:`Shock Bot · +3 damage · ${cost(p,'shockbot')} Synth`});
-      if(p.bots?.healbot&&!active&&s.stage==='damage'&&hit?.attack&&!hit.ultimate&&!hit.stun&&!hit.pure&&!hit.parlayBlocked&&hit.grossDamage-(hit.collateral??0)-(hit.witherReduction??0)>=6&&
+      if(p.bots?.healbot&&!active&&s.stage==='damage'&&hit?.attack&&!hit.ultimate&&!hit.stun&&!hit.pure&&!hit.parlayBlocked&&modifiedAttackDamage(hit)>=6&&
          (hit.healBotUses??0)<2&&p.synth>=cost(p,'healbot'))
         options.push({key:'heal',label:`Heal Bot · ${cost(p,'healbot')} Synth`});
       return options;
