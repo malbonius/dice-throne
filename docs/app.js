@@ -20,6 +20,8 @@ function boardImage(state,seat,full=false) {
   if(id===cursedPirate.id && state.players[seat].cursed)
     return full?art.cursedPirateFullBoard:art.cursedPirateBoard;
   if(id===paleLady.id&&state.players[seat].werewolf)return full?art.werewolfFullBoard:art.werewolfBoard;
+  const form=state.players[seat].druidForm;
+  if(id===druid.id&&form!=='druid')return art[form+(full?'DruidFullBoard':'DruidBoard')];
   return (full?art.fullBoards:art.boards)[id];
 }
 function board(seat) {
@@ -30,6 +32,10 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  shapeshift: 'Spend to change between Druid, Bear and Cat forms. Stack limit 2.',
+  regenerate: 'Heal 2 during upkeep, then flip to the 1-point side.',
+  regenerate1: 'Heal 1 during upkeep, then remove this token.',
+  wound: 'Take 1 damage per token during upkeep, then roll for each token. A 4–6 removes it. Stack limit 2.',
   feather: 'Spend 1 to reroll the Nevermore die, 2 to change it by 1, or 3 to activate Nevermore.',
   hex: 'Your sixes have no number or symbol. Remove Hex at the end of your turn.',
   nevermore: 'On an opponent, Nevermore can absorb vitality and triggers an upkeep roll. Returning him normally heals the Raveness for the dial value.',
@@ -98,7 +104,7 @@ const token = (seat,key,label,suffix=key) => {
     hero===tactician.id&&key==='protect'?'tacticianProtect':
     hero===seraph.id&&key==='cleanse'?'seraphCleanse':
     hero===seraph.id&&key==='blessing'?'seraphBlessing':key;
-  const image=key==='moonShard'?art.moonShards[state.players[seat].moonShard-1]:art[tokenArt];
+  const image=key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[state.players[seat].moonShard-1]:art[tokenArt];
   return `<span class="token-help">${button('status',`<span class="token"><img src="${image}" alt="">${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
@@ -114,6 +120,11 @@ function hero(seat) {
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+    p.druidForm&&`<span class="token">${druid.formName(p.druidForm)} Form</span>`,
+    p.shapeShift>0&&token(seat,'shapeshift',`Shape Shift ×${p.shapeShift}`),
+    p.regenerate>0&&token(seat,'regenerate',`Regenerate (2) ×${p.regenerate}`),
+    p.regenerate1>0&&token(seat,'regenerate1',`Regenerate (1) ×${p.regenerate1}`),
+    p.wound>0&&token(seat,'wound',`Wound ×${p.wound}`),
     p.hex&&token(seat,'hex','Hex'),
     p.feather>0&&token(seat,'feather',`Feathers ${p.feather}/${p.featherCap??5}`),
     ...state.players.flatMap((owner,i)=>owner.nevermoreSeat===seat?
@@ -215,7 +226,11 @@ function arena() {
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
-  if(allowed.collectFeathers){
+  if(allowed.collectShapeShift){
+    phase='Status effect';heading='Collect Shape Shift';
+    detail='You may spend an existing Shape Shift to make room for incoming tokens.';
+    content=button('collectShapeShift','Collect Shape Shift','class="primary"');
+  } else if(allowed.collectFeathers){
     phase='Status effect';heading='Collect Feathers';
     detail=`Gain up to ${state.ravenFeathers.amount} Feathers. You may spend existing Feathers first.`;
     content=button('collectFeathers','Collect Feathers','class="primary"');
@@ -401,6 +416,20 @@ function arena() {
       content=button('chooseHorrify','Gain 3 Dreadful','data-status="dreadful"')+
         button('chooseHorrify','Gain Grim Pursuit','data-status="grim"');
       break;
+    case 'druidReady':
+      phase='Offensive Roll';heading=p.name;
+      detail=p.druid.wildDraw?'Draw a card if you finish this ability in Druid Form.':p.damage?'Cat Form adds 2 damage and inflicts Wound.':'';
+      content=button('finishDruidAbility','Continue ability','class="primary"');
+      break;
+    case 'druidRainfall':
+      phase='Ability choice';heading='Rainfall';
+      detail='Choose a hero to gain 1 CP and 2 Regenerate.';
+      content=names.map((name,i)=>button('druidRainfall',name,`data-target="${i}"`)).join('');
+      break;
+    case 'woundRoll':
+      phase='Upkeep';heading='Wound';
+      content=tray(state.woundRoll,seat,false)+button('resolveWound','Resolve Wound roll','class="primary"');
+      break;
     case 'ravenActivate': {
       const task=state.ravenActivation, holder=state.players[task.owner].nevermoreSeat;
       phase='Companion';heading=`${names[task.owner]} activates Nevermore`;
@@ -467,7 +496,8 @@ function arena() {
         break;
       }
       detail=[hero.moonShard===3&&!hero.werewolf?'Twilight flips Pale Lady to Werewolf.':'',heroId(state,state.active)===gunslinger.id&&hero.reload!==2&&!state.quickDrawChecked?'Quick Draw grants Reload.':'',hero.nyra?.downed?(hero.nyra.hp>=5?'Nyra becomes Active.':'Nyra heals 1 and remains Downed.'):'',hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
-      content=(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Roll to clear Nanites'):'')+
+      content=(allowed.checkWound?button('checkWound','Resolve a Wound token'):'')+
+        (allowed.checkRegenerate?button('checkRegenerate','Resolve Regenerate'):'')+(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Roll to clear Nanites'):'')+
         (allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):'')+(allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
       break;
     }
@@ -649,6 +679,12 @@ function arena() {
       content=button('next',`Start ${names[1-seat]}’s turn`,'class="primary"'); break;
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
+  }
+  const shapeSeats=state.response?[responding]:state.stage==='announce'?[responding,state.active]:[responding];
+  for(const owner of shapeSeats){
+    const options=druid.shiftChoices(state,owner);
+    if(options.length)content+=`<div class="token-actions"><strong>${names[owner]} · Shape Shift</strong><div class="controls">${options.map(form=>
+      button('spendShapeShift',`Shift to ${druid.formName(form)} Form`,`data-target="${owner}" data-status="${form}"`)).join('')}</div></div>`;
   }
   const featherSeats=state.response?[responding]:state.nevermoreRoll?[state.nevermoreRoll.owner,state.nevermoreRoll.target]:[responding];
   for(const owner of featherSeats){
