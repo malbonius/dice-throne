@@ -32,6 +32,8 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  kineticEnergy: 'Every 2 tokens add 1 attack damage. At the stack limit, remove all, gain 2 CP, draw 2 and deal 5 isolated undefendable damage.',
+  vibraniumSuit: 'Spend to prevent 3 incoming damage. Can be removed and cannot be transferred.',
   sunDial: 'Dusk gains 1 in upkeep and flips to Dawn at 5. Dawn can add the dial value to an attack, then loses 4 after damage. At 0, flip to Dusk.',
   chargedGem: 'Spend in your Main Phase and roll. On 1–2, gain 1 CP. On 3–4, deal 2 isolated undefendable damage. On 5–6, do both.',
   sunMarked: 'When attacked, the attacker heals 2. Persistent. Pure and collateral damage do not trigger this effect.',
@@ -131,6 +133,8 @@ function hero(seat) {
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
       return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
     }),
+    p.kineticEnergy>0&&token(seat,'kineticEnergy',`Kinetic Energy ${p.kineticEnergy}/${statusCap(p,'kineticEnergy')}`),
+    p.vibraniumSuit&&token(seat,'vibraniumSuit','Vibranium Suit'),
     p.sunDial!==undefined&&token(seat,'sunDial',`${p.sunDawn?'Dawn':'Dusk'} · ${p.sunDial}/5`),
     p.sunMarked&&token(seat,'sunMarked','Sun Marked'),
     p.chargedGem&&token(seat,'chargedGem','Charged Gem'),
@@ -440,6 +444,10 @@ function arena() {
       phase='Ability choice';heading=p.name;
       content=button('chooseHorrify','Gain 3 Dreadful','data-status="dreadful"')+
         button('chooseHorrify','Gain Grim Pursuit','data-status="grim"');
+      break;
+    case 'pantherAbility':
+      phase='Ability';heading=p.name;
+      content=button('finishPantherAbility','Continue ability','class="primary"');
       break;
     case 'sunGemRoll':
       phase='Main Phase action';heading='Charged Gem';
@@ -797,6 +805,8 @@ function arena() {
     const player=state.players[state.active];
     if(sunElf.canDawn(state,state.active))content+=button('spendSunDawn',`Use Dawn · +${player.sunDial} damage`);
   }
+  if(state.players[responding].vibraniumSuit&&blackPanther.incoming(state,responding))
+    content+=button('spendVibraniumSuit','Spend Vibranium Suit · prevent 3 damage');
   const forgeActions=forgemaster.choices(state,responding).map(({label},i)=>button('forgemasterAction',label,`data-choice="${i}"`));
   if(forgeActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · The Mines and The Forge</strong><div class="controls">${forgeActions.join('')}</div></div>`;
   const shapeSeats=state.response?[responding]:state.stage==='announce'?[responding,state.active]:[responding];

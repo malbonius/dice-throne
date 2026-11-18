@@ -4,7 +4,7 @@ const sharedCards = [
  ['Not This Time!',1,'roll'],['Twice as Wild!',3,'roll'],['Try, Try Again!',1,'roll'],['So Wild!',2,'roll'],['Samesies!',1,'roll'],
  ['One More Time!',1,'roll'],['Helping Hand!',1,'roll'],['Better D!',0,'roll'],['Six-It!',1,'roll']
 ];
-const heroRoster = [barbarian, moonElf, pyromancer, shadowThief, monk, paladin, ninja, treant, cursedPirate, artificer, seraph, vampireLord, gunslinger, samurai, tactician, huntress, headlessHorseman, necromancer, paleLady, raveness, druid, duelist, forgemaster, sunElf];
+const heroRoster = [barbarian, moonElf, pyromancer, shadowThief, monk, paladin, ninja, treant, cursedPirate, artificer, seraph, vampireLord, gunslinger, samurai, tactician, huntress, headlessHorseman, necromancer, paleLady, raveness, druid, duelist, forgemaster, sunElf, blackPanther];
 const HEROES = heroRoster.map(hero => hero.board);
 const abilityEffects = Object.assign({}, ...heroRoster.map(hero => hero.effects));
 const abilityEffectDice = Object.assign(
@@ -20,7 +20,7 @@ const cardInfo = (seat,id) => {
  const [name,cost,phase]=id<=18?sharedCards[id-1]:heroRoster[seat].cards[id-firstAction];
  return {name,cost,phase};
 };
-const newStatuses=['powderKeg','wither','parlay','synth','nanite','flight','blindingLight','holyPresence','bloodPower','bleed','mesmerize','bounty','reload','honor','shame','backStrike','tactical','constrict','nyraBond','dreadful','grim','decrepify','prey','feather','hex','wound','regenerate','regenerate1','guardBreak','disarm','chargedGem','sunMarked'];
+const newStatuses=['powderKeg','wither','parlay','synth','nanite','flight','blindingLight','holyPresence','bloodPower','bleed','mesmerize','bounty','reload','honor','shame','backStrike','tactical','constrict','nyraBond','dreadful','grim','decrepify','prey','feather','hex','wound','regenerate','regenerate1','guardBreak','disarm','chargedGem','sunMarked','kineticEnergy','vibraniumSuit'];
 const statusKeys=['blind','entangle','evasive','targeted','concussion','burn','knockdown','fireMastery','poison','shadows','sneak','chi','cleanse','crit','accuracy','protect','retribution','delayedPoison','smoke','ninjutsu','wellspring','barbed',...newStatuses];
 const negativeStatuses=['entangle','blind','concussion','targeted','burn','knockdown','poison','delayedPoison','barbed','powderKeg','wither','parlay','nanite','blindingLight','bleed','bounty','shame','constrict','decrepify','prey','hex','wound','disarm','sunMarked'];
 const spiritTypes=['seedling','sapling','dryad'];
@@ -60,9 +60,10 @@ function discardSpirits(player,choice){
  return spiritTotal(choice);
 }
 const paladinBuffs=['protect','retribution','crit','accuracy'];
-const statusLabel = s=>s==='chargedGem'?'Charged Gem':s==='sunMarked'?'Sun Marked':s==='guardBreak'?'Guard Break':s==='regenerate1'?'Regenerate (1)':s==='regenerate'?'Regenerate (2)':s==='decrepify'?'Decrep-ify':s==='grim'?'Grim Pursuit':s==='nyraBond'?'Nyra’s Bond':s==='tactical'?'Tactical Advantage':s==='backStrike'?'Back Strike':s==='bloodPower'?'Blood Power':s==='mesmerize'?'Mesmerize':s==='blindingLight'?'Blinding Light':s==='holyPresence'?'Holy Presence':s==='powderKeg'?'Powder Keg':s==='doubloon'?'Cursed Doubloon':s==='barbed'?'Barbed Vine':s==='smoke'?'Smoke Bomb':s==='delayedPoison'?'Delayed Poison':s==='blessing'?'Blessing of Divinity':s==='fireMastery'?'Fire Mastery':s==='sneak'?'Sneak Attack':s[0].toUpperCase()+s.slice(1);
-const statusCap=(p,key)=>key==='feather'?(p.featherCap??5):key==='dreadful'?5:key==='synth'?7:key==='tactical'?(p.tacticalCap??5):key==='bloodPower'?5:key==='chi'?(p.chiCap??5):key==='fireMastery'?(p.masteryCap??5):['delayedPoison','wither','holyPresence','bleed','reload','honor','shame','prey','wound','regenerate','regenerate1','guardBreak'].includes(key)?2:['evasive','poison','cleanse','ninjutsu','nanite','flight','grim'].includes(key)?3:1;
+const statusLabel = s=>s==='kineticEnergy'?'Kinetic Energy':s==='vibraniumSuit'?'Vibranium Suit':s==='chargedGem'?'Charged Gem':s==='sunMarked'?'Sun Marked':s==='guardBreak'?'Guard Break':s==='regenerate1'?'Regenerate (1)':s==='regenerate'?'Regenerate (2)':s==='decrepify'?'Decrep-ify':s==='grim'?'Grim Pursuit':s==='nyraBond'?'Nyra’s Bond':s==='tactical'?'Tactical Advantage':s==='backStrike'?'Back Strike':s==='bloodPower'?'Blood Power':s==='mesmerize'?'Mesmerize':s==='blindingLight'?'Blinding Light':s==='holyPresence'?'Holy Presence':s==='powderKeg'?'Powder Keg':s==='doubloon'?'Cursed Doubloon':s==='barbed'?'Barbed Vine':s==='smoke'?'Smoke Bomb':s==='delayedPoison'?'Delayed Poison':s==='blessing'?'Blessing of Divinity':s==='fireMastery'?'Fire Mastery':s==='sneak'?'Sneak Attack':s[0].toUpperCase()+s.slice(1);
+const statusCap=(p,key)=>key==='kineticEnergy'?(p.upgrades?.['Energy Absorption']?7:8):key==='feather'?(p.featherCap??5):key==='dreadful'?5:key==='synth'?7:key==='tactical'?(p.tacticalCap??5):key==='bloodPower'?5:key==='chi'?(p.chiCap??5):key==='fireMastery'?(p.masteryCap??5):['delayedPoison','wither','holyPresence','bleed','reload','honor','shame','prey','wound','regenerate','regenerate1','guardBreak'].includes(key)?2:['evasive','poison','cleanse','ninjutsu','nanite','flight','grim'].includes(key)?3:1;
 const grantStatus = (p,key,amount=1)=>{
+ if(key==='kineticEnergy'){blackPanther.gain(p,amount);return;}
  if(key==='regenerate'){druid.regenerate(p,amount);return;}
  if(key==='regenerate1'){p.regenerate1=(p.regenerate1??0)+Math.min(amount,2-druid.regenTotal(p));return;}
  const prior=p[key]||0, cap=statusCap(p,key);
@@ -130,18 +131,19 @@ function reviveNecromancer(p){
  if(Array.isArray(p.hand)){p.discard.push(...p.hand);p.hand=[];}
  return true;
 }
-function takeDamage(player,damage) {
+function takeDamage(player,damage,absorb=true) {
  const saved=damage>=player.hp&&player.blessing;
  player.hp=saved?1:bounded(player.hp-damage,60);
  if(saved)removeStatus(player,'blessing');
  else reviveNecromancer(player);
+ if(absorb&&damage>0&&player.hp>0&&player.hero===blackPanther.id)blackPanther.gain(player,1);
  return saved;
 }
 function stealNecroHealth(s,seat,amount){
  if(!amount)return false;
  const victim=s.players[1-seat], thief=s.players[seat], names=heroNames(s);
  const stolen=Math.min(victim.hp,amount);
- takeDamage(victim,stolen);
+ takeDamage(victim,stolen,false);
  thief.hp=bounded(thief.hp+stolen,60);
  s.log.unshift(`${names[seat]} steals ${stolen} Health.`);
  if(victim.hp)return false;
@@ -150,7 +152,7 @@ function stealNecroHealth(s,seat,amount){
  s.log.unshift(s.winner);
  return true;
 }
-const attackLocked=s=>s.pending?.ultimate&&s.stage==='sunMarked'||s.pending?.ultimate&&['forgeSearch','forgeAbility'].includes(s.stage)||s.pending?.ultimate&&s.stage==='duelMove'||s.ravenActivation?.locked||s.pending?.ultimate&&['ravenAbility','prey','druidReady'].includes(s.stage)||s.undeadRoll?.resume==='locked'||s.stage==='undeadRemove'&&s.undeadResume==='locked'||s.stage==='locked'||s.horseRoll?.resume==='locked'||s.gunReload?.resume==='locked'||s.artRoll?.resume==='locked'||s.seraphRoll?.resume==='locked'||s.stage==='sideDamage'&&s.sideDamage.resume==='locked'||s.ninjutsuReturnStage==='locked'||s.pending?.ultimate&&['sneakOffer','growSpirits','evasion'].includes(s.stage);
+const attackLocked=s=>s.sideDamage?.pantherLocked||s.pending?.ultimate&&s.stage==='pantherAbility'||s.pending?.ultimate&&s.stage==='sunMarked'||s.pending?.ultimate&&['forgeSearch','forgeAbility'].includes(s.stage)||s.pending?.ultimate&&s.stage==='duelMove'||s.ravenActivation?.locked||s.pending?.ultimate&&['ravenAbility','prey','druidReady'].includes(s.stage)||s.undeadRoll?.resume==='locked'||s.stage==='undeadRemove'&&s.undeadResume==='locked'||s.stage==='locked'||s.horseRoll?.resume==='locked'||s.gunReload?.resume==='locked'||s.artRoll?.resume==='locked'||s.seraphRoll?.resume==='locked'||s.stage==='sideDamage'&&s.sideDamage.resume==='locked'||s.ninjutsuReturnStage==='locked'||s.pending?.ultimate&&['sneakOffer','growSpirits','evasion'].includes(s.stage);
 const rollPhase=s=>s.mesmerizeRoll?.resume!=='upkeep'&&s.artRoll?.resume!=='upkeep'&&s.evasionReturnStage!=='upkeep'&&(s.evasionReturnStage!=='sideDamage'||s.sideDamage?.source==='Barbed Vine')&&['offence','announce','blind','effect','effectResponse','defence','defenceResponse','damage','evasion','postHit','targeting','combustion','pickpocket','sneakOffer','sneakRoll','monkChoice','ninjaGain','ninjutsuRoll','ninjutsuChoice','pirateKegRoll','artRoll','seraphRoll','mesmerizeRoll','gunContest','gunReload','gunDuelChoice','horseRoll','undeadRoll','necroChoice','horrifyChoice','samuraiRoll','vampireChoice','seraphTarget','purify','dryadResponse','spiritPayment','overgrowthWells','prey','druidReady','guardBreakRoll','guardOffer','sunMarked'].includes(s.stage);
 function rollContext(s) {
  if(s.sunGemRoll)return {dice:s.sunGemRoll.dice,seat:s.active};
@@ -193,8 +195,8 @@ function cardChoices(s,seat,id) {
  if(price(s,seat,id)>p.cp) return [];
  if(s.mesmerizeRoll&&![5,6,8,9,11,12,13,14,16,18].includes(id))return [];
  if(s.cardRoll && !(hero===headlessHorseman.id&&[31,32].includes(id))&&!(hero===huntress.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===artificer.id&&[28,29].includes(id)) && !([8,9].includes(id) || (hero===sunElf.id&&([32,33].includes(id)||id===31&&rollPhase(s))) || (c.phase==='roll' && rollPhase(s) && ([11,12,13,14,16,18].includes(id)||hero===3&&id===29||hero===cursedPirate.id&&id===29)))) return [];
- if(attackLocked(s) && (seat!==s.active || s.pending.ultimate && ![5,6,9,30,31].includes(id)&&!(hero===vampireLord.id&&[32,33].includes(id))&&!(hero===gunslinger.id&&id===27)&&!(hero===samurai.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===huntress.id&&[28,29].includes(id))&&!(hero===headlessHorseman.id&&[27,31,32].includes(id))&&!(hero===necromancer.id&&[32,33].includes(id))&&!(hero===paleLady.id&&[19,20,21,23].includes(id))&&!(hero===raveness.id&&[29,30,31].includes(id))&&!(hero===druid.id&&[27,32].includes(id))&&!(hero===duelist.id&&[28,29,30].includes(id))&&!(hero===sunElf.id&&[32,33].includes(id)) && !(hero===2&&id===32) && !(hero===6&&id===28&&s.stage==='locked')&&!(hero===7&&id===31&&s.stage==='locked')&&!(hero===cursedPirate.id&&[30,31,32,33].includes(id)&&s.stage==='locked')&&!(id===10&&vineDamage(s)))) return [];
- if(c.phase==='roll' && !rollPhase(s) && !((s.stage==='locked'||s.gunReload)&&seat===s.active) && !(id===10&&s.stage==='sideDamage'&&['Barbed Vine','Powder Keg','Swashbuckle!','Scurvy!','Cursed Cards!','Nanobot','Ravage!','Absorb Vitality'].includes(s.sideDamage.source))) return [];
+ if(attackLocked(s) && (seat!==s.active || s.pending.ultimate && ![5,6,9,30,31].includes(id)&&!(hero===vampireLord.id&&[32,33].includes(id))&&!(hero===gunslinger.id&&id===27)&&!(hero===samurai.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===huntress.id&&[28,29].includes(id))&&!(hero===headlessHorseman.id&&[27,31,32].includes(id))&&!(hero===necromancer.id&&[32,33].includes(id))&&!(hero===paleLady.id&&[19,20,21,23].includes(id))&&!(hero===raveness.id&&[29,30,31].includes(id))&&!(hero===druid.id&&[27,32].includes(id))&&!(hero===duelist.id&&[28,29,30].includes(id))&&!(hero===sunElf.id&&[32,33].includes(id))&&!(hero===blackPanther.id&&[30,31,32].includes(id)) && !(hero===2&&id===32) && !(hero===6&&id===28&&s.stage==='locked')&&!(hero===7&&id===31&&s.stage==='locked')&&!(hero===cursedPirate.id&&[30,31,32,33].includes(id)&&s.stage==='locked')&&!(id===10&&vineDamage(s)))) return [];
+ if(c.phase==='roll' && !rollPhase(s) && !((s.stage==='locked'||s.gunReload)&&seat===s.active) && !(id===10&&s.stage==='sideDamage'&&['Barbed Vine','Powder Keg','Swashbuckle!','Scurvy!','Cursed Cards!','Nanobot','Ravage!','Absorb Vitality','Kinetic Energy'].includes(s.sideDamage.source))) return [];
  if(['main','upgrade'].includes(c.phase) && (!isMain(s)||seat!==s.active||s.cardRoll||s.mainAction||s.ravenFeathers||s.shapeOverflow)) return [];
  if(c.phase==='upgrade' && p.upgrades[c.slot] && seatCard(s,seat,p.upgrades[c.slot]).level>=c.level)return [];
  const one=[{label:'Play'}];
@@ -203,7 +205,7 @@ function cardChoices(s,seat,id) {
  const pos=d?.dice.map((value,i)=>({value,i,label:d.owners?`${names[dieOwner(d,i)]}’s die (${value})`:`die ${i+1} (${value})`}))??[];
  const ownDice=pos.filter(die=>dieOwner(d,die.i)===seat);
  const flips=pos.flatMap(({i,label,value})=>[1,2,3,4,5,6].filter(v=>v!==value).map(v=>({label:`${label} → ${v}`,i,v})));
- if(id===1)return statuses.filter(x=>!['holyPresence','hex'].includes(x.status))
+ if(id===1)return statuses.filter(x=>!['holyPresence','hex','vibraniumSuit'].includes(x.status))
    .filter(x=>!x.status.startsWith('regenerate')||druid.regenTotal(s.players[1-x.target])<2).filter(x=>statusCap(s.players[1-x.target],x.status)===1||!s.players[1-x.target][x.status]||s.players[1-x.target][x.status]<statusCap(s.players[1-x.target],x.status)).map(x=>({...x,label:`${x.label} → ${names[1-x.target]}`}));
  if(id===2)return heroes.filter(x=>statusKeys.some(k=>s.players[x.target][k]));
  if(id===4||id===7)return statuses.flatMap(choice=>{
@@ -214,7 +216,7 @@ function cardChoices(s,seat,id) {
  });
  if(id===8)return flips.filter(f=>dieValue(pos[f.i].value,s.players[dieOwner(d,f.i)])&&Math.abs(f.v-pos[f.i].value)===1);
  if(id===10){
-  if(s.stage==='sideDamage'&&['Barbed Vine','Powder Keg','Swashbuckle!','Scurvy!','Cursed Cards!','Nanobot','Ravage!','Absorb Vitality'].includes(s.sideDamage.source))return heroes.filter(x=>x.target===s.sideDamage.seat&&sideIncoming(s.sideDamage)>0);
+  if(s.stage==='sideDamage'&&['Barbed Vine','Powder Keg','Swashbuckle!','Scurvy!','Cursed Cards!','Nanobot','Ravage!','Absorb Vitality','Kinetic Energy'].includes(s.sideDamage.source))return heroes.filter(x=>x.target===s.sideDamage.seat&&sideIncoming(s.sideDamage)>0);
   if(s.stage==='locked'&&vineDamage(s))return heroes.filter(x=>x.target===s.active&&returnDamageFor(s)>0);
   return s.stage==='damage'?heroes.filter(x=>(x.target===s.active?returnDamageFor(s):incomingDamage(s))>0):[];
  }
@@ -439,7 +441,7 @@ function tacticalChoices(s,seat){
      const receiver=s.players[1-from];
      for(const status of statusKeys){
        const balance=Number(receiver[status]??0)-(status==='tactical'&&from!==seat?4:0);
-       if(['holyPresence','hex'].includes(status)||status.startsWith('regenerate')&&druid.regenTotal(receiver)>=2||!player[status]||balance>=statusCap(receiver,status))continue;
+       if(['holyPresence','hex','vibraniumSuit'].includes(status)||status.startsWith('regenerate')&&druid.regenTotal(receiver)>=2||!player[status]||balance>=statusCap(receiver,status))continue;
        if(status==='tactical'&&from===seat&&p.tactical===4)continue;
        options.push({kind:'transfer',cost:4,from,status,label:`Transfer ${statusLabel(status)} from ${names[from]} to ${names[1-from]}`});
      }
@@ -570,7 +572,7 @@ const decrepCanRoll=s=>!s.players[s.active].decrepify||!s.attempts||s.held.filte
 const hasResponse=(s,seat)=>{
  const tokens=tokenChoices(s,seat);
  const tithe=titheChoices(s,seat);
- return !!(sunElf.canDawn(s,seat)||forgemaster.choices(s,seat).some(option=>!['craft','deposit'].includes(option.kind))||druid.shiftChoices(s,seat).length||necroActions(s,seat).length||grimChoices(s,seat).length||raveness.featherChoices(s,seat).some(option=>option.kind==='activate')||canHealNyra(s,seat)||nyraRerolls(s,seat).length||tacticalChoices(s,seat).length||honorChoices(s,seat)||canBackStrike(s,seat)||canReload(s,seat)||canMesmerize(s,seat)||bloodPowerChoices(s,seat).length||artificerActions(s,seat).length||handPlays(s,seat).length||tokens.flight||tokens.cleanse.length||tokens.boost||tokens.prevent||tokens.crit||
+ return !!(s.players[seat].vibraniumSuit&&blackPanther.incoming(s,seat)||sunElf.canDawn(s,seat)||forgemaster.choices(s,seat).some(option=>!['craft','deposit'].includes(option.kind))||druid.shiftChoices(s,seat).length||necroActions(s,seat).length||grimChoices(s,seat).length||raveness.featherChoices(s,seat).some(option=>option.kind==='activate')||canHealNyra(s,seat)||nyraRerolls(s,seat).length||tacticalChoices(s,seat).length||honorChoices(s,seat)||canBackStrike(s,seat)||canReload(s,seat)||canMesmerize(s,seat)||bloodPowerChoices(s,seat).length||artificerActions(s,seat).length||handPlays(s,seat).length||tokens.flight||tokens.cleanse.length||tokens.boost||tokens.prevent||tokens.crit||
    tokens.accuracy||tokens.protect||tokens.retribution||tokens.smoke||tokens.ninjutsu||tokens.evadeSide||tokens.seedling.length||tokens.sapling||tokens.dryad||tokens.dryadPrevent.length||tokens.wellspring||tithe.draw||tithe.dice?.length||
    s.stage==='damage'&&s.players[seat].evasive&&(seat===s.active?returnDamageFor(s):incomingDamage(s))>0&&!s.cardRoll);
 };
@@ -597,7 +599,7 @@ function completeCardRoll(s,roll,random,add){
  const rules = heroRoster[hero];
  if (id === 3) p.cp = bounded(p.cp + Math.ceil(dice[0] / 2), 15);
  if (rules.resolveCardRoll?.({id,dice,p,opponent,counts,hit,s,seat,target,bounded,updateDamage,grantStatus,gainBloodPower,gainTactical,gainGrim,stealNecroHealth,grantAttackStatus,queueGrowth,startSideDamage,grantPirateStatus,drawCards,discardRandom,random})) return;
- if (id === (rules.promoId??33) &&hero!==cursedPirate.id&&hero!==artificer.id&&hero!==seraph.id&&hero!==vampireLord.id&&hero!==gunslinger.id&&hero!==samurai.id&&hero!==tactician.id&&hero!==huntress.id&&hero!==headlessHorseman.id&&hero!==necromancer.id&&hero!==paleLady.id&&hero!==raveness.id&&hero!==druid.id&&hero!==duelist.id&&hero!==forgemaster.id&&hero!==sunElf.id) {
+ if (id === (rules.promoId??33) &&hero!==cursedPirate.id&&hero!==artificer.id&&hero!==seraph.id&&hero!==vampireLord.id&&hero!==gunslinger.id&&hero!==samurai.id&&hero!==tactician.id&&hero!==huntress.id&&hero!==headlessHorseman.id&&hero!==necromancer.id&&hero!==paleLady.id&&hero!==raveness.id&&hero!==druid.id&&hero!==duelist.id&&hero!==forgemaster.id&&hero!==sunElf.id&&hero!==blackPanther.id) {
   if (dice[0] !== 6) drawCards(p,1,random,id);
   else rules.resolvePromo({p,opponent,s,seat,bounded,grantStatus,statusCap,queueGrowth});
  }
@@ -618,6 +620,7 @@ function applyCard(s,seat,id,choice,roll,random,add) {
    p.coveredUpgrades.push(p.upgrades[c.slot]);
   }
   p.upgrades[c.slot]=id;
+  if(hero===blackPanther.id&&c.slot==='Energy Absorption')blackPanther.gain(p,0);
   return;
  }
  if([1,4,7].includes(id)){
@@ -658,7 +661,7 @@ function applyCard(s,seat,id,choice,roll,random,add) {
  const rules = heroRoster[hero];
  const card = {id,s,names,seat,p,opponent,c,choice,bounded,grantStatus,gainBloodPower,gainTactical,gainGrim,statusCap,updateDamage,discardRandom,drawCards,random,paladinBuffs,discardSpirits,spiritTypes,spiritTotal,queueGrowth,startSideDamage,grantPirateStatus,grantAttackStatus,add,seatCard,roll};
  if (rules.applyCard?.(card)) return;
- const rollSize = id === 3 || id === 33 && hero!==cursedPirate.id && hero!==artificer.id && hero!==seraph.id && hero!==vampireLord.id && hero!==gunslinger.id && hero!==samurai.id && hero!==tactician.id && hero!==huntress.id && hero!==headlessHorseman.id && hero!==necromancer.id&&hero!==paleLady.id&&hero!==raveness.id&&hero!==druid.id&&hero!==duelist.id&&hero!==forgemaster.id&&hero!==sunElf.id ? 1 : rules.cardRollSize?.(id) ?? 0;
+ const rollSize = id === 3 || id === 33 && hero!==cursedPirate.id && hero!==artificer.id && hero!==seraph.id && hero!==vampireLord.id && hero!==gunslinger.id && hero!==samurai.id && hero!==tactician.id && hero!==huntress.id && hero!==headlessHorseman.id && hero!==necromancer.id&&hero!==paleLady.id&&hero!==raveness.id&&hero!==druid.id&&hero!==duelist.id&&hero!==forgemaster.id&&hero!==sunElf.id&&hero!==blackPanther.id ? 1 : rules.cardRollSize?.(id) ?? 0;
  if(rollSize){
   s.cardRoll={seat,id,dice:Array.from({length:rollSize},()=>roll()),ninjaRerolls:hero===6&&id===28||hero===paleLady.id&&id===20?5:0};
   if(hero===gunslinger.id&&id===30||hero===huntress.id&&id===32||hero===sunElf.id&&id===34)s.cardRoll.target=choice.target;
@@ -729,7 +732,7 @@ function playOneCard(s,seat,id,choice,roll,random,add){
 }
 
 const bounded = (v, cap) => Math.min(cap, Math.max(0, v));
-const sets=[{name:'Season One ReRolled',heroes:[0,1,2,3,4,5,6,7]},{name:'Season Two',heroes:[cursedPirate.id,artificer.id,seraph.id,vampireLord.id,gunslinger.id,samurai.id,tactician.id,huntress.id]},{name:'Outcasts',heroes:[headlessHorseman.id,necromancer.id,paleLady.id,raveness.id]},{name:'Vanguard',heroes:[druid.id,duelist.id,forgemaster.id,sunElf.id]}];
+const sets=[{name:'Season One ReRolled',heroes:[0,1,2,3,4,5,6,7]},{name:'Season Two',heroes:[cursedPirate.id,artificer.id,seraph.id,vampireLord.id,gunslinger.id,samurai.id,tactician.id,huntress.id]},{name:'Marvel',heroes:[blackPanther.id]},{name:'Outcasts',heroes:[headlessHorseman.id,necromancer.id,paleLady.id,raveness.id]},{name:'Vanguard',heroes:[druid.id,duelist.id,forgemaster.id,sunElf.id]}];
 const heroId=(s,seat)=>s.players[seat].hero??seat;
 const boardFor=(s,seat)=>{
  const hero=heroRoster[heroId(s,seat)];
@@ -831,7 +834,11 @@ function legal(state) {
   if(state.shapeOverflow&&state.stage!=='finished')return {collectShapeShift:true};
   if(state.ravenFeathers&&!state.ravenFeathers.spending&&state.stage!=='finished')return {collectFeathers:true};
   switch (state.stage) {
+    case 'pantherAbility': return {finishPantherAbility:true};
     case 'sunGemRoll': return {resolveChargedGem:true};
+    case 'finishPantherAbility':
+      continueOffence(state.pending);
+      break;
     case 'sunBurstChoice': return {sunBurstChoice:true};
     case 'sunMarked': return {resolveSunMarked:true};
     case 'forgeMine': return {forgeMineChoice:true};
@@ -988,9 +995,39 @@ function transition(previous, action, roll, random=Math.random, bypassResponse=f
    player.cp=0;
    if(previous.players[seat].resurrect&&!player.resurrect)next.log.unshift(`${heroNames(next)[seat]} returns with 5 Health through Resurrect.`);
  });
+ if(next!==previous){
+   const hit=next.pending, player=next.players[next.active];
+   if(hit&&(hit.kineticBonus!==undefined||player.kineticEnergy!==undefined)&&hit.grossDamage!==undefined&&!['main','main1','discard','finished','postHit'].includes(next.stage)&&!hit.kineticSettled){
+     const bonus=hit.attack&&!hit.pure&&!hit.parlayBlocked?Math.floor((player.kineticEnergy??0)/2):0;
+     hit.grossDamage+=bonus-(hit.kineticBonus??0);
+     hit.kineticBonus=bonus;
+     updateDamage(hit);
+   }
+   if(next.stage!=='finished'&&!next.sideDamage){
+     const seat=next.players.findIndex(p=>p.kineticBursts>0&&p.hp>0);
+     if(seat>=0){
+       const p=next.players[seat], locked=!!attackLocked(next);
+       p.kineticBursts--;
+       p.cp=bounded(p.cp+2,15);
+       drawCards(p,2,random);
+       next.log.unshift(`${heroNames(next)[seat]} bursts Kinetic Energy, gaining 2 CP and drawing 2 cards.`);
+       startSideDamage(next,1-seat,5,'Kinetic Energy',false,{keepPending:true,pantherLocked:locked});
+     }
+   }
+ }
  return next;
 }
 function transitionCore(previous, action, roll, random, bypassResponse) {
+  if(action.type==='spendVibraniumSuit'){
+    const seat=cardActor(previous), kind=blackPanther.incoming(previous,seat);
+    if(!previous.players[seat].vibraniumSuit||!kind||previous.cardRoll||previous.retry)return previous;
+    const s=structuredClone(previous);
+    s.response=null;
+    removeStatus(s.players[seat],'vibraniumSuit');
+    blackPanther.prevent(s,seat,3,kind);
+    s.log.unshift(`${heroNames(s)[seat]} spends Vibranium Suit to prevent 3 damage.`);
+    return s;
+  }
   if(action.type==='spendSunDawn'||action.type==='spendChargedGem'){
     const seat=previous.active;
     const dawn=action.type==='spendSunDawn';
@@ -1520,6 +1557,10 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     p.abilityDamage??=p.damage;
     p.damage+=p.chiBoost??0;
     p.attack=p.damage>0;
+    if(p.attack&&!p.pure&&attacker.kineticEnergy!==undefined){
+      p.kineticBonus=Math.floor(attacker.kineticEnergy/2);
+      p.damage+=p.kineticBonus;
+    }
     p.incomingStatus=negativeStatuses.filter(k=>p[k]&&!p.dryadBlocked?.includes(k));
     p.priorStatus=Object.fromEntries(p.incomingStatus.map(k=>[k,defender[k]||0]));
     if(p.jawsTargeted&&p.incomingStatus.includes('prey'))p.priorStatus.prey=p.jawsPrior;
@@ -1698,6 +1739,11 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       druid.gainShifts(state,state.active,shifts);
       if(regenerate)druid.regenerate(attacker,regenerate);
       if(rainfall){state.stage='druidRainfall';return;}
+    }
+    if(p.panther){
+      if(p.panther.suit)grantStatus(attacker,'vibraniumSuit');
+      if(p.panther.kinetic)blackPanther.gain(attacker,p.panther.kinetic);
+      if(attacker.kineticBursts){state.stage='pantherAbility';return;}
     }
     if(p.forgemaster){
       if(p.forgemaster.armorBonus&&attacker.armor.helm&&attacker.armor.shield)p.damage+=2;
@@ -1898,6 +1944,9 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     else if(g.collateral)startSideDamage(state,1-g.seat,g.collateral,g.source);
   }
   switch (action.type) {
+    case 'finishPantherAbility':
+      continueOffence(state.pending);
+      break;
     case 'sunBurstChoice':
       if(!['gem','mark'].includes(action.status))return previous;
       if(action.status==='gem')grantStatus(attacker,'chargedGem');
@@ -2838,6 +2887,9 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         poison:ability.poison||ability.dagger&&counts.Shadow,sneak:ability.sneak,enterShadows:ability.shadows,afterShadows:ability.afterShadows,pure:ability.type==='pure',
         undefendable:!!state.offenceFlight||ability.type==='undefendable'||matching>=ability.matchUndefendable, ultimate:ability.type==='ultimate', returnDamage:0,
         stun:!!ability.stun, targeted:!!ability.targeted, effect:ability.effect, recoil:ability.recoil ?? 0};
+      if(heroId(state,state.active)===blackPanther.id)Object.assign(state.pending,{
+        panther:{suit:ability.suit,kinetic:ability.kineticFromVibranium?(counts.Vibranium??0):(ability.kinetic??Number(matching>=ability.kineticMatch))}
+      });
       if(heroId(state,state.active)===sunElf.id)Object.assign(state.pending,{
         sunElf:{gain:ability.sunGain??Number(matching>=ability.sunMatch),gem:ability.chargedGem,choice:ability.sunChoice,scorchUpgrade:ability.sunScorchUpgrade},
         sunMarked:ability.sunMarked
@@ -2951,7 +3003,12 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'resolveEffect': {
       const p=state.pending;
       const counts = tally(effectiveDice(p.effectDice,attacker),heroId(state,state.active));
-      if(p.effect==='sunScorch'){
+      if(p.effect==='pantherTriple'){
+        p.damage+=counts.Slash??0;
+        if(counts.Vibranium)blackPanther.gain(attacker,2);
+        if(counts.Panther)drawCards(attacker,1,random);
+        if(attacker.kineticBursts){state.stage='pantherAbility';break;}
+      } else if(p.effect==='sunScorch'){
         const power=!!counts['Sun Power'], charges=counts.Charge??0;
         p.damage+=2*(counts.Stave??0);
         sunElf.increase(attacker,2*Number(power)+(p.sunElf.scorchUpgrade?charges:2*charges));
@@ -3192,7 +3249,8 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       const attackDamage=p.attack?Math.max(0,damage-(p.collateral??0)):0;
       if(attackDamage&&defender.bleed===2&&(heroId(state,state.active)===vampireLord.id||attacker.bloodPower))state.bloodReward=true;
       const defenderDamage=damage-toNyra;
-      const defenderSaved=takeDamage(defender,defenderDamage);
+      if(p.kineticBonus!==undefined)p.kineticSettled=true;
+      const defenderSaved=takeDamage(defender,defenderDamage,!p.ultimate);
       const returnDamage=returnDamageFor(state);
       const vine=consumeVine();
       if(vine)add(`Barbed Vine adds ${vine} to ${names[state.active]}’s incoming damage.`);
