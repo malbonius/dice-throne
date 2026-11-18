@@ -81,7 +81,7 @@ const paleLady = (() => {
     cardRollSize(card){return ({19:1,20:5,24:5,25:1,29:1,32:1,33:1})[card]??0;},
     resolveCardRoll({id:card,dice,p,opponent,counts,hit,s,seat,updateDamage,grantStatus,startSideDamage,drawCards,random}){
       const slash=counts.Slash??0,crescent=counts.Crescent??0,full=counts['Full Moon']??0;
-      if(card===19||card===20){
+      if(card===19&&dice[0]||card===20){
         hit.grossDamage+=card===20?slash:dice[0]===1?3:4;
         if(card===19&&full)gain(p);
         updateDamage(hit);
