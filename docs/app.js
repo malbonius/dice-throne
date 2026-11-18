@@ -32,6 +32,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  sunDial: 'Dusk gains 1 in upkeep and flips to Dawn at 5. Dawn can add the dial value to an attack, then loses 4 after damage. At 0, flip to Dusk.',
+  chargedGem: 'Spend in your Main Phase and roll. On 1–2, gain 1 CP. On 3–4, deal 2 isolated undefendable damage. On 5–6, do both.',
+  sunMarked: 'When attacked, the attacker heals 2. Persistent. Pure and collateral damage do not trigger this effect.',
   footwork: 'Move on the Footwork Track with Reposition, abilities and cards. Your final position can give one bonus per turn.',
   guardBreak: 'Spend after activating a defendable attack and roll one die. A 4 or 5 makes it undefendable.',
   disarm: 'During upkeep, discard a card or skip your Income Phase. Then remove Disarm.',
@@ -107,7 +110,7 @@ const token = (seat,key,label,suffix=key) => {
     hero===tactician.id&&key==='protect'?'tacticianProtect':
     hero===seraph.id&&key==='cleanse'?'seraphCleanse':
     hero===seraph.id&&key==='blessing'?'seraphBlessing':key;
-  const image=key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[state.players[seat].moonShard-1]:art[tokenArt];
+  const image=key==='sunDial'?(state.players[seat].sunDawn?art.dialSun:art.dialDusk):key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[state.players[seat].moonShard-1]:art[tokenArt];
   return `<span class="token-help">${button('status',`<span class="token"><img src="${image}" alt="">${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
@@ -123,6 +126,14 @@ function hero(seat) {
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+    ...Object.entries(p.armor??{}).filter(([,tier])=>tier).map(([slot,tier])=>{
+      const name=forgemaster.armorName(slot,tier);
+      const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
+      return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
+    }),
+    p.sunDial!==undefined&&token(seat,'sunDial',`${p.sunDawn?'Dawn':'Dusk'} · ${p.sunDial}/5`),
+    p.sunMarked&&token(seat,'sunMarked','Sun Marked'),
+    p.chargedGem&&token(seat,'chargedGem','Charged Gem'),
     p.footwork!==undefined&&token(seat,'footwork',`Footwork · ${duelist.positions[p.footwork+2]}`),
     p.guardBreak>0&&token(seat,'guardBreak',`Guard Break ×${p.guardBreak}`),
     p.disarm&&token(seat,'disarm','Disarm'),
@@ -170,6 +181,12 @@ function hero(seat) {
     p.concussion && token(seat,'concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && token(seat,'stun','Stun')].filter(Boolean).join('') || 'No status effects'}</div></div>
     ${board(seat)}<div class="inventory"><span class="deck">${(p.deck.length??p.deck) ? `<img src="${art.back}" alt="">` : ''} Draw ${p.deck.length??p.deck} · Discard ${p.discard?.length??0}</span><span class="hand-tools"><span class="hand-count">${p.hand.length??p.hand} in hand</span>
       ${button('open-hand','Hand',`data-index="${seat}" aria-label="Open ${names[seat]}’s hand" aria-haspopup="dialog" ${seat===cardActor(state)&&!['finished','nyraDamage'].includes(state.stage)?'':'disabled'}`)}</span>${button('inspect-leaflet','Leaflet',`class="leaflet" data-index="${seat}" aria-label="${names[seat]} leaflet"`)}${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}</div>
+    ${p.forgeOre?`<details class="forge-inventory" data-seat="${seat}"><summary>The Forge · ${p.forgeOre.length} Ore</summary>
+      <div class="controls">${[19,28,34].map(id=>{
+        const ore=forgemaster.oreType(id),cards=p.forgeOre.filter(card=>forgemaster.oreType(card)===ore);
+        return cards.length?button('inspect-card',`${seatCard(state,seat,id).name} ×${cards.length}`,`data-index="${id}" data-seat="${seat}"`):'';
+      }).join('')}${['mining','crafting'].map(key=>button('inspect-forging',key==='mining'?'Mining rules':'Crafting rules',`data-status="${key}"`)).join('')}</div>
+    </details>`:''}
   </section>`;
 }
 function tray(values,seat,editable,held=[]) {
@@ -424,6 +441,56 @@ function arena() {
       content=button('chooseHorrify','Gain 3 Dreadful','data-status="dreadful"')+
         button('chooseHorrify','Gain Grim Pursuit','data-status="grim"');
       break;
+    case 'sunGemRoll':
+      phase='Main Phase action';heading='Charged Gem';
+      content=tray(state.sunGemRoll.dice,state.active,false)+button('resolveChargedGem','Resolve Charged Gem','class="primary"');
+      break;
+    case 'sunBurstChoice':
+      phase='Ability choice';heading=p.name;
+      content=button('sunBurstChoice','Gain Charged Gem','data-status="gem"')+
+        button('sunBurstChoice','Inflict Sun Marked','data-status="mark"');
+      break;
+    case 'sunMarked':
+      phase='Start of defence';heading='Sun Marked';
+      detail=`${activeName} heals 2 if Sun Marked is still on ${names[1-state.active]}.`;
+      content=button('resolveSunMarked',state.players[1-state.active].sunMarked?'Resolve Sun Marked':'Continue attack','class="primary"');
+      break;
+    case 'forgeMine': {
+      const task=state.forgeTask, ores=task.cards.filter(forgemaster.oreType);
+      phase='The Mines';heading=`${actingName} looks at the top ${task.cards.length} cards`;
+      detail=task.cards.map(id=>seatCard(state,task.seat,id).name).join(' · ');
+      content=ores.map(id=>button('forgeMineChoice',`Reveal ${seatCard(state,task.seat,id).name}`,`data-index="${id}" data-status="one"`)).join('')+
+        (task.all&&ores.length>1?button('forgeMineChoice','Reveal all Ore','data-status="all"'):'')+
+        button('forgeMineChoice','Reveal none · gain 1 CP','data-status="none"');
+      break;
+    }
+    case 'forgeOrder':
+      phase='The Mines';heading='Return the remaining cards';
+      detail='Choose which card goes on the bottom next.';
+      content=state.forgeTask.cards.map(id=>button('forgeOrder',seatCard(state,seat,id).name,`data-index="${id}"`)).join('');
+      break;
+    case 'forgeSearch':
+      phase='Ultimate';heading='Final Touches!';
+      content=[...new Map(state.players[state.active].deck.filter(forgemaster.oreType).map(id=>[forgemaster.oreType(id),id])).values()]
+        .map(id=>button('forgeSearch',`Forge ${seatCard(state,state.active,id).name}`,`data-index="${id}"`)).join('');
+      break;
+    case 'forgeAbility':
+      phase='Ability';heading=p.name;
+      content=button('finishForgeAbility','Continue ability','class="primary"');
+      break;
+    case 'forgeMasterwork': {
+      phase='Defensive Roll';heading='Masterwork';
+      detail=p.armorDoubleLimit===2?'Double up to two armour effects.':'Double one armour effect.';
+      const slots=Object.keys(state.players[seat].armor).filter(slot=>state.players[seat].armor[slot]);
+      content=forgemaster.selections(slots,p.armorDoubleLimit===2,p.armorDoubleLimit===2)
+        .map(({label},i)=>button('forgeMasterwork',label,`data-choice="${i}"`)).join('');
+      break;
+    }
+    case 'forgeArmor':
+      phase='Damage response';heading='Armour';
+      content=forgemaster.selections(forgemaster.eligibleArmor(state),true)
+        .map(({label},i)=>button('forgeArmor',label,`data-choice="${i}"`)).join('');
+      break;
     case 'duelMove': {
       const {max}=state.duelMovement;
       phase='Footwork';heading=`${actingName} can take up to ${max} ${max===1?'Step':'Steps'}`;
@@ -504,6 +571,11 @@ function arena() {
     case 'upkeep': {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
+      if(allowed.forgeUpkeep){
+        heading='The Mines';detail='You may Mine your deck during upkeep.';
+        content=button('forgeUpkeep','Mine your deck','data-status="mine"')+button('forgeUpkeep','Skip mining','data-status="skip"');
+        break;
+      }
       if(allowed.resolveDisarm){
         heading='Disarm';detail='Discard one card or skip your Income Phase.';
         content=hero.hand.map(id=>button('resolveDisarm',`Discard ${seatCard(state,state.active,id).name}`,`data-index="${id}" data-status="discard"`)).join('')+
@@ -535,7 +607,7 @@ function arena() {
           button('horseUpkeep','Skip Headless Mayhem','data-status="skip"');
         break;
       }
-      detail=[hero.moonShard===3&&!hero.werewolf?'Twilight flips Pale Lady to Werewolf.':'',heroId(state,state.active)===gunslinger.id&&hero.reload!==2&&!state.quickDrawChecked?'Quick Draw grants Reload.':'',hero.nyra?.downed?(hero.nyra.hp>=5?'Nyra becomes Active.':'Nyra heals 1 and remains Downed.'):'',hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
+      detail=[hero.sunDial!==undefined&&!hero.sunDawn&&!state.sunUpkeep?'Dusk increases the Sun Dial by 1.':'',hero.moonShard===3&&!hero.werewolf?'Twilight flips Pale Lady to Werewolf.':'',heroId(state,state.active)===gunslinger.id&&hero.reload!==2&&!state.quickDrawChecked?'Quick Draw grants Reload.':'',hero.nyra?.downed?(hero.nyra.hp>=5?'Nyra becomes Active.':'Nyra heals 1 and remains Downed.'):'',hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
       content=(allowed.checkWound?button('checkWound','Resolve a Wound token'):'')+
         (allowed.checkRegenerate?button('checkRegenerate','Resolve Regenerate'):'')+(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Roll to clear Nanites'):'')+
         (allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):'')+(allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
@@ -720,6 +792,13 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
+  if(!state.response||state.response.seat===state.active){
+    if(sunElf.canGem(state,state.active))content+=button('spendChargedGem','Spend Charged Gem');
+    const player=state.players[state.active];
+    if(sunElf.canDawn(state,state.active))content+=button('spendSunDawn',`Use Dawn · +${player.sunDial} damage`);
+  }
+  const forgeActions=forgemaster.choices(state,responding).map(({label},i)=>button('forgemasterAction',label,`data-choice="${i}"`));
+  if(forgeActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · The Mines and The Forge</strong><div class="controls">${forgeActions.join('')}</div></div>`;
   const shapeSeats=state.response?[responding]:state.stage==='announce'?[responding,state.active]:[responding];
   for(const owner of shapeSeats){
     const options=druid.shiftChoices(state,owner);
@@ -782,10 +861,12 @@ function arena() {
 }
 function render() {
   const logOpen=match.querySelector('.action-log')?.open;
+  const openForge=new Set([...match.querySelectorAll('.forge-inventory[open]')].map(el=>el.dataset.seat));
   const openUpgrades=new Set([...match.querySelectorAll('.board-upgrades[open]')].map(el=>el.dataset.seat));
   const selected=boardOverride ?? cardActor(state);
   match.innerHTML=hero(0)+arena()+hero(1)+`<section class="mobile-board" aria-label="Hero boards"><div class="tabs">${names.map((name,i)=>button('board',`${name} board`,`data-index="${i}" aria-pressed="${selected===i}"`)).join('')}</div>${board(selected)}</section>`;
   match.querySelector('.action-log').open=!!logOpen;
+  for(const details of match.querySelectorAll('.forge-inventory'))details.open=openForge.has(details.dataset.seat);
   for(const details of match.querySelectorAll('.board-upgrades'))details.open=openUpgrades.has(details.dataset.seat);
   if(handDialog.open)renderHand();
   try { localStorage.setItem(storageKey,JSON.stringify(state)); } catch {}
@@ -814,6 +895,16 @@ function handleAction(event) {
     selectedCard=selectedCard===index?null:index;
     renderHand();
     handContent.querySelector(`button[data-action="select-card"][data-index="${index}"]`)?.focus();
+    return;
+  }
+  if(type==='inspect-forging'){
+    const key=target.dataset.status;
+    viewerSeat=index;viewerCard=null;viewerLeaflet=false;
+    front.hidden=back.hidden=true;
+    viewerImage.alt=key==='mining'?'Mining rules':'Crafting rules';
+    viewerImage.src=art[key];
+    document.getElementById('viewer-title').textContent=viewerImage.alt;
+    viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);
     return;
   }
   if(type==='inspect-undead'){
