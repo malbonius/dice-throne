@@ -34,9 +34,42 @@ dialog::backdrop{background:#080a12dc}
   .hero-head .vitals{gap:clamp(6px,2vw,12px);font-size:clamp(.78rem,3.5vw,1rem)}
   .inventory{flex-wrap:wrap}
 }
-.new-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.new-controls select{font:inherit;padding:6px;border-radius:6px;min-height:34px}
-.new-controls label{font-size:.78rem;color:var(--muted)}
+.match-setup{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}
+.setup-seats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.setup-seat{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid var(--line);border-radius:9px}
+.setup-seat small,.setup-seat strong{display:block}
+.setup-seat button{white-space:nowrap}
+.setup-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.setup-actions label{display:flex;align-items:center;gap:5px;font-size:.85rem;color:var(--muted)}
+#hero-picker{width:min(520px,calc(100% - 24px));max-height:85dvh;padding:0;overflow:hidden}
+#hero-picker[open]{display:flex;flex-direction:column}
+body:has(#hero-picker[open]){overflow:hidden}
+.picker-head{padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.picker-head label{display:block;margin:10px 0 5px;color:var(--muted);font-size:.88rem}
+#hero-search{width:100%;min-height:44px;padding:8px 10px;font:inherit;color:inherit;background:#10121a;border:1px solid #51566a;border-radius:8px}
+#hero-search:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.picker-results{padding:12px 16px 16px;min-height:0;overflow:auto;overscroll-behavior:contain}
+.picker-results details{border:1px solid var(--line);border-radius:9px}
+.picker-results details+details{margin-top:8px}
+.picker-results summary{padding:12px;cursor:pointer;font-weight:650}
+.picker-heroes{display:grid;gap:5px;padding:0 8px 8px}
+.picker-hero{display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}
+.picker-hero[hidden]{display:none}
+.picker-hero[aria-current="true"]{border-color:var(--gold)}
+.picker-hero small{color:var(--gold)}
+#hero-no-results{margin:0;color:var(--muted)}
+@media(max-width:800px){
+  header>div{align-items:stretch;flex-direction:column}
+  .match-setup{justify-content:space-between}
+}
+@media(max-width:560px){
+  .setup-seats{width:100%}
+  .setup-seat{flex-direction:column;align-items:stretch;justify-content:space-between}
+  .setup-actions{width:100%;justify-content:space-between}
+}
+@media(hover:none) and (pointer:coarse){
+  #hero-picker{inset:0;margin:0;width:100%;height:100dvh;max-height:none;border:0;border-radius:0}
+}
 .hand-panel{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
 .hand-panel h3{margin:0 0 8px;font-size:.95rem}
 .hand-group h3{font-size:.85rem;margin:0 0 6px;color:var(--muted)}
@@ -64,9 +97,31 @@ dialog::backdrop{background:#080a12dc}
 <meta name="theme-color" content="#191e28">
 </head>
 <body>
-<header><div><div><h1>Dice Throne</h1><small>Playtest 0.21.0</small></div><div class="new-controls"><label>Player 1 <select id="hero-select-0"></select></label><label>Player 2 <select id="hero-select-1"></select></label><label><input id="promos" type="checkbox"> Include promo cards</label><button id="reset" type="button">New match</button></div></div></header>
+<header>
+ <div>
+  <div><h1>Dice Throne</h1><small>Playtest 0.22.0</small></div>
+  <section class="match-setup" aria-label="Match setup">
+   <div class="setup-seats">
+    <div class="setup-seat"><div><small>Player 1</small><strong id="setup-hero-0"></strong></div><button type="button" id="change-hero-0" aria-label="Change hero for Player 1" aria-describedby="setup-hero-0" aria-haspopup="dialog">Change hero</button></div>
+    <div class="setup-seat"><div><small>Player 2</small><strong id="setup-hero-1"></strong></div><button type="button" id="change-hero-1" aria-label="Change hero for Player 2" aria-describedby="setup-hero-1" aria-haspopup="dialog">Change hero</button></div>
+   </div>
+   <div class="setup-actions"><label><input id="promos" type="checkbox"> Include promo cards</label><button id="reset" type="button">Start match</button></div>
+  </section>
+ </div>
+</header>
 <aside class="install-strip"><span role="status" id="offline-status">Preparing offline play…</span><button type="button" id="install-app" hidden>Install app</button></aside>
 <main id="match"></main>
+<dialog id="hero-picker" aria-labelledby="hero-picker-title">
+ <div class="picker-head">
+  <div class="viewer-head"><h2 id="hero-picker-title"></h2><form method="dialog"><button autofocus>Cancel</button></form></div>
+  <label for="hero-search">Search by hero name</label>
+  <input id="hero-search" type="search" autocomplete="off">
+ </div>
+ <div class="picker-results">
+  <div id="hero-groups"></div>
+  <p id="hero-no-results" role="status"></p>
+ </div>
+</dialog>
 <dialog id="hand-dialog" aria-labelledby="hand-title">
  <div class="viewer-head"><h2 id="hand-title"></h2><form method="dialog"><button>Close hand</button></form></div>
  <div id="hand-content"></div>

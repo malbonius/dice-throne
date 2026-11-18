@@ -681,14 +681,78 @@ viewerScroll.addEventListener('touchmove',event=>{
 },{passive:false});
 for(const type of ['touchend','touchcancel']) viewerScroll.addEventListener(type,()=>{pinch=null;});
 window.addEventListener('resize',()=>{if(viewer.open)setZoom(zoom);});
-const heroSelectors=[0,1].map(seat=>document.getElementById(`hero-select-${seat}`));
-for(const [seat,select] of heroSelectors.entries()){
-  select.innerHTML=sets.filter(set=>set.heroes.length).map(set=>`<optgroup label="${set.name}">${set.heroes.map(id=>`<option value="${id}">${HEROES[id].name}</option>`).join('')}</optgroup>`).join('');
-  select.value=heroId(state,seat);
+const setupHeroes=state.players.map((_,seat)=>heroId(state,seat));
+const setupHeroNames=setupHeroes.map((_,seat)=>document.getElementById(`setup-hero-${seat}`));
+const heroPicker=document.getElementById('hero-picker');
+const heroPickerTitle=document.getElementById('hero-picker-title');
+const heroSearch=document.getElementById('hero-search');
+const heroGroups=document.getElementById('hero-groups');
+const heroNoResults=document.getElementById('hero-no-results');
+const touchPicker=window.matchMedia('(hover: none) and (pointer: coarse)');
+let pickerSeat;
+let groupsBeforeSearch=null;
+
+function openHeroPicker(seat) {
+  pickerSeat=seat;
+  const currentHero=setupHeroes[seat];
+  heroPickerTitle.textContent=`Choose a hero for Player ${seat+1}`;
+  heroSearch.value='';
+  heroNoResults.textContent='';
+  groupsBeforeSearch=null;
+  heroGroups.innerHTML=sets.filter(set=>set.heroes.length).map(set=>`
+    <details ${set.heroes.includes(currentHero)?'open':''}>
+      <summary>${set.name}</summary>
+      <div class="picker-heroes">
+        ${set.heroes.map(id=>`
+          <button type="button" class="picker-hero" data-hero="${id}" ${id===currentHero?'aria-current="true"':''}>
+            ${HEROES[id].name}${id===currentHero?'<small aria-hidden="true">Selected</small>':''}
+          </button>`).join('')}
+      </div>
+    </details>`).join('');
+  heroPicker.showModal();
+  heroGroups.parentElement.scrollTop=0;
+  if(!touchPicker.matches)heroSearch.focus();
 }
+
+for(const [seat,id] of setupHeroes.entries()){
+  setupHeroNames[seat].textContent=HEROES[id].name;
+  document.getElementById(`change-hero-${seat}`).addEventListener('click',()=>openHeroPicker(seat));
+}
+
+heroSearch.addEventListener('input',()=>{
+  const query=heroSearch.value.trim().toLowerCase();
+  const groups=Array.from(heroGroups.children);
+  if(query && !groupsBeforeSearch)groupsBeforeSearch=groups.map(group=>group.open);
+  let found=false;
+  for(const [index,group] of groups.entries()){
+    let hasMatch=false;
+    for(const option of group.querySelectorAll('[data-hero]')){
+      const matches=HEROES[option.dataset.hero].name.toLowerCase().includes(query);
+      option.hidden=!matches;
+      hasMatch ||= matches;
+    }
+    group.hidden=!hasMatch;
+    if(query)group.open=hasMatch;
+    else if(groupsBeforeSearch)group.open=groupsBeforeSearch[index];
+    found ||= hasMatch;
+  }
+  if(!query)groupsBeforeSearch=null;
+  heroNoResults.textContent=found?'':'No heroes match your search.';
+  heroGroups.parentElement.scrollTop=0;
+});
+
+heroGroups.addEventListener('click',event=>{
+  const option=event.target.closest('button[data-hero]');
+  if(!option)return;
+  const id=Number(option.dataset.hero);
+  setupHeroes[pickerSeat]=id;
+  setupHeroNames[pickerSeat].textContent=HEROES[id].name;
+  heroPicker.close();
+});
+
 document.getElementById('reset').addEventListener('click',()=>{
   if ((state.attempts || state.turn>1) && state.stage!=='finished' && !confirm('Start a new match and replace the current one?')) return;
-  state=createMatch(roll,{promo:document.getElementById('promos').checked,heroes:heroSelectors.map(select=>Number(select.value))});
+  state=createMatch(roll,{promo:document.getElementById('promos').checked,heroes:setupHeroes});
   names=heroNames(state);
   selectedCard=null;boardOverride=null;render();
 });
