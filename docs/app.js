@@ -29,6 +29,8 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  decrepify: 'After the first Roll Attempt, reroll at most two dice per attempt. Reduces modifiable attack damage by 1 and clears when the Roll Phase ends.',
+  resurrect: 'On lethal damage, return with 5 Health. Discard your hand and lose access to cards and CP for the rest of the match.',
   dreadful: 'Adds dice to Hallowed Reckoning and Spectral Assault. Spend 4 during upkeep to Terrorize. Stack limit 5.',
   grim: 'Spend for an extra Roll Attempt or to roll for bonus attack damage. Each option can be used once per turn. Stack limit 3.',
   hauntedHead: 'Each Headless Horseman has a separate Haunted Head. It grants its owner Dreadful at the end of their turn while the opponent holds it.',
@@ -105,6 +107,15 @@ function hero(seat) {
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+    p.corpses!==undefined&&`<span class="token"><img src="${art.corpseDial}" alt="">Corpses ${p.corpses}/10</span>`,
+    p.covered&&`<span class="token">Unearth covers ${p.covered}</span>`,
+    ...Object.entries(p.undead??{}).filter(([,count])=>count).map(([kind,count])=>{
+      const {name}=necromancer.undead[kind], key={warrior:'skeletalWarrior',mage:'skeletalMage',golem:'boneGolem'}[kind];
+      return `<span class="token"><img src="${art[key]}" alt="">${name} ×${count}</span>`;
+    }),
+    p.resurrected&&'<span class="token">Resurrected · CP and cards locked</span>',
+    p.resurrect&&token(seat,'resurrect','Resurrect'),
+    p.decrepify&&token(seat,'decrepify','Decrep-ify'),
     p.dreadful&&token(seat,'dreadful',`Dreadful ×${p.dreadful}`),
     p.grim&&token(seat,'grim',`Grim Pursuit ×${p.grim}`),
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
@@ -127,7 +138,7 @@ function hero(seat) {
     p.fireMastery&&token(seat,'fireMastery',`Fire Mastery ${p.fireMastery}/${statusCap(p,'fireMastery')}`),
     p.concussion && token(seat,'concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && token(seat,'stun','Stun')].filter(Boolean).join('') || 'No status effects'}</div></div>
     ${board(seat)}<div class="inventory"><span class="deck">${(p.deck.length??p.deck) ? `<img src="${art.back}" alt="">` : ''} Draw ${p.deck.length??p.deck} · Discard ${p.discard?.length??0}</span><span class="hand-tools"><span class="hand-count">${p.hand.length??p.hand} in hand</span>
-      ${button('open-hand','Hand',`data-index="${seat}" aria-label="Open ${names[seat]}’s hand" aria-haspopup="dialog" ${seat===cardActor(state)&&!['finished','nyraDamage'].includes(state.stage)?'':'disabled'}`)}</span>${button('inspect-leaflet','Leaflet',`class="leaflet" data-index="${seat}" aria-label="${names[seat]} leaflet"`)}</div>
+      ${button('open-hand','Hand',`data-index="${seat}" aria-label="Open ${names[seat]}’s hand" aria-haspopup="dialog" ${seat===cardActor(state)&&!['finished','nyraDamage'].includes(state.stage)?'':'disabled'}`)}</span>${button('inspect-leaflet','Leaflet',`class="leaflet" data-index="${seat}" aria-label="${names[seat]} leaflet"`)}${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}</div>
   </section>`;
 }
 function tray(values,seat,editable,held=[]) {
@@ -290,7 +301,7 @@ function arena() {
     case 'offence':
       phase='Offensive Roll';
       heading=`${actingName} rolls`;
-      detail=state.attempts ? 'Tap dice to keep them, reroll the rest, or announce an available ability.' : 'Roll all five dice to begin.';
+      detail=state.players[state.active].decrepify&&state.attempts?'Decrep-ify · hold at least three dice to reroll.':state.attempts ? 'Tap dice to keep them, reroll the rest, or announce an available ability.' : 'Roll all five dice to begin.';
       content=tray(state.dice.length ? state.dice : Array(5).fill(null),seat,!!allowed.hold,state.held)
         + `<div class="controls">${button('roll',state.attempts?(constrictCost(state)?'Reroll · 1 CP':'Reroll'):'Roll dice',`class="primary" ${allowed.roll?'':'disabled'}`)}
         ${button('end','End without an ability',allowed.end?'':'disabled')}</div>`
@@ -334,6 +345,32 @@ function arena() {
       content=statusKeys.filter(key=>state.players[p.seraphTarget][key]).map(status=>button('resolvePurify',`Remove ${statusLabel(status)}`,`data-status="${status}"`)).join('')+
         button('resolvePurify','Continue without removing a status','class="primary"');
       break;
+    case 'undeadRoll': {
+      const pending=state.undeadRoll;
+      phase='Undead';heading='Roll for activated Undead';
+      detail='Remove one Undead of your choice for each Bones result.';
+      content=tray(pending.dice,seat,false)+
+        (pending.rerolls?pending.dice.map((value,i)=>button('rerollUndead',`Reroll die ${i+1} (${value}) · ${pending.rerolls} left`,`data-index="${i}"`)).join(''):'')+
+        button('resolveUndead','Resolve Undead roll','class="primary"');
+      break;
+    }
+    case 'undeadRemove':
+      phase='Undead';heading='Choose an Undead to remove';
+      content=Object.keys(necromancer.undead).filter(kind=>state.players[seat].undead[kind]).map(kind=>
+        button('removeUndead',necromancer.undead[kind].name,`data-status="${kind}"`)).join('');
+      break;
+    case 'necroChoice': {
+      phase='Ability choice';heading=p.name;
+      const player=state.players[state.active];
+      if(p.explosion)content=Array.from({length:Math.min(p.explosion,player.corpses)+1},(_,n)=>
+        button('necroChoice',`Spend ${n} Corpses`,`data-amount="${n}"`)).join('');
+      else if(p.shroud){
+        const kinds=necromancer.types(player);
+        content=kinds.map(kind=>button('necroChoice',`Summon ${necromancer.undead[kind].name}`,`data-status="${kind}"`)).join('');
+        if(!kinds.length||p.shroud!=='both')content+=button('necroChoice','Gain 3 Corpses','data-status="corpses"');
+      } else content=button('necroChoice','Finish Reanimate','class="primary"');
+      break;
+    }
     case 'horseRoll':
       phase='Attack Modifier';heading='Grim Pursuit';
       detail='Add 1 damage per Horseshoe rolled.';
@@ -347,6 +384,12 @@ function arena() {
     case 'upkeep': {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
+      if(allowed.unearth){
+        heading='Unearth';detail='Choose a different ability to cover and gain its Corpses.';
+        content=unearthChoices(hero).map(name=>button('unearth',`${name} · +${necromancer.unearth[name]+Number(!!hero.upgrades[name])} Corpses`,
+          `data-status="${name}"`)).join('');
+        break;
+      }
       if(allowed.horseUpkeep){
         heading='Headless Mayhem';
         const move=hero.hauntedHeadSeat===seat
@@ -548,6 +591,7 @@ function arena() {
   const tokenActions=state.grimOverflow?grimActions:state.stage==='nyraDamage'?[]:state.tacticalOverflow||state.tacticalRemoval?tacticalActions:[
     ...tacticalActions,
     ...grimActions,
+    ...necroActions(state,responding).map(({kind,label})=>button('necroAction',label,`data-status="${kind}"`)),
     ...(canHealNyra(state,responding)?[button('healNyra','Nyra’s Bond · heal Nyra by 2')]:[]),
     ...nyraRerolls(state,responding).map((value,i)=>button('nyraReroll',`Nyra takes 1 damage · reroll die ${i+1} (${value})`,`data-index="${i}"`)),
     ...artificerActions(state,responding).map(({key,label})=>button('artificerAction',label,`data-status="${key}"`)),
@@ -621,6 +665,15 @@ function handleAction(event) {
     selectedCard=selectedCard===index?null:index;
     renderHand();
     handContent.querySelector(`button[data-action="select-card"][data-index="${index}"]`)?.focus();
+    return;
+  }
+  if(type==='inspect-undead'){
+    viewerSeat=index;viewerCard=null;viewerLeaflet=false;
+    front.hidden=back.hidden=true;
+    viewerImage.alt='Undead reference';
+    viewerImage.src=art.undeadLeaflet;
+    document.getElementById('viewer-title').textContent=viewerImage.alt;
+    viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);
     return;
   }
   if (type==='inspect-board' || type==='inspect-leaflet') {
