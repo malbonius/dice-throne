@@ -30,6 +30,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  feather: 'Spend 1 to reroll the Nevermore die, 2 to change it by 1, or 3 to activate Nevermore.',
+  hex: 'Your sixes have no number or symbol. Remove Hex at the end of your turn.',
+  nevermore: 'On an opponent, Nevermore can absorb vitality and triggers an upkeep roll. Returning him normally heals the Raveness for the dial value.',
   prey: 'When attacked, the attacker may roll for each Prey. On 1, remove that token. On 2–5, add 1 damage. On 6, add 2 damage.',
   moonShard: 'Twilight flips Pale Lady at three Moon Shards in upkeep. Werewolf normally loses one at turn end and flips back at zero. Stack limit 3.',
   decrepify: 'After the first Roll Attempt, reroll at most two dice per attempt. Reduces modifiable attack damage by 1 and clears when the Roll Phase ends.',
@@ -111,6 +114,10 @@ function hero(seat) {
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+    p.hex&&token(seat,'hex','Hex'),
+    p.feather>0&&token(seat,'feather',`Feathers ${p.feather}/${p.featherCap??5}`),
+    ...state.players.flatMap((owner,i)=>owner.nevermoreSeat===seat?
+      [token(seat,'nevermore',`Nevermore${heroId(state,1-i)===raveness.id?` (P${i+1})`:''} · ${owner.nevermoreVitality}/3`,`nevermore-${i}`)]:[]),
     p.werewolf&&'<span class="token">Werewolf form</span>',
     p.moonShard>0&&token(seat,'moonShard',`Moon Shards ×${p.moonShard}`),
     p.prey>0&&token(seat,'prey',`Prey ×${p.prey}`),
@@ -151,8 +158,10 @@ function hero(seat) {
 function tray(values,seat,editable,held=[]) {
   return `<div class="dice" role="group" aria-label="${names[seat]} dice">${values.map((value,i) => {
     if (!value) return '<span class="die empty" aria-hidden="true">·</span>';
-    const label = `${value} ${HEROES[heroId(state,seat)].symbols[value-1]}`;
-    const picture = `<img src="${art.dice[heroId(state,seat)][value-1]}" alt="${label}">`;
+    const blank=!dieValue(value,state.players[seat]);
+    const label = blank?'Blank · Hex':`${value} ${HEROES[heroId(state,seat)].symbols[value-1]}`;
+    const picture = blank?'<span aria-label="Blank due to Hex">—</span>':
+      `<img src="${art.dice[heroId(state,seat)][value-1]}" alt="${label}">`;
     return editable ? button('hold',picture,`class="die" data-index="${i}" aria-pressed="${!!held[i]}" aria-label="Die ${i+1}, ${label}, ${held[i]?'held':'available to reroll'}"`)
       : `<span class="die">${picture}</span>`;
   }).join('')}</div>`;
@@ -206,7 +215,11 @@ function arena() {
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
-  if(state.grimOverflow){
+  if(allowed.collectFeathers){
+    phase='Status effect';heading='Collect Feathers';
+    detail=`Gain up to ${state.ravenFeathers.amount} Feathers. You may spend existing Feathers first.`;
+    content=button('collectFeathers','Collect Feathers','class="primary"');
+  } else if(state.grimOverflow){
     phase='Grim Pursuit';heading='Make room for Grim Pursuit';
     detail=`Gain ${state.grimOverflow.amount} Grim Pursuit. Spend existing tokens first if you want to make room.`;
     content=button('collectGrim','Collect Grim Pursuit','class="primary"');
@@ -388,6 +401,34 @@ function arena() {
       content=button('chooseHorrify','Gain 3 Dreadful','data-status="dreadful"')+
         button('chooseHorrify','Gain Grim Pursuit','data-status="grim"');
       break;
+    case 'ravenActivate': {
+      const task=state.ravenActivation, holder=state.players[task.owner].nevermoreSeat;
+      phase='Companion';heading=`${names[task.owner]} activates Nevermore`;
+      detail=`${task.left} ${task.left===1?'activation':'activations'} remaining. Nevermore is with ${names[holder]}.`;
+      content=button('activateNevermore',`Move Nevermore to ${names[1-holder]}`,`data-status="move" data-target="${1-holder}"`)+
+        (holder!==task.owner?button('activateNevermore','Absorb Vitality','data-status="absorb"'):'')+
+        button('activateNevermore','Skip this activation','data-status="skip"');
+      break;
+    }
+    case 'ravenNevermoreRoll':
+      phase='Upkeep';heading='Nevermore Die Roll';
+      content=tray(state.nevermoreRoll.dice,seat,false)+button('resolveNevermore','Resolve Nevermore die','class="primary"');
+      break;
+    case 'ravenDiscard':
+      phase='Upkeep';heading='Nevermore forces a discard';
+      content=state.players[seat].hand.map(id=>button('ravenDiscard',seatCard(state,seat,id).name,`data-index="${id}"`)).join('');
+      break;
+    case 'ravenAttackChoice': {
+      const holder=state.players[seat].nevermoreSeat;
+      phase='Main Phase action';heading='Nevermore Attack!';
+      content=button('ravenAttackChoice',`Heal ${names[holder]} by 2`,'data-status="heal"')+
+        button('ravenAttackChoice',`Deal 2 damage to ${names[holder]}`,'data-status="damage"');
+      break;
+    }
+    case 'ravenAbility':
+      phase='Ability';heading=p.name;
+      content=button('finishRavenAbility','Continue ability','class="primary"');
+      break;
     case 'prey':
       phase='Attack modifier';heading='Prey';
       content=state.preyRoll?tray(state.preyRoll,state.active,false)+button('resolvePrey','Resolve Prey roll','class="primary"'):
@@ -405,6 +446,11 @@ function arena() {
     case 'upkeep': {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
+      if(allowed.rollNevermore){
+        heading='Nevermore';detail=`${activeName} starts their upkeep with Nevermore.`;
+        content=button('rollNevermore','Roll the Nevermore die','class="primary"');
+        break;
+      }
       if(allowed.unearth){
         heading='Unearth';detail='Choose a different ability to cover and gain its Corpses.';
         content=unearthChoices(hero).map(name=>button('unearth',`${name} · +${necromancer.unearth[name]+Number(!!hero.upgrades[name])} Corpses`,
@@ -603,6 +649,12 @@ function arena() {
       content=button('next',`Start ${names[1-seat]}’s turn`,'class="primary"'); break;
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
+  }
+  const featherSeats=state.response?[responding]:state.nevermoreRoll?[state.nevermoreRoll.owner,state.nevermoreRoll.target]:[responding];
+  for(const owner of featherSeats){
+    const options=raveness.featherChoices(state,owner);
+    if(options.length)content+=`<div class="token-actions"><strong>${names[owner]} · spend Feathers</strong><div class="controls">${options.map(option=>
+      button('spendFeather',`${option.cost} Feather · ${option.label}`,`data-target="${owner}" data-status="${option.kind}"`)).join('')}</div></div>`;
   }
   const tokens=tokenChoices(state,responding);
   const tacticalActions=tacticalChoices(state,responding).map(({cost,label},index)=>
