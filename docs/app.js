@@ -32,6 +32,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  footwork: 'Move on the Footwork Track with Reposition, abilities and cards. Your final position can give one bonus per turn.',
+  guardBreak: 'Spend after activating a defendable attack and roll one die. A 4 or 5 makes it undefendable.',
+  disarm: 'During upkeep, discard a card or skip your Income Phase. Then remove Disarm.',
   shapeshift: 'Spend to change between Druid, Bear and Cat forms. Stack limit 2.',
   regenerate: 'Heal 2 during upkeep, then flip to the 1-point side.',
   regenerate1: 'Heal 1 during upkeep, then remove this token.',
@@ -120,6 +123,9 @@ function hero(seat) {
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+    p.footwork!==undefined&&token(seat,'footwork',`Footwork · ${duelist.positions[p.footwork+2]}`),
+    p.guardBreak>0&&token(seat,'guardBreak',`Guard Break ×${p.guardBreak}`),
+    p.disarm&&token(seat,'disarm','Disarm'),
     p.druidForm&&`<span class="token">${druid.formName(p.druidForm)} Form</span>`,
     p.shapeShift>0&&token(seat,'shapeshift',`Shape Shift ×${p.shapeShift}`),
     p.regenerate>0&&token(seat,'regenerate',`Regenerate (2) ×${p.regenerate}`),
@@ -203,6 +209,7 @@ function incomeSummary(income) {
   if(!income)return '';
   let message;
   if(income.skipped==='first-turn')message='Skipped on the starting hero’s first turn.';
+  else if(income.skipped==='disarm')message='Skipped due to Disarm.';
   else if(income.skipped==='concussion')message='Skipped due to Concussion.';
   else {
     const cp=income.cp ? '+1 CP' : 'CP already at the cap';
@@ -226,6 +233,7 @@ function arena() {
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
+  const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
   if(allowed.collectShapeShift){
     phase='Status effect';heading='Collect Shape Shift';
     detail='You may spend an existing Shape Shift to make room for incoming tokens.';
@@ -416,6 +424,27 @@ function arena() {
       content=button('chooseHorrify','Gain 3 Dreadful','data-status="dreadful"')+
         button('chooseHorrify','Gain Grim Pursuit','data-status="grim"');
       break;
+    case 'duelMove': {
+      const {max}=state.duelMovement;
+      phase='Footwork';heading=`${actingName} can take up to ${max} ${max===1?'Step':'Steps'}`;
+      const player=state.players[seat];
+      detail=`Current position · ${duelist.positions[player.footwork+2]}`;
+      content=duelist.steps(player,max).map(({label},i)=>button('duelMove',label,`data-choice="${i}"`)).join('');
+      break;
+    }
+    case 'duelAbility':
+      phase='Ability';heading=p.name;
+      content=button('finishDuelAbility','Continue ability','class="primary"');
+      break;
+    case 'guardOffer':
+      phase='Attack modifier';heading='Guard Break';
+      content=(allowed.spendGuardBreak?button('spendGuardBreak','Spend Guard Break and roll'):'')+
+        button('skipGuardBreak','Continue attack','class="primary"');
+      break;
+    case 'guardBreakRoll':
+      phase='Attack modifier';heading='Guard Break';
+      content=tray(state.guardBreakRoll,state.active,false)+button('resolveGuardBreak','Resolve Guard Break','class="primary"');
+      break;
     case 'druidReady':
       phase='Offensive Roll';heading=p.name;
       detail=p.druid.wildDraw?'Draw a card if you finish this ability in Druid Form.':p.damage?'Cat Form adds 2 damage and inflicts Wound.':'';
@@ -475,6 +504,17 @@ function arena() {
     case 'upkeep': {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
+      if(allowed.resolveDisarm){
+        heading='Disarm';detail='Discard one card or skip your Income Phase.';
+        content=hero.hand.map(id=>button('resolveDisarm',`Discard ${seatCard(state,state.active,id).name}`,`data-index="${id}" data-status="discard"`)).join('')+
+          button('resolveDisarm','Skip Income Phase','data-status="skip"');
+        break;
+      }
+      if(allowed.reposition){
+        heading='Reposition';detail=`Current position · ${duelist.positions[hero.footwork+2]}. Moving backward grants one Guard Break.`;
+        content=duelist.steps(hero,2,1).map(({label},i)=>button('reposition',label,`data-choice="${i}"`)).join('');
+        break;
+      }
       if(allowed.rollNevermore){
         heading='Nevermore';detail=`${activeName} starts their upkeep with Nevermore.`;
         content=button('rollNevermore','Roll the Nevermore die','class="primary"');
@@ -633,7 +673,7 @@ function arena() {
       phase=p.ultimate ? 'Ultimate damage' : 'Stunned defender';
       heading=`${activeName} resolves ${p.name}`;
       detail=`${p.damage?`${p.damage} incoming damage. `:''}${names[1-state.active]} cannot respond.${vineDamage(state)?` Barbed Vine deals up to ${vineDamage(state)} to ${activeName}.`:''}`;
-      content=(allowed.reopenPrey?button('reopenPrey','Roll for Prey'):'')+button('settle',p.damage?'Resolve damage':'Resolve ability','class="primary"'); break;
+      content=(allowed.reopenPrey?button('reopenPrey','Roll for Prey'):'')+button('settle',footworkPending?'Apply Footwork bonus':p.damage?'Resolve damage':'Resolve ability','class="primary"'); break;
     case 'defence':
       phase='Defensive Roll'; heading=`${actingName} can defend`;
       detail=`${p.name} brings ${p.damage} incoming damage.`;
@@ -657,7 +697,7 @@ function arena() {
       phase='Damage response'; heading=`${actingName} responds`;
       detail=`${incomingDamage(state)} incoming damage${shadowAvoids(state)&&p.damage?' after Shadows':p.pure?' (pure)':p.undefendable?' (undefendable)':''}${returnDamageFor(state) ? ` · ${returnDamageFor(state)} return damage` : ''}.${p.recoil && incomingDamage(state) ? ` Reckless deals ${p.recoil} damage to Barbarian if this attack hits.` : ''}`;
       content=(state.defenceDice.length ? tray(state.defenceDice,seat,false):'')
-        +`<div class="controls">${allowed.evade?button('evade',`${actingName} spends Evasive`):''}${allowed.evadeReturn?button('evadeReturn',`${activeName} spends Evasive`):''}${allowed.reopenPrey?button('reopenPrey','Roll for Prey'):''}${button('settle',nyraIncoming(state)?'Assign damage':'Resolve damage','class="primary"')}</div>`; break;
+        +`<div class="controls">${allowed.evade?button('evade',`${actingName} spends Evasive`):''}${allowed.evadeReturn?button('evadeReturn',`${activeName} spends Evasive`):''}${allowed.reopenPrey?button('reopenPrey','Roll for Prey'):''}${button('settle',footworkPending?'Apply Footwork bonus':nyraIncoming(state)?'Assign damage':'Resolve damage','class="primary"')}</div>`; break;
     case 'evasion':
       phase='Avoid damage'; heading=`${actingName} checks ${statusLabel(state.evasionToken??'evasive')}`;
       detail=state.evasionToken==='smoke'?'A 1–3 avoids the incoming damage.':'A 1 or 2 avoids the incoming damage.';

@@ -4,7 +4,7 @@ const sharedCards = [
  ['Not This Time!',1,'roll'],['Twice as Wild!',3,'roll'],['Try, Try Again!',1,'roll'],['So Wild!',2,'roll'],['Samesies!',1,'roll'],
  ['One More Time!',1,'roll'],['Helping Hand!',1,'roll'],['Better D!',0,'roll'],['Six-It!',1,'roll']
 ];
-const heroRoster = [barbarian, moonElf, pyromancer, shadowThief, monk, paladin, ninja, treant, cursedPirate, artificer, seraph, vampireLord, gunslinger, samurai, tactician, huntress, headlessHorseman, necromancer, paleLady, raveness, druid];
+const heroRoster = [barbarian, moonElf, pyromancer, shadowThief, monk, paladin, ninja, treant, cursedPirate, artificer, seraph, vampireLord, gunslinger, samurai, tactician, huntress, headlessHorseman, necromancer, paleLady, raveness, druid, duelist];
 const HEROES = heroRoster.map(hero => hero.board);
 const abilityEffects = Object.assign({}, ...heroRoster.map(hero => hero.effects));
 const abilityEffectDice = Object.assign(
@@ -20,9 +20,9 @@ const cardInfo = (seat,id) => {
  const [name,cost,phase]=id<=18?sharedCards[id-1]:heroRoster[seat].cards[id-firstAction];
  return {name,cost,phase};
 };
-const newStatuses=['powderKeg','wither','parlay','synth','nanite','flight','blindingLight','holyPresence','bloodPower','bleed','mesmerize','bounty','reload','honor','shame','backStrike','tactical','constrict','nyraBond','dreadful','grim','decrepify','prey','feather','hex','wound','regenerate','regenerate1'];
+const newStatuses=['powderKeg','wither','parlay','synth','nanite','flight','blindingLight','holyPresence','bloodPower','bleed','mesmerize','bounty','reload','honor','shame','backStrike','tactical','constrict','nyraBond','dreadful','grim','decrepify','prey','feather','hex','wound','regenerate','regenerate1','guardBreak','disarm'];
 const statusKeys=['blind','entangle','evasive','targeted','concussion','burn','knockdown','fireMastery','poison','shadows','sneak','chi','cleanse','crit','accuracy','protect','retribution','delayedPoison','smoke','ninjutsu','wellspring','barbed',...newStatuses];
-const negativeStatuses=['entangle','blind','concussion','targeted','burn','knockdown','poison','delayedPoison','barbed','powderKeg','wither','parlay','nanite','blindingLight','bleed','bounty','shame','constrict','decrepify','prey','hex','wound'];
+const negativeStatuses=['entangle','blind','concussion','targeted','burn','knockdown','poison','delayedPoison','barbed','powderKeg','wither','parlay','nanite','blindingLight','bleed','bounty','shame','constrict','decrepify','prey','hex','wound','disarm'];
 const spiritTypes=['seedling','sapling','dryad'];
 const spiritCaps={seedling:3,sapling:2,dryad:1};
 const spiritTotal=p=>spiritTypes.reduce((total,key)=>total+(p[key]??0),0);
@@ -60,8 +60,8 @@ function discardSpirits(player,choice){
  return spiritTotal(choice);
 }
 const paladinBuffs=['protect','retribution','crit','accuracy'];
-const statusLabel = s=>s==='regenerate1'?'Regenerate (1)':s==='regenerate'?'Regenerate (2)':s==='decrepify'?'Decrep-ify':s==='grim'?'Grim Pursuit':s==='nyraBond'?'Nyra’s Bond':s==='tactical'?'Tactical Advantage':s==='backStrike'?'Back Strike':s==='bloodPower'?'Blood Power':s==='mesmerize'?'Mesmerize':s==='blindingLight'?'Blinding Light':s==='holyPresence'?'Holy Presence':s==='powderKeg'?'Powder Keg':s==='doubloon'?'Cursed Doubloon':s==='barbed'?'Barbed Vine':s==='smoke'?'Smoke Bomb':s==='delayedPoison'?'Delayed Poison':s==='blessing'?'Blessing of Divinity':s==='fireMastery'?'Fire Mastery':s==='sneak'?'Sneak Attack':s[0].toUpperCase()+s.slice(1);
-const statusCap=(p,key)=>key==='feather'?(p.featherCap??5):key==='dreadful'?5:key==='synth'?7:key==='tactical'?(p.tacticalCap??5):key==='bloodPower'?5:key==='chi'?(p.chiCap??5):key==='fireMastery'?(p.masteryCap??5):['delayedPoison','wither','holyPresence','bleed','reload','honor','shame','prey','wound','regenerate','regenerate1'].includes(key)?2:['evasive','poison','cleanse','ninjutsu','nanite','flight','grim'].includes(key)?3:1;
+const statusLabel = s=>s==='guardBreak'?'Guard Break':s==='regenerate1'?'Regenerate (1)':s==='regenerate'?'Regenerate (2)':s==='decrepify'?'Decrep-ify':s==='grim'?'Grim Pursuit':s==='nyraBond'?'Nyra’s Bond':s==='tactical'?'Tactical Advantage':s==='backStrike'?'Back Strike':s==='bloodPower'?'Blood Power':s==='mesmerize'?'Mesmerize':s==='blindingLight'?'Blinding Light':s==='holyPresence'?'Holy Presence':s==='powderKeg'?'Powder Keg':s==='doubloon'?'Cursed Doubloon':s==='barbed'?'Barbed Vine':s==='smoke'?'Smoke Bomb':s==='delayedPoison'?'Delayed Poison':s==='blessing'?'Blessing of Divinity':s==='fireMastery'?'Fire Mastery':s==='sneak'?'Sneak Attack':s[0].toUpperCase()+s.slice(1);
+const statusCap=(p,key)=>key==='feather'?(p.featherCap??5):key==='dreadful'?5:key==='synth'?7:key==='tactical'?(p.tacticalCap??5):key==='bloodPower'?5:key==='chi'?(p.chiCap??5):key==='fireMastery'?(p.masteryCap??5):['delayedPoison','wither','holyPresence','bleed','reload','honor','shame','prey','wound','regenerate','regenerate1','guardBreak'].includes(key)?2:['evasive','poison','cleanse','ninjutsu','nanite','flight','grim'].includes(key)?3:1;
 const grantStatus = (p,key,amount=1)=>{
  if(key==='regenerate'){druid.regenerate(p,amount);return;}
  if(key==='regenerate1'){p.regenerate1=(p.regenerate1??0)+Math.min(amount,2-druid.regenTotal(p));return;}
@@ -150,10 +150,11 @@ function stealNecroHealth(s,seat,amount){
  s.log.unshift(s.winner);
  return true;
 }
-const attackLocked=s=>s.ravenActivation?.locked||s.pending?.ultimate&&['ravenAbility','prey','druidReady'].includes(s.stage)||s.undeadRoll?.resume==='locked'||s.stage==='undeadRemove'&&s.undeadResume==='locked'||s.stage==='locked'||s.horseRoll?.resume==='locked'||s.gunReload?.resume==='locked'||s.artRoll?.resume==='locked'||s.seraphRoll?.resume==='locked'||s.stage==='sideDamage'&&s.sideDamage.resume==='locked'||s.ninjutsuReturnStage==='locked'||s.pending?.ultimate&&['sneakOffer','growSpirits','evasion'].includes(s.stage);
-const rollPhase=s=>s.mesmerizeRoll?.resume!=='upkeep'&&s.artRoll?.resume!=='upkeep'&&s.evasionReturnStage!=='upkeep'&&(s.evasionReturnStage!=='sideDamage'||s.sideDamage?.source==='Barbed Vine')&&['offence','announce','blind','effect','effectResponse','defence','defenceResponse','damage','evasion','postHit','targeting','combustion','pickpocket','sneakOffer','sneakRoll','monkChoice','ninjaGain','ninjutsuRoll','ninjutsuChoice','pirateKegRoll','artRoll','seraphRoll','mesmerizeRoll','gunContest','gunReload','gunDuelChoice','horseRoll','undeadRoll','necroChoice','horrifyChoice','samuraiRoll','vampireChoice','seraphTarget','purify','dryadResponse','spiritPayment','overgrowthWells','prey','druidReady'].includes(s.stage);
+const attackLocked=s=>s.pending?.ultimate&&s.stage==='duelMove'||s.ravenActivation?.locked||s.pending?.ultimate&&['ravenAbility','prey','druidReady'].includes(s.stage)||s.undeadRoll?.resume==='locked'||s.stage==='undeadRemove'&&s.undeadResume==='locked'||s.stage==='locked'||s.horseRoll?.resume==='locked'||s.gunReload?.resume==='locked'||s.artRoll?.resume==='locked'||s.seraphRoll?.resume==='locked'||s.stage==='sideDamage'&&s.sideDamage.resume==='locked'||s.ninjutsuReturnStage==='locked'||s.pending?.ultimate&&['sneakOffer','growSpirits','evasion'].includes(s.stage);
+const rollPhase=s=>s.mesmerizeRoll?.resume!=='upkeep'&&s.artRoll?.resume!=='upkeep'&&s.evasionReturnStage!=='upkeep'&&(s.evasionReturnStage!=='sideDamage'||s.sideDamage?.source==='Barbed Vine')&&['offence','announce','blind','effect','effectResponse','defence','defenceResponse','damage','evasion','postHit','targeting','combustion','pickpocket','sneakOffer','sneakRoll','monkChoice','ninjaGain','ninjutsuRoll','ninjutsuChoice','pirateKegRoll','artRoll','seraphRoll','mesmerizeRoll','gunContest','gunReload','gunDuelChoice','horseRoll','undeadRoll','necroChoice','horrifyChoice','samuraiRoll','vampireChoice','seraphTarget','purify','dryadResponse','spiritPayment','overgrowthWells','prey','druidReady','guardBreakRoll','guardOffer'].includes(s.stage);
 function rollContext(s) {
  if(s.mesmerizeRoll&&!s.mesmerizeRoll.choosing)return {dice:s.mesmerizeRoll.dice,seat:s.mesmerizeRoll.seat};
+ if(s.guardBreakRoll&&!s.cardRoll)return {dice:s.guardBreakRoll,seat:s.active};
  if(s.woundRoll&&!s.cardRoll)return {dice:s.woundRoll,seat:s.active};
  if(s.nevermoreRoll&&!s.cardRoll)return {dice:s.nevermoreRoll.dice,seat:s.nevermoreRoll.target};
  if(s.preyRoll&&!s.cardRoll)return {dice:s.preyRoll,seat:s.active};
@@ -190,7 +191,7 @@ function cardChoices(s,seat,id) {
  if(price(s,seat,id)>p.cp) return [];
  if(s.mesmerizeRoll&&![5,6,8,9,11,12,13,14,16,18].includes(id))return [];
  if(s.cardRoll && !(hero===headlessHorseman.id&&[31,32].includes(id))&&!(hero===huntress.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===artificer.id&&[28,29].includes(id)) && !([8,9].includes(id) || (c.phase==='roll' && rollPhase(s) && ([11,12,13,14,16,18].includes(id)||hero===3&&id===29||hero===cursedPirate.id&&id===29)))) return [];
- if(attackLocked(s) && (seat!==s.active || s.pending.ultimate && ![5,6,9,30,31].includes(id)&&!(hero===vampireLord.id&&[32,33].includes(id))&&!(hero===gunslinger.id&&id===27)&&!(hero===samurai.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===huntress.id&&[28,29].includes(id))&&!(hero===headlessHorseman.id&&[27,31,32].includes(id))&&!(hero===necromancer.id&&[32,33].includes(id))&&!(hero===paleLady.id&&[19,20,21,23].includes(id))&&!(hero===raveness.id&&[29,30,31].includes(id))&&!(hero===druid.id&&[27,32].includes(id)) && !(hero===2&&id===32) && !(hero===6&&id===28&&s.stage==='locked')&&!(hero===7&&id===31&&s.stage==='locked')&&!(hero===cursedPirate.id&&[30,31,32,33].includes(id)&&s.stage==='locked')&&!(id===10&&vineDamage(s)))) return [];
+ if(attackLocked(s) && (seat!==s.active || s.pending.ultimate && ![5,6,9,30,31].includes(id)&&!(hero===vampireLord.id&&[32,33].includes(id))&&!(hero===gunslinger.id&&id===27)&&!(hero===samurai.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===huntress.id&&[28,29].includes(id))&&!(hero===headlessHorseman.id&&[27,31,32].includes(id))&&!(hero===necromancer.id&&[32,33].includes(id))&&!(hero===paleLady.id&&[19,20,21,23].includes(id))&&!(hero===raveness.id&&[29,30,31].includes(id))&&!(hero===druid.id&&[27,32].includes(id))&&!(hero===duelist.id&&[28,29,30].includes(id)) && !(hero===2&&id===32) && !(hero===6&&id===28&&s.stage==='locked')&&!(hero===7&&id===31&&s.stage==='locked')&&!(hero===cursedPirate.id&&[30,31,32,33].includes(id)&&s.stage==='locked')&&!(id===10&&vineDamage(s)))) return [];
  if(c.phase==='roll' && !rollPhase(s) && !((s.stage==='locked'||s.gunReload)&&seat===s.active) && !(id===10&&s.stage==='sideDamage'&&['Barbed Vine','Powder Keg','Swashbuckle!','Scurvy!','Cursed Cards!','Nanobot','Ravage!','Absorb Vitality'].includes(s.sideDamage.source))) return [];
  if(['main','upgrade'].includes(c.phase) && (!isMain(s)||seat!==s.active||s.cardRoll||s.mainAction||s.ravenFeathers||s.shapeOverflow)) return [];
  if(c.phase==='upgrade' && p.upgrades[c.slot] && seatCard(s,seat,p.upgrades[c.slot]).level>=c.level)return [];
@@ -594,7 +595,7 @@ function completeCardRoll(s,roll,random,add){
  const rules = heroRoster[hero];
  if (id === 3) p.cp = bounded(p.cp + Math.ceil(dice[0] / 2), 15);
  if (rules.resolveCardRoll?.({id,dice,p,opponent,counts,hit,s,seat,target,bounded,updateDamage,grantStatus,gainBloodPower,gainTactical,gainGrim,stealNecroHealth,grantAttackStatus,queueGrowth,startSideDamage,grantPirateStatus,drawCards,discardRandom,random})) return;
- if (id === (rules.promoId??33) &&hero!==cursedPirate.id&&hero!==artificer.id&&hero!==seraph.id&&hero!==vampireLord.id&&hero!==gunslinger.id&&hero!==samurai.id&&hero!==tactician.id&&hero!==huntress.id&&hero!==headlessHorseman.id&&hero!==necromancer.id&&hero!==paleLady.id&&hero!==raveness.id&&hero!==druid.id) {
+ if (id === (rules.promoId??33) &&hero!==cursedPirate.id&&hero!==artificer.id&&hero!==seraph.id&&hero!==vampireLord.id&&hero!==gunslinger.id&&hero!==samurai.id&&hero!==tactician.id&&hero!==huntress.id&&hero!==headlessHorseman.id&&hero!==necromancer.id&&hero!==paleLady.id&&hero!==raveness.id&&hero!==druid.id&&hero!==duelist.id) {
   if (dice[0] !== 6) drawCards(p,1,random,id);
   else rules.resolvePromo({p,opponent,s,seat,bounded,grantStatus,statusCap,queueGrowth});
  }
@@ -655,7 +656,7 @@ function applyCard(s,seat,id,choice,roll,random,add) {
  const rules = heroRoster[hero];
  const card = {id,s,names,seat,p,opponent,c,choice,bounded,grantStatus,gainBloodPower,gainTactical,gainGrim,statusCap,updateDamage,discardRandom,drawCards,random,paladinBuffs,discardSpirits,spiritTypes,spiritTotal,queueGrowth,startSideDamage,grantPirateStatus,grantAttackStatus,add,seatCard,roll};
  if (rules.applyCard?.(card)) return;
- const rollSize = id === 3 || id === 33 && hero!==cursedPirate.id && hero!==artificer.id && hero!==seraph.id && hero!==vampireLord.id && hero!==gunslinger.id && hero!==samurai.id && hero!==tactician.id && hero!==huntress.id && hero!==headlessHorseman.id && hero!==necromancer.id&&hero!==paleLady.id&&hero!==raveness.id&&hero!==druid.id ? 1 : rules.cardRollSize?.(id) ?? 0;
+ const rollSize = id === 3 || id === 33 && hero!==cursedPirate.id && hero!==artificer.id && hero!==seraph.id && hero!==vampireLord.id && hero!==gunslinger.id && hero!==samurai.id && hero!==tactician.id && hero!==huntress.id && hero!==headlessHorseman.id && hero!==necromancer.id&&hero!==paleLady.id&&hero!==raveness.id&&hero!==druid.id&&hero!==duelist.id ? 1 : rules.cardRollSize?.(id) ?? 0;
  if(rollSize){
   s.cardRoll={seat,id,dice:Array.from({length:rollSize},()=>roll()),ninjaRerolls:hero===6&&id===28||hero===paleLady.id&&id===20?5:0};
   if(hero===gunslinger.id&&id===30||hero===huntress.id&&id===32)s.cardRoll.target=choice.target;
@@ -726,7 +727,7 @@ function playOneCard(s,seat,id,choice,roll,random,add){
 }
 
 const bounded = (v, cap) => Math.min(cap, Math.max(0, v));
-const sets=[{name:'Season One ReRolled',heroes:[0,1,2,3,4,5,6,7]},{name:'Season Two',heroes:[cursedPirate.id,artificer.id,seraph.id,vampireLord.id,gunslinger.id,samurai.id,tactician.id,huntress.id]},{name:'Outcasts',heroes:[headlessHorseman.id,necromancer.id,paleLady.id,raveness.id]},{name:'Vanguard',heroes:[druid.id]}];
+const sets=[{name:'Season One ReRolled',heroes:[0,1,2,3,4,5,6,7]},{name:'Season Two',heroes:[cursedPirate.id,artificer.id,seraph.id,vampireLord.id,gunslinger.id,samurai.id,tactician.id,huntress.id]},{name:'Outcasts',heroes:[headlessHorseman.id,necromancer.id,paleLady.id,raveness.id]},{name:'Vanguard',heroes:[druid.id,duelist.id]}];
 const heroId=(s,seat)=>s.players[seat].hero??seat;
 const boardFor=(s,seat)=>{
  const hero=heroRoster[heroId(s,seat)];
@@ -757,7 +758,7 @@ function createMatch(roll, options) {
     state.version=2;
     state.cards=true;
     state.promo=!!options.promo;
-    state.stage=[7,artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id,paleLady.id].includes(heroId(state,active))?'upkeep':'main1';
+    state.stage=[7,artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id,paleLady.id,duelist.id].includes(heroId(state,active))?'upkeep':'main1';
     state.income={skipped:'first-turn'};
     state.players.forEach((p,i)=>{
       heroRoster[heroId(state,i)].initialize?.(state,i);
@@ -828,6 +829,10 @@ function legal(state) {
   if(state.shapeOverflow&&state.stage!=='finished')return {collectShapeShift:true};
   if(state.ravenFeathers&&!state.ravenFeathers.spending&&state.stage!=='finished')return {collectFeathers:true};
   switch (state.stage) {
+    case 'duelMove': return {duelMove:true};
+    case 'duelAbility': return {finishDuelAbility:true};
+    case 'guardOffer': return {spendGuardBreak:!!state.players[state.active].guardBreak,skipGuardBreak:true};
+    case 'guardBreakRoll': return {resolveGuardBreak:true};
     case 'druidReady': return {finishDruidAbility:true};
     case 'druidRainfall': return {druidRainfall:true};
     case 'woundRoll': return {resolveWound:true};
@@ -868,6 +873,8 @@ function legal(state) {
     case 'artFreeBots': return {chooseFreeBot:true};
     case 'upkeep': {
       const p=state.players[state.active];
+      if(p.disarm)return {resolveDisarm:true};
+      if(p.footwork!==undefined&&!state.repositioned)return {reposition:true};
       if(nevermoreOwner(state)!==null&&!state.nevermoreChecked)return {rollNevermore:true};
       if(heroId(state,state.active)===necromancer.id&&!state.necroUpkeep)return {unearth:true};
       if(heroId(state,state.active)===headlessHorseman.id&&!state.horseUpkeep)
@@ -914,6 +921,7 @@ function legal(state) {
   }
 }
 function actor(state) {
+  if(state.stage==='duelMove')return state.duelMovement.seat;
   if(legal(state).collectShapeShift)return state.shapeOverflow.seat;
   if(legal(state).collectFeathers)return state.ravenFeathers.seat;
   if(state.stage==='ravenActivate')return state.ravenActivation.owner;
@@ -1334,7 +1342,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       state.response=null;
       return transitionCore(state,deferred,roll,random,true);
     }
-    const responseActions=['begin','endMain','accept','resolveBlind','resolveEffect','rollPrey','resolvePrey','resolveTarget','resolveDefence','settle','resolveEvade','finishCardRoll','continueHit','defend','skipDefence','resolveUpkeep','resolveSeraphRoll','resolvePurify','resolveGunContest','resolveReload','resolveGrimRoll','resolveUndead','resolveBackStrike','chooseDuel','resolveMesmerize','resolveBleed','resolveNevermore','checkWound','resolveWound','checkRegenerate','activateNevermore','finishRavenAbility','resolveArtRoll','resolvePirateKeg','chooseMastery','payKnockdown','skipKnockdown','resolveSneak','chooseStolenCP','skipSneak','next','resolveNinjutsu','resolveSideDamage','end' ];
+    const responseActions=['begin','endMain','accept','resolveBlind','resolveEffect','resolveGuardBreak','resolveDisarm','rollPrey','resolvePrey','resolveTarget','resolveDefence','settle','resolveEvade','finishCardRoll','continueHit','defend','skipDefence','resolveUpkeep','resolveSeraphRoll','resolvePurify','resolveGunContest','resolveReload','resolveGrimRoll','resolveUndead','resolveBackStrike','chooseDuel','resolveMesmerize','resolveBleed','resolveNevermore','checkWound','resolveWound','checkRegenerate','activateNevermore','finishRavenAbility','resolveArtRoll','resolvePirateKeg','chooseMastery','payKnockdown','skipKnockdown','resolveSneak','chooseStolenCP','skipSneak','next','resolveNinjutsu','resolveSideDamage','end' ];
     if(!bypassResponse && action.type==='evade' && legal(previous).evade && hasResponse(previous,previous.active)){
       return {...previous,response:{seat:previous.active,action}};
     }
@@ -1517,6 +1525,10 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       p.preyResume=state.stage;
       state.stage='prey';
     }
+    if(state.cards&&p.attack&&!p.ultimate&&!p.pure&&!p.undefendable&&!p.parlayBlocked&&attacker.guardBreak){
+      p.guardResume=state.stage;
+      state.stage='guardOffer';
+    }
     if(p.grim)gainGrim(state,state.active,p.grim);
     if(p.tacticalCap){
       attacker.tacticalCap=statusCap(attacker,'tactical')+1;
@@ -1548,6 +1560,12 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
   }
   function continueOffence(p) {
     gainTitheCP(p);
+    if(p.duelist?.steps&&!p.duelist.moved){
+      p.duelist.moved=true;
+      state.stage='duelAbility';
+      duelist.offerSteps(state,state.active,p.duelist.steps);
+      return;
+    }
     if(p.druid&&!p.druid.ready){
       state.stage='druidReady';
       return;
@@ -1583,7 +1601,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       p.ninjaTokens=0;
     }
     if(state.cards&&attacker.sneak&&attackExpected&&!p.pure)state.stage='sneakOffer';
-    else if(state.cards&&!p.stun&&!p.ultimate&&!p.showdownTargeted&&!p.jawsTargeted&&(p.damage||p.burn||p.knockdown||p.collateral||p.poison||p.delayedPoison||p.barbed||p.powderKeg||p.wither||p.parlay||p.pirateInflict||p.nanite||p.blindingLight||p.bleed||p.bounty||p.shame||p.constrict||p.decrepify||p.prey||p.hex||p.wound))enterTargeting(p);
+    else if(state.cards&&!p.stun&&!p.ultimate&&!p.showdownTargeted&&!p.jawsTargeted&&(p.damage||p.burn||p.knockdown||p.collateral||p.poison||p.delayedPoison||p.barbed||p.powderKeg||p.wither||p.parlay||p.pirateInflict||p.nanite||p.blindingLight||p.bleed||p.bounty||p.shame||p.constrict||p.decrepify||p.prey||p.hex||p.wound||p.disarm))enterTargeting(p);
     else activate();
   }
   function resolveAbility() {
@@ -1605,6 +1623,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       if(regenerate)druid.regenerate(attacker,regenerate);
       if(rainfall){state.stage='druidRainfall';return;}
     }
+    if(p.duelist?.guardGain)grantStatus(attacker,'guardBreak',p.duelist.guardGain);
     if(p.raven){
       if(p.raven.cap)attacker.featherCap+=p.raven.cap;
       if(p.draw){drawCards(attacker,p.draw,random);p.draw=0;}
@@ -1670,10 +1689,12 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     finishRoll(Boolean(wouldAttack)&&!defender.cursed);
   }
   function income(player) {
-    if (player.concussion) {
+    if (player.concussion||state.disarmSkip) {
       player.concussion=false;
-      state.income={skipped:'concussion'};
-      add(`Turn ${state.turn}. ${names[state.active]} skips income due to Concussion.`);
+      const reason=state.disarmSkip?'Disarm':'Concussion';
+      state.income={skipped:reason.toLowerCase()};
+      delete state.disarmSkip;
+      add(`Turn ${state.turn}. ${names[state.active]} skips income due to ${reason}.`);
     } else {
       const previousCP=player.cp;
       if(!player.resurrected)player.cp=bounded(player.cp+1,15);
@@ -1696,6 +1717,8 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     delete attacker.keepMoonShard;
     if(attacker.druidForm==='druid')druid.regenerate(attacker);
     delete state.regenerateChecked;
+    delete state.repositioned;
+    delete state.disarmSkip;
     delete state.woundsResolved;
     delete state.woundsRemoved;
     delete state.woundsAtStart;
@@ -1731,7 +1754,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     if(state.holyPresenceChecked)delete state.holyPresenceChecked;
     if(state.bleedChecked)delete state.bleedChecked;
     if(state.quickDrawChecked)delete state.quickDrawChecked;
-    if(player.wound||druid.regenTotal(player)||nevermoreOwner(state)!==null||upkeepDamage(player,state.active)||player.fireMastery||heroId(state,state.active)===7||player.cursed||player.powderKeg||player.nanite||player.holyPresence||player.bleed||player.nyra?.downed||[artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id,paleLady.id].includes(heroId(state,state.active))){
+    if(player.disarm||player.wound||druid.regenTotal(player)||nevermoreOwner(state)!==null||upkeepDamage(player,state.active)||player.fireMastery||heroId(state,state.active)===7||player.cursed||player.powderKeg||player.nanite||player.holyPresence||player.bleed||player.nyra?.downed||[artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id,paleLady.id,duelist.id].includes(heroId(state,state.active))){
       state.pending=null;
       state.stage='upkeep';
       state.upkeepEvaded=false;state.upkeepPrevention=0;state.upkeepProtect=0;
@@ -1785,6 +1808,60 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     else if(g.collateral)startSideDamage(state,1-g.seat,g.collateral,g.source);
   }
   switch (action.type) {
+    case 'duelMove': {
+      const task=state.duelMovement, player=state.players[task.seat];
+      const choice=duelist.steps(player,task.max)[action.choice];
+      if(!choice)return previous;
+      duelist.move(player,choice.steps);
+      state.stage=task.resume;
+      delete state.duelMovement;
+      if(choice.steps)add(`${names[task.seat]} · ${choice.label}.`);
+      break;
+    }
+    case 'finishDuelAbility':
+      continueOffence(state.pending);
+      break;
+    case 'reposition': {
+      const choice=duelist.steps(attacker,2,1)[action.choice];
+      if(!choice)return previous;
+      duelist.move(attacker,choice.steps);
+      if(choice.steps<0)grantStatus(attacker,'guardBreak');
+      state.repositioned=true;
+      add(`Reposition · ${choice.label}.`);
+      break;
+    }
+    case 'resolveDisarm': {
+      if(action.status==='discard'){
+        const index=attacker.hand.indexOf(action.id);
+        if(index<0)return previous;
+        attacker.hand.splice(index,1);
+        attacker.discard.push(action.id);
+        add(`${names[state.active]} discards ${seatCard(state,state.active,action.id).name} for Disarm.`);
+      } else if(action.status==='skip')state.disarmSkip=true;
+      else return previous;
+      removeStatus(attacker,'disarm');
+      break;
+    }
+    case 'spendGuardBreak':
+      removeStatus(attacker,'guardBreak');
+      state.guardBreakRoll=[roll()];
+      state.stage='guardBreakRoll';
+      break;
+    case 'skipGuardBreak':
+      state.stage=state.pending.guardResume;
+      break;
+    case 'resolveGuardBreak': {
+      const face=dieValue(state.guardBreakRoll[0],attacker), hit=state.pending;
+      delete state.guardBreakRoll;
+      if(face===4||face===5){
+        hit.undefendable=true;
+        hit.shadowSkippedDefence=false;
+        if(hit.guardResume==='prey')hit.preyResume='damage';
+        state.stage=hit.guardResume==='defence'?'damage':hit.guardResume;
+        add('Guard Break makes the attack undefendable.');
+      } else state.stage=attacker.guardBreak?'guardOffer':hit.guardResume;
+      break;
+    }
     case 'collectShapeShift': {
       const {seat,amount}=state.shapeOverflow;
       const p=state.players[seat];
@@ -2577,6 +2654,10 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         poison:ability.poison||ability.dagger&&counts.Shadow,sneak:ability.sneak,enterShadows:ability.shadows,afterShadows:ability.afterShadows,pure:ability.type==='pure',
         undefendable:!!state.offenceFlight||ability.type==='undefendable'||matching>=ability.matchUndefendable, ultimate:ability.type==='ultimate', returnDamage:0,
         stun:!!ability.stun, targeted:!!ability.targeted, effect:ability.effect, recoil:ability.recoil ?? 0};
+      if(heroId(state,state.active)===duelist.id)Object.assign(state.pending,{
+        duelist:{guardGain:ability.guardGain,steps:ability.steps??Number(ability.strike&&counts.largeStraight||matching>=ability.stepMatch)},
+        disarm:ability.disarm,collateral:ability.collateral
+      });
       if(heroId(state,state.active)===druid.id)Object.assign(state.pending,{
         druid:{shifts:ability.shifts,regenerate:ability.regenerate,wildDraw:ability.wildDraw,rainfall:ability.rainfall},
         wound:Number(matching>=ability.woundMatch)
@@ -2678,7 +2759,9 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'resolveEffect': {
       const p=state.pending;
       const counts = tally(effectiveDice(p.effectDice,attacker),heroId(state,state.active));
-      if(p.effect==='druidMaul'){
+      if(p.effect==='duelEnGarde'){
+        p.disarm=!!counts.Pierce;
+      } else if(p.effect==='druidMaul'){
         p.damage=effectiveDice(p.effectDice,attacker).reduce((total,value)=>total+value,0);
       } else if(p.effect==='druidForest'){
         if(counts.Claw)p.damage+=2;
@@ -2848,6 +2931,30 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     case 'settle': {
       const p = state.pending;
+      if(state.stage!=='nyraDamage'){
+        const activeBonus=duelist.bonus(state,state.active);
+        const defenceBonus=duelist.bonus(state,1-state.active);
+        if(activeBonus||defenceBonus){
+          if(activeBonus){
+            const amount=attacker.footwork===2?3:1;
+            attacker.footworkTurn=state.turn;
+            p.grossDamage+=amount;
+            add(`Footwork adds ${amount} attack damage.`);
+          }
+          if(defenceBonus){
+            defender.footworkTurn=state.turn;
+            if(defenceBonus==='draw'){
+              drawCards(defender,1,random);
+              add('Footwork draws 1 card.');
+            } else {
+              p.prevention=(p.prevention??0)+3;
+              add('Footwork prevents up to 3 damage.');
+            }
+          }
+          updateDamage(p);
+          break;
+        }
+      }
       if(heroId(state,state.active)===necromancer.id&&!p.undeadSettled){
         p.undeadSettled=true;
         const used=undeadUsed(state,state.active);
