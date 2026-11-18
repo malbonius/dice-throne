@@ -1,12 +1,12 @@
-# Dice Throne Playtest 0.22.0
+# Dice Throne Playtest 0.23.0
 
-The hero picker covers all 16 heroes across **Season One ReRolled** and **Season Two**. It opens as a full-screen view on a touch-first device and a dialog on desktop.
+Headless Horseman is the first playable **Outcasts** hero. His 32-card deck and optional **Get Ahead!** promo are included, with the supplied board, dice, cards, leaflets and tokens.
 
-## Update from 0.21.0
+## Update from 0.22.0
 
-1. Extract this ZIP over your working 0.21.0 repository or assembled release.
-2. Upload the extracted files to the existing GitHub Pages branch. Keep the rest of the repository and the existing `/docs` publish folder.
-3. Open the app online and wait for **Playtest 0.22.0** and **Ready for offline play**. Reload once if the previous version is still displayed.
-4. Select **Change hero** for either player. Browse the sets or search by name, then choose a hero to return to setup. Select **Start match** when both seats are ready.
+1. Extract the ZIP over your working 0.22.0 repository or assembled release.
+2. Upload the changed files to the existing GitHub Pages branch using the existing `/docs` folder.
+3. Open the app online until it shows **Playtest 0.23.0** and **Ready for offline play**.
+4. Open the hero picker for either seat and select **Outcasts → Headless Horseman**.
 
-Either seat can choose any hero, including the same hero. Changing a setup choice leaves the current match and autosave intact. Keep the existing Pages URL so the browser can resume its saved match.
+Each Horseman owns a separate Haunted Head in mirrored matches. During upkeep, you can move your Head, Terrorize with 4 Dreadful, or skip Headless Mayhem. Grim Pursuit supports one extra Roll Attempt and one attack modifier per turn. A transferred Grim Pursuit token can grant a Roll Attempt to another hero.
