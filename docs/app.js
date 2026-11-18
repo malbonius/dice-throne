@@ -29,6 +29,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  dreadful: 'Adds dice to Hallowed Reckoning and Spectral Assault. Spend 4 during upkeep to Terrorize. Stack limit 5.',
+  grim: 'Spend for an extra Roll Attempt or to roll for bonus attack damage. Each option can be used once per turn. Stack limit 3.',
+  hauntedHead: 'Each Headless Horseman has a separate Haunted Head. It grants its owner Dreadful at the end of their turn while the opponent holds it.',
   nyraBond: 'Spend to heal Nyra by 2 immediately, or spend when assigning attack damage to split it between Huntress and Nyra.',
   tactical: 'Spend for CP, a reroll of one of your dice, a card, Targeted, Protect or a status transfer. Transfers are only available in your Main Phase.',
   constrict: 'Pay 1 CP for each Roll Attempt after your first. Remove Constrict at the end of that Roll Phase.',
@@ -102,6 +105,9 @@ function hero(seat) {
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+    p.dreadful&&token(seat,'dreadful',`Dreadful ×${p.dreadful}`),
+    p.grim&&token(seat,'grim',`Grim Pursuit ×${p.grim}`),
+    ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
     p.tactical&&token(seat,'tactical',`Tactical Advantage ${p.tactical}/${statusCap(p,'tactical')}`),
     p.constrict&&token(seat,'constrict','Constrict'),
@@ -182,7 +188,11 @@ function arena() {
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
-  if(state.tacticalOverflow){
+  if(state.grimOverflow){
+    phase='Grim Pursuit';heading='Make room for Grim Pursuit';
+    detail=`Gain ${state.grimOverflow.amount} Grim Pursuit. Spend existing tokens first if you want to make room.`;
+    content=button('collectGrim','Collect Grim Pursuit','class="primary"');
+  } else if(state.tacticalOverflow){
     phase='Tactical Advantage'; heading=`${actingName} is about to gain Tactical Advantage`;
     detail=`Gain ${state.tacticalOverflow.amount} together. Spend your current tokens first if you want to make room.`;
     content=button('collectTactical','Collect Tactical Advantage','class="primary"');
@@ -324,9 +334,28 @@ function arena() {
       content=statusKeys.filter(key=>state.players[p.seraphTarget][key]).map(status=>button('resolvePurify',`Remove ${statusLabel(status)}`,`data-status="${status}"`)).join('')+
         button('resolvePurify','Continue without removing a status','class="primary"');
       break;
+    case 'horseRoll':
+      phase='Attack Modifier';heading='Grim Pursuit';
+      detail='Add 1 damage per Horseshoe rolled.';
+      content=tray(state.horseRoll.dice,seat,false)+button('resolveGrimRoll','Apply Grim Pursuit','class="primary"');
+      break;
+    case 'horrifyChoice':
+      phase='Ability choice';heading=p.name;
+      content=button('chooseHorrify','Gain 3 Dreadful','data-status="dreadful"')+
+        button('chooseHorrify','Gain Grim Pursuit','data-status="grim"');
+      break;
     case 'upkeep': {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
+      if(allowed.horseUpkeep){
+        heading='Headless Mayhem';
+        const move=hero.hauntedHeadSeat===seat
+          ?button('horseUpkeep',`Send Haunted Head to ${names[1-seat]} · gain Dreadful`,'data-status="send"')
+          :button('horseUpkeep','Bring Haunted Head back','data-status="return"');
+        content=move+(hero.dreadful>=4?button('horseUpkeep','Terrorize · spend 4 Dreadful','data-status="terrorize"'):'')+
+          button('horseUpkeep','Skip Headless Mayhem','data-status="skip"');
+        break;
+      }
       detail=[heroId(state,state.active)===gunslinger.id&&hero.reload!==2&&!state.quickDrawChecked?'Quick Draw grants Reload.':'',hero.nyra?.downed?(hero.nyra.hp>=5?'Nyra becomes Active.':'Nyra heals 1 and remains Downed.'):'',hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
       content=(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Roll to clear Nanites'):'')+
         (allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):'')+(allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
@@ -429,7 +458,7 @@ function arena() {
       break;
     case 'effect':
       phase='Ability roll'; heading=p.name;
-      detail=`${actingName} rolls ${effectDiceCount(p)} separate effect dice to determine the ability’s effects.`;
+      detail=`${actingName} rolls ${effectDiceCount(p,state.players[state.active])} separate effect dice to determine the ability’s effects.`;
       content=button('rollEffect','Roll for effect','class="primary"'); break;
     case 'effectResponse':
       phase='Ability roll'; heading=p.name;
@@ -514,8 +543,11 @@ function arena() {
   const tokens=tokenChoices(state,responding);
   const tacticalActions=tacticalChoices(state,responding).map(({cost,label},index)=>
     button('spendTactical',`${cost} Tactical Advantage · ${label}`,`data-choice="${index}"`));
-  const tokenActions=state.stage==='nyraDamage'?[]:state.tacticalOverflow||state.tacticalRemoval?tacticalActions:[
+  const grimActions=grimChoices(state,responding).map(kind=>button('spendGrim',
+    kind==='attempt'?'Grim Pursuit · extra Roll Attempt':'Grim Pursuit · roll for attack damage',`data-status="${kind}"`));
+  const tokenActions=state.grimOverflow?grimActions:state.stage==='nyraDamage'?[]:state.tacticalOverflow||state.tacticalRemoval?tacticalActions:[
     ...tacticalActions,
+    ...grimActions,
     ...(canHealNyra(state,responding)?[button('healNyra','Nyra’s Bond · heal Nyra by 2')]:[]),
     ...nyraRerolls(state,responding).map((value,i)=>button('nyraReroll',`Nyra takes 1 damage · reroll die ${i+1} (${value})`,`data-index="${i}"`)),
     ...artificerActions(state,responding).map(({key,label})=>button('artificerAction',label,`data-status="${key}"`)),
@@ -542,7 +574,7 @@ function arena() {
     ...Array.from({length:tokens.prevent},(_,i)=>button('preventChi',`Spend ${i+1} Chi · prevent ${i+1}`,`data-amount="${i+1}"`))
   ];
   if(tokenActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · spend tokens</strong><div class="controls">${tokenActions.join('')}</div></div>`;
-  const tithe=state.stage==='nyraDamage'?{}:titheChoices(state,responding);
+  const tithe=state.stage==='nyraDamage'||state.grimOverflow?{}:titheChoices(state,responding);
   const titheActions=[
     ...(tithe.draw?[button('titheDraw',`Draw 1 card · ${titheDrawCost(state.players[responding])} CP`)]:[]),
     ...(tithe.dice??[]).map((value,i)=>button('titheReroll',`Reroll die ${i+1} (${value}) · 1 CP`,`data-index="${i}"`))
