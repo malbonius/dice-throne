@@ -19,6 +19,7 @@ function boardImage(state,seat,full=false) {
   const id=heroId(state,seat);
   if(id===cursedPirate.id && state.players[seat].cursed)
     return full?art.cursedPirateFullBoard:art.cursedPirateBoard;
+  if(id===paleLady.id&&state.players[seat].werewolf)return full?art.werewolfFullBoard:art.werewolfBoard;
   return (full?art.fullBoards:art.boards)[id];
 }
 function board(seat) {
@@ -29,6 +30,8 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  prey: 'When attacked, the attacker may roll for each Prey. On 1, remove that token. On 2–5, add 1 damage. On 6, add 2 damage.',
+  moonShard: 'Twilight flips Pale Lady at three Moon Shards in upkeep. Werewolf normally loses one at turn end and flips back at zero. Stack limit 3.',
   decrepify: 'After the first Roll Attempt, reroll at most two dice per attempt. Reduces modifiable attack damage by 1 and clears when the Roll Phase ends.',
   resurrect: 'On lethal damage, return with 5 Health. Discard your hand and lose access to cards and CP for the rest of the match.',
   dreadful: 'Adds dice to Hallowed Reckoning and Spectral Assault. Spend 4 during upkeep to Terrorize. Stack limit 5.',
@@ -92,7 +95,8 @@ const token = (seat,key,label,suffix=key) => {
     hero===tactician.id&&key==='protect'?'tacticianProtect':
     hero===seraph.id&&key==='cleanse'?'seraphCleanse':
     hero===seraph.id&&key==='blessing'?'seraphBlessing':key;
-  return `<span class="token-help">${button('status',`<span class="token"><img src="${art[tokenArt]}" alt="">${label}</span>`,
+  const image=key==='moonShard'?art.moonShards[state.players[seat].moonShard-1]:art[tokenArt];
+  return `<span class="token-help">${button('status',`<span class="token"><img src="${image}" alt="">${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
 function hero(seat) {
@@ -107,6 +111,9 @@ function hero(seat) {
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+    p.werewolf&&'<span class="token">Werewolf form</span>',
+    p.moonShard>0&&token(seat,'moonShard',`Moon Shards ×${p.moonShard}`),
+    p.prey>0&&token(seat,'prey',`Prey ×${p.prey}`),
     p.corpses!==undefined&&`<span class="token"><img src="${art.corpseDial}" alt="">Corpses ${p.corpses}/10</span>`,
     p.covered&&`<span class="token">Unearth covers ${p.covered}</span>`,
     ...Object.entries(p.undead??{}).filter(([,count])=>count).map(([kind,count])=>{
@@ -261,7 +268,7 @@ function arena() {
   } else if(state.cardRoll) {
     phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,seat,state.cardRoll.id).name;
     detail=`${names[seat]} can modify the roll before it resolves.`;
-    content=tray(state.cardRoll.dice,seat,false)+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
+    content=tray(state.cardRoll.dice,seat,false)+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>heroId(state,seat)===paleLady.id||v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
   } else if(state.stage==='gunContest') {
     const contest=state.gunContest;
     phase=contest.kind==='duel'?'Defensive Roll':'Ability roll';
@@ -381,6 +388,20 @@ function arena() {
       content=button('chooseHorrify','Gain 3 Dreadful','data-status="dreadful"')+
         button('chooseHorrify','Gain Grim Pursuit','data-status="grim"');
       break;
+    case 'prey':
+      phase='Attack modifier';heading='Prey';
+      content=state.preyRoll?tray(state.preyRoll,state.active,false)+button('resolvePrey','Resolve Prey roll','class="primary"'):
+        (allowed.rollPrey?button('rollPrey','Roll for Prey','class="primary"'):'')+button('skipPrey','Continue attack');
+      break;
+    case 'petulant':
+      phase='Main Phase action';heading='Petulant!';
+      content=(state.players[seat].cp?button('resolvePetulant','Pay 1 CP','data-choice="1"'):'')+
+        button('resolvePetulant','Let Pale Lady transform','data-choice="0"');
+      break;
+    case 'paleMoonChoice':
+      phase='Ability choice';heading='Full Moon';
+      content=button('paleMoonChoice','Gain 1 CP','data-choice="0"')+button('paleMoonChoice','Gain a Moon Shard','data-choice="1"');
+      break;
     case 'upkeep': {
       phase='Upkeep'; heading=`${activeName} resolves upkeep`;
       const hero=state.players[state.active];
@@ -399,7 +420,7 @@ function arena() {
           button('horseUpkeep','Skip Headless Mayhem','data-status="skip"');
         break;
       }
-      detail=[heroId(state,state.active)===gunslinger.id&&hero.reload!==2&&!state.quickDrawChecked?'Quick Draw grants Reload.':'',hero.nyra?.downed?(hero.nyra.hp>=5?'Nyra becomes Active.':'Nyra heals 1 and remains Downed.'):'',hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
+      detail=[hero.moonShard===3&&!hero.werewolf?'Twilight flips Pale Lady to Werewolf.':'',heroId(state,state.active)===gunslinger.id&&hero.reload!==2&&!state.quickDrawChecked?'Quick Draw grants Reload.':'',hero.nyra?.downed?(hero.nyra.hp>=5?'Nyra becomes Active.':'Nyra heals 1 and remains Downed.'):'',hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
       content=(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Roll to clear Nanites'):'')+
         (allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):'')+(allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
       break;
@@ -536,7 +557,7 @@ function arena() {
       phase=p.ultimate ? 'Ultimate damage' : 'Stunned defender';
       heading=`${activeName} resolves ${p.name}`;
       detail=`${p.damage?`${p.damage} incoming damage. `:''}${names[1-state.active]} cannot respond.${vineDamage(state)?` Barbed Vine deals up to ${vineDamage(state)} to ${activeName}.`:''}`;
-      content=button('settle',p.damage?'Resolve damage':'Resolve ability','class="primary"'); break;
+      content=(allowed.reopenPrey?button('reopenPrey','Roll for Prey'):'')+button('settle',p.damage?'Resolve damage':'Resolve ability','class="primary"'); break;
     case 'defence':
       phase='Defensive Roll'; heading=`${actingName} can defend`;
       detail=`${p.name} brings ${p.damage} incoming damage.`;
@@ -560,7 +581,7 @@ function arena() {
       phase='Damage response'; heading=`${actingName} responds`;
       detail=`${incomingDamage(state)} incoming damage${shadowAvoids(state)&&p.damage?' after Shadows':p.pure?' (pure)':p.undefendable?' (undefendable)':''}${returnDamageFor(state) ? ` · ${returnDamageFor(state)} return damage` : ''}.${p.recoil && incomingDamage(state) ? ` Reckless deals ${p.recoil} damage to Barbarian if this attack hits.` : ''}`;
       content=(state.defenceDice.length ? tray(state.defenceDice,seat,false):'')
-        +`<div class="controls">${allowed.evade?button('evade',`${actingName} spends Evasive`):''}${allowed.evadeReturn?button('evadeReturn',`${activeName} spends Evasive`):''}${button('settle',nyraIncoming(state)?'Assign damage':'Resolve damage','class="primary"')}</div>`; break;
+        +`<div class="controls">${allowed.evade?button('evade',`${actingName} spends Evasive`):''}${allowed.evadeReturn?button('evadeReturn',`${activeName} spends Evasive`):''}${allowed.reopenPrey?button('reopenPrey','Roll for Prey'):''}${button('settle',nyraIncoming(state)?'Assign damage':'Resolve damage','class="primary"')}</div>`; break;
     case 'evasion':
       phase='Avoid damage'; heading=`${actingName} checks ${statusLabel(state.evasionToken??'evasive')}`;
       detail=state.evasionToken==='smoke'?'A 1–3 avoids the incoming damage.':'A 1 or 2 avoids the incoming damage.';

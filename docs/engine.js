@@ -4,7 +4,7 @@ const sharedCards = [
  ['Not This Time!',1,'roll'],['Twice as Wild!',3,'roll'],['Try, Try Again!',1,'roll'],['So Wild!',2,'roll'],['Samesies!',1,'roll'],
  ['One More Time!',1,'roll'],['Helping Hand!',1,'roll'],['Better D!',0,'roll'],['Six-It!',1,'roll']
 ];
-const heroRoster = [barbarian, moonElf, pyromancer, shadowThief, monk, paladin, ninja, treant, cursedPirate, artificer, seraph, vampireLord, gunslinger, samurai, tactician, huntress, headlessHorseman, necromancer];
+const heroRoster = [barbarian, moonElf, pyromancer, shadowThief, monk, paladin, ninja, treant, cursedPirate, artificer, seraph, vampireLord, gunslinger, samurai, tactician, huntress, headlessHorseman, necromancer, paleLady];
 const HEROES = heroRoster.map(hero => hero.board);
 const abilityEffects = Object.assign({}, ...heroRoster.map(hero => hero.effects));
 const abilityEffectDice = Object.assign(
@@ -20,9 +20,9 @@ const cardInfo = (seat,id) => {
  const [name,cost,phase]=id<=18?sharedCards[id-1]:heroRoster[seat].cards[id-firstAction];
  return {name,cost,phase};
 };
-const newStatuses=['powderKeg','wither','parlay','synth','nanite','flight','blindingLight','holyPresence','bloodPower','bleed','mesmerize','bounty','reload','honor','shame','backStrike','tactical','constrict','nyraBond','dreadful','grim','decrepify'];
+const newStatuses=['powderKeg','wither','parlay','synth','nanite','flight','blindingLight','holyPresence','bloodPower','bleed','mesmerize','bounty','reload','honor','shame','backStrike','tactical','constrict','nyraBond','dreadful','grim','decrepify','prey'];
 const statusKeys=['blind','entangle','evasive','targeted','concussion','burn','knockdown','fireMastery','poison','shadows','sneak','chi','cleanse','crit','accuracy','protect','retribution','delayedPoison','smoke','ninjutsu','wellspring','barbed',...newStatuses];
-const negativeStatuses=['entangle','blind','concussion','targeted','burn','knockdown','poison','delayedPoison','barbed','powderKeg','wither','parlay','nanite','blindingLight','bleed','bounty','shame','constrict','decrepify'];
+const negativeStatuses=['entangle','blind','concussion','targeted','burn','knockdown','poison','delayedPoison','barbed','powderKeg','wither','parlay','nanite','blindingLight','bleed','bounty','shame','constrict','decrepify','prey'];
 const spiritTypes=['seedling','sapling','dryad'];
 const spiritCaps={seedling:3,sapling:2,dryad:1};
 const spiritTotal=p=>spiritTypes.reduce((total,key)=>total+(p[key]??0),0);
@@ -61,7 +61,7 @@ function discardSpirits(player,choice){
 }
 const paladinBuffs=['protect','retribution','crit','accuracy'];
 const statusLabel = s=>s==='decrepify'?'Decrep-ify':s==='grim'?'Grim Pursuit':s==='nyraBond'?'Nyra’s Bond':s==='tactical'?'Tactical Advantage':s==='backStrike'?'Back Strike':s==='bloodPower'?'Blood Power':s==='mesmerize'?'Mesmerize':s==='blindingLight'?'Blinding Light':s==='holyPresence'?'Holy Presence':s==='powderKeg'?'Powder Keg':s==='doubloon'?'Cursed Doubloon':s==='barbed'?'Barbed Vine':s==='smoke'?'Smoke Bomb':s==='delayedPoison'?'Delayed Poison':s==='blessing'?'Blessing of Divinity':s==='fireMastery'?'Fire Mastery':s==='sneak'?'Sneak Attack':s[0].toUpperCase()+s.slice(1);
-const statusCap=(p,key)=>key==='dreadful'?5:key==='synth'?7:key==='tactical'?(p.tacticalCap??5):key==='bloodPower'?5:key==='chi'?(p.chiCap??5):key==='fireMastery'?(p.masteryCap??5):['delayedPoison','wither','holyPresence','bleed','reload','honor','shame'].includes(key)?2:['evasive','poison','cleanse','ninjutsu','nanite','flight','grim'].includes(key)?3:1;
+const statusCap=(p,key)=>key==='dreadful'?5:key==='synth'?7:key==='tactical'?(p.tacticalCap??5):key==='bloodPower'?5:key==='chi'?(p.chiCap??5):key==='fireMastery'?(p.masteryCap??5):['delayedPoison','wither','holyPresence','bleed','reload','honor','shame','prey'].includes(key)?2:['evasive','poison','cleanse','ninjutsu','nanite','flight','grim'].includes(key)?3:1;
 const grantStatus = (p,key,amount=1)=>{
  const prior=p[key]||0, cap=statusCap(p,key);
  p[key]=cap>1?bounded(prior+amount,cap):true;
@@ -148,10 +148,11 @@ function stealNecroHealth(s,seat,amount){
  s.log.unshift(s.winner);
  return true;
 }
-const attackLocked=s=>s.undeadRoll?.resume==='locked'||s.stage==='undeadRemove'&&s.undeadResume==='locked'||s.stage==='locked'||s.horseRoll?.resume==='locked'||s.gunReload?.resume==='locked'||s.artRoll?.resume==='locked'||s.seraphRoll?.resume==='locked'||s.stage==='sideDamage'&&s.sideDamage.resume==='locked'||s.ninjutsuReturnStage==='locked'||s.pending?.ultimate&&['sneakOffer','growSpirits','evasion'].includes(s.stage);
-const rollPhase=s=>s.mesmerizeRoll?.resume!=='upkeep'&&s.artRoll?.resume!=='upkeep'&&s.evasionReturnStage!=='upkeep'&&(s.evasionReturnStage!=='sideDamage'||s.sideDamage?.source==='Barbed Vine')&&['offence','announce','blind','effect','effectResponse','defence','defenceResponse','damage','evasion','postHit','targeting','combustion','pickpocket','sneakOffer','sneakRoll','monkChoice','ninjaGain','ninjutsuRoll','ninjutsuChoice','pirateKegRoll','artRoll','seraphRoll','mesmerizeRoll','gunContest','gunReload','gunDuelChoice','horseRoll','undeadRoll','necroChoice','horrifyChoice','samuraiRoll','vampireChoice','seraphTarget','purify','dryadResponse','spiritPayment','overgrowthWells'].includes(s.stage);
+const attackLocked=s=>s.pending?.ultimate&&s.stage==='prey'||s.undeadRoll?.resume==='locked'||s.stage==='undeadRemove'&&s.undeadResume==='locked'||s.stage==='locked'||s.horseRoll?.resume==='locked'||s.gunReload?.resume==='locked'||s.artRoll?.resume==='locked'||s.seraphRoll?.resume==='locked'||s.stage==='sideDamage'&&s.sideDamage.resume==='locked'||s.ninjutsuReturnStage==='locked'||s.pending?.ultimate&&['sneakOffer','growSpirits','evasion'].includes(s.stage);
+const rollPhase=s=>s.mesmerizeRoll?.resume!=='upkeep'&&s.artRoll?.resume!=='upkeep'&&s.evasionReturnStage!=='upkeep'&&(s.evasionReturnStage!=='sideDamage'||s.sideDamage?.source==='Barbed Vine')&&['offence','announce','blind','effect','effectResponse','defence','defenceResponse','damage','evasion','postHit','targeting','combustion','pickpocket','sneakOffer','sneakRoll','monkChoice','ninjaGain','ninjutsuRoll','ninjutsuChoice','pirateKegRoll','artRoll','seraphRoll','mesmerizeRoll','gunContest','gunReload','gunDuelChoice','horseRoll','undeadRoll','necroChoice','horrifyChoice','samuraiRoll','vampireChoice','seraphTarget','purify','dryadResponse','spiritPayment','overgrowthWells','prey'].includes(s.stage);
 function rollContext(s) {
  if(s.mesmerizeRoll&&!s.mesmerizeRoll.choosing)return {dice:s.mesmerizeRoll.dice,seat:s.mesmerizeRoll.seat};
+ if(s.preyRoll&&!s.cardRoll)return {dice:s.preyRoll,seat:s.active};
  if(s.bleedRoll&&!s.cardRoll)return {dice:s.bleedRoll,seat:s.active};
  if(s.cardRoll) return {dice:s.cardRoll.dice,seat:s.cardRoll.seat};
  if(s.stage==='gunReload')return {dice:s.gunReload.dice,seat:s.gunReload.seat};
@@ -179,14 +180,14 @@ function diceOwnedBy(ctx,seat){
 }
 function cardChoices(s,seat,id) {
  const p=s.players[seat], hero=heroId(s,seat), names=heroNames(s);
- if(!s.cards || s.retry || s.growth || s.mainChoice || s.pirateChoice || s.bloodOverflow || s.honorOverflow || s.grimOverflow || s.tacticalOverflow || s.tacticalRemoval || s.mesmerizeRoll?.choosing || ['artSpanner','artBuild','artFreeBots'].includes(s.stage) || !p.hand.includes(id) ||['finished','discard','nyraDamage'].includes(s.stage)) return [];
+ if(!s.cards || s.retry || s.growth || s.mainChoice || s.pirateChoice || s.bloodOverflow || s.honorOverflow || s.grimOverflow || s.tacticalOverflow || s.tacticalRemoval || s.mesmerizeRoll?.choosing || ['artSpanner','artBuild','artFreeBots'].includes(s.stage) || !p.hand.includes(id) ||['finished','discard','nyraDamage','petulant','paleMoonChoice'].includes(s.stage)) return [];
  const c=seatCard(s,seat,id), d=rollContext(s);
  if(s.sideDamage?.endTurn&&c.phase!=='instant')return [];
  if(price(s,seat,id)>p.cp) return [];
  if(s.mesmerizeRoll&&![5,6,8,9,11,12,13,14,16,18].includes(id))return [];
  if(s.cardRoll && !(hero===headlessHorseman.id&&[31,32].includes(id))&&!(hero===huntress.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===artificer.id&&[28,29].includes(id)) && !([8,9].includes(id) || (c.phase==='roll' && rollPhase(s) && ([11,12,13,14,16,18].includes(id)||hero===3&&id===29||hero===cursedPirate.id&&id===29)))) return [];
- if(attackLocked(s) && (seat!==s.active || s.pending.ultimate && ![5,6,9,30,31].includes(id)&&!(hero===vampireLord.id&&[32,33].includes(id))&&!(hero===gunslinger.id&&id===27)&&!(hero===samurai.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===huntress.id&&[28,29].includes(id))&&!(hero===headlessHorseman.id&&[27,31,32].includes(id))&&!(hero===necromancer.id&&[32,33].includes(id)) && !(hero===2&&id===32) && !(hero===6&&id===28&&s.stage==='locked')&&!(hero===7&&id===31&&s.stage==='locked')&&!(hero===cursedPirate.id&&[30,31,32,33].includes(id)&&s.stage==='locked')&&!(id===10&&vineDamage(s)))) return [];
- if(c.phase==='roll' && !rollPhase(s) && !((s.stage==='locked'||s.gunReload)&&seat===s.active) && !(id===10&&s.stage==='sideDamage'&&['Barbed Vine','Powder Keg','Swashbuckle!','Scurvy!','Cursed Cards!','Nanobot'].includes(s.sideDamage.source))) return [];
+ if(attackLocked(s) && (seat!==s.active || s.pending.ultimate && ![5,6,9,30,31].includes(id)&&!(hero===vampireLord.id&&[32,33].includes(id))&&!(hero===gunslinger.id&&id===27)&&!(hero===samurai.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===huntress.id&&[28,29].includes(id))&&!(hero===headlessHorseman.id&&[27,31,32].includes(id))&&!(hero===necromancer.id&&[32,33].includes(id))&&!(hero===paleLady.id&&[19,20,21,23].includes(id)) && !(hero===2&&id===32) && !(hero===6&&id===28&&s.stage==='locked')&&!(hero===7&&id===31&&s.stage==='locked')&&!(hero===cursedPirate.id&&[30,31,32,33].includes(id)&&s.stage==='locked')&&!(id===10&&vineDamage(s)))) return [];
+ if(c.phase==='roll' && !rollPhase(s) && !((s.stage==='locked'||s.gunReload)&&seat===s.active) && !(id===10&&s.stage==='sideDamage'&&['Barbed Vine','Powder Keg','Swashbuckle!','Scurvy!','Cursed Cards!','Nanobot','Ravage!'].includes(s.sideDamage.source))) return [];
  if(['main','upgrade'].includes(c.phase) && (!isMain(s)||seat!==s.active||s.cardRoll||s.mainAction)) return [];
  if(c.phase==='upgrade' && p.upgrades[c.slot] && seatCard(s,seat,p.upgrades[c.slot]).level>=c.level)return [];
  const one=[{label:'Play'}];
@@ -197,10 +198,15 @@ function cardChoices(s,seat,id) {
  const flips=pos.flatMap(({i,label,value})=>[1,2,3,4,5,6].filter(v=>v!==value).map(v=>({label:`${label} → ${v}`,i,v})));
  if(id===1)return statuses.filter(x=>x.status!=='holyPresence').filter(x=>statusCap(s.players[1-x.target],x.status)===1||!s.players[1-x.target][x.status]||s.players[1-x.target][x.status]<statusCap(s.players[1-x.target],x.status)).map(x=>({...x,label:`${x.label} → ${names[1-x.target]}`}));
  if(id===2)return heroes.filter(x=>statusKeys.some(k=>s.players[x.target][k]));
- if(id===4||id===7)return statuses;
+ if(id===4||id===7)return statuses.flatMap(choice=>{
+   if(choice.status!=='prey'||choice.target===s.active||!s.pending?.preyBonuses?.length)return [choice];
+   const bonuses=[...s.pending.preyBonuses,...Array(Math.max(0,s.players[choice.target].prey-s.pending.preyBonuses.length)).fill(0)];
+   return bonuses.flatMap((bonus,index)=>bonuses.indexOf(bonus)===index?
+     [{...choice,preyIndex:index,label:`${choice.label} · ${bonus?'+ '+bonus+' damage':'no bonus'}`}]:[]);
+ });
  if(id===8)return flips.filter(f=>Math.abs(f.v-pos[f.i].value)===1);
  if(id===10){
-  if(s.stage==='sideDamage'&&['Barbed Vine','Powder Keg','Swashbuckle!','Scurvy!','Cursed Cards!','Nanobot'].includes(s.sideDamage.source))return heroes.filter(x=>x.target===s.sideDamage.seat&&sideIncoming(s.sideDamage)>0);
+  if(s.stage==='sideDamage'&&['Barbed Vine','Powder Keg','Swashbuckle!','Scurvy!','Cursed Cards!','Nanobot','Ravage!'].includes(s.sideDamage.source))return heroes.filter(x=>x.target===s.sideDamage.seat&&sideIncoming(s.sideDamage)>0);
   if(s.stage==='locked'&&vineDamage(s))return heroes.filter(x=>x.target===s.active&&returnDamageFor(s)>0);
   return s.stage==='damage'?heroes.filter(x=>(x.target===s.active?returnDamageFor(s):incomingDamage(s))>0):[];
  }
@@ -257,6 +263,7 @@ function removeMatchStatus(s,seat,key){
  if(key==='constrict'&&seat===s.active)delete s.wasConstricted;
  if(key==='decrepify'&&seat===s.active)delete s.wasDecrepified;
  if(key==='bounty')removeBountyBonus(s,seat);
+ if(key==='prey')removePreyBonus(s,seat);
  if(key==='barbed'&&seat===s.active)s.vineAttempts=0;
  if(key==='shadows'&&seat!==s.active&&s.stage==='damage'&&hit?.shadowSkippedDefence&&!hit.parlayBlocked&&!hit.undefendable){
    hit.shadowSkippedDefence=false;s.stage='defence';
@@ -582,11 +589,18 @@ function completeCardRoll(s,roll,random,add){
  const rules = heroRoster[hero];
  if (id === 3) p.cp = bounded(p.cp + Math.ceil(dice[0] / 2), 15);
  if (rules.resolveCardRoll?.({id,dice,p,opponent,counts,hit,s,seat,target,bounded,updateDamage,grantStatus,gainBloodPower,gainTactical,gainGrim,stealNecroHealth,grantAttackStatus,queueGrowth,startSideDamage,grantPirateStatus,drawCards,discardRandom,random})) return;
- if (id === (rules.promoId??33) &&hero!==cursedPirate.id&&hero!==artificer.id&&hero!==seraph.id&&hero!==vampireLord.id&&hero!==gunslinger.id&&hero!==samurai.id&&hero!==tactician.id&&hero!==huntress.id&&hero!==headlessHorseman.id&&hero!==necromancer.id) {
+ if (id === (rules.promoId??33) &&hero!==cursedPirate.id&&hero!==artificer.id&&hero!==seraph.id&&hero!==vampireLord.id&&hero!==gunslinger.id&&hero!==samurai.id&&hero!==tactician.id&&hero!==huntress.id&&hero!==headlessHorseman.id&&hero!==necromancer.id&&hero!==paleLady.id) {
   if (dice[0] !== 6) drawCards(p,1,random,id);
   else rules.resolvePromo({p,opponent,s,seat,bounded,grantStatus,statusCap,queueGrowth});
  }
  add(`${seatCard(s,seat,id).name} resolves with ${dice.join(', ')}.`);
+}
+function removePreyBonus(s,seat,index,count=1){
+ const hit=s.pending;
+ if(seat===s.active||!hit?.preyBonuses?.length||['main','main1','discard','finished'].includes(s.stage))return;
+ const lost=hit.preyBonuses.splice(index??Math.max(0,(s.players[seat].prey??0)),count);
+ hit.grossDamage-=lost.reduce((total,bonus)=>total+bonus,0);
+ updateDamage(hit);
 }
 function applyCard(s,seat,id,choice,roll,random,add) {
  const hero=heroId(s,seat),names=heroNames(s),p=s.players[seat],c=seatCard(s,seat,id),opponent=s.players[1-seat];
@@ -607,6 +621,7 @@ function applyCard(s,seat,id,choice,roll,random,add) {
   if(choice.status==='constrict'&&choice.target===s.active)delete s.wasConstricted;
   if(choice.status==='decrepify'&&choice.target===s.active)delete s.wasDecrepified;
   removeStatus(s.players[choice.target],choice.status);
+  if(choice.status==='prey')removePreyBonus(s,choice.target,choice.preyIndex);
   if(choice.status==='barbed'&&choice.target===s.active)s.vineAttempts=0;
   if(id===1)grantPirateStatus(s,1-choice.target,choice.status);
   if(choice.status==='bounty')removeBountyBonus(s,choice.target);
@@ -625,6 +640,7 @@ function applyCard(s,seat,id,choice,roll,random,add) {
    const player=s.players[choice.target];
    if(!newStatuses.includes(key)||player[key])player[key]=statusCap(player,key)>1?0:false;
   }
+  removePreyBonus(s,choice.target,0,2);
   removeBountyBonus(s,choice.target);
   s.players[choice.target].shadowsStarted=false;
   s.players[choice.target].chiFresh=0;
@@ -632,14 +648,14 @@ function applyCard(s,seat,id,choice,roll,random,add) {
   return;
  }
  const rules = heroRoster[hero];
- const card = {id,s,names,seat,p,opponent,c,choice,bounded,grantStatus,gainBloodPower,gainTactical,gainGrim,statusCap,updateDamage,discardRandom,drawCards,random,paladinBuffs,discardSpirits,spiritTypes,spiritTotal,queueGrowth,startSideDamage,grantPirateStatus,grantAttackStatus,add,seatCard};
+ const card = {id,s,names,seat,p,opponent,c,choice,bounded,grantStatus,gainBloodPower,gainTactical,gainGrim,statusCap,updateDamage,discardRandom,drawCards,random,paladinBuffs,discardSpirits,spiritTypes,spiritTotal,queueGrowth,startSideDamage,grantPirateStatus,grantAttackStatus,add,seatCard,roll};
  if (rules.applyCard?.(card)) return;
- const rollSize = id === 3 || id === 33 && hero!==cursedPirate.id && hero!==artificer.id && hero!==seraph.id && hero!==vampireLord.id && hero!==gunslinger.id && hero!==samurai.id && hero!==tactician.id && hero!==huntress.id && hero!==headlessHorseman.id && hero!==necromancer.id ? 1 : rules.cardRollSize?.(id) ?? 0;
+ const rollSize = id === 3 || id === 33 && hero!==cursedPirate.id && hero!==artificer.id && hero!==seraph.id && hero!==vampireLord.id && hero!==gunslinger.id && hero!==samurai.id && hero!==tactician.id && hero!==huntress.id && hero!==headlessHorseman.id && hero!==necromancer.id&&hero!==paleLady.id ? 1 : rules.cardRollSize?.(id) ?? 0;
  if(rollSize){
-  s.cardRoll={seat,id,dice:Array.from({length:rollSize},()=>roll()),ninjaRerolls:hero===6&&id===28?5:0};
+  s.cardRoll={seat,id,dice:Array.from({length:rollSize},()=>roll()),ninjaRerolls:hero===6&&id===28||hero===paleLady.id&&id===20?5:0};
   if(hero===gunslinger.id&&id===30||hero===huntress.id&&id===32)s.cardRoll.target=choice.target;
   // During an Ultimate, the ability's dice and subsidiary rolls are final.
-  if(s.stage==='locked'&&s.pending.ultimate&&!(hero===6&&id===28))completeCardRoll(s,roll,random,add);
+  if(s.stage==='locked'&&s.pending.ultimate&&!(hero===6&&id===28)&&!(hero===paleLady.id&&id===20))completeCardRoll(s,roll,random,add);
   return;
  }
  if(id===5||id===6){drawCards(p,id===5?3:2,random,id);return;}
@@ -705,10 +721,11 @@ function playOneCard(s,seat,id,choice,roll,random,add){
 }
 
 const bounded = (v, cap) => Math.min(cap, Math.max(0, v));
-const sets=[{name:'Season One ReRolled',heroes:[0,1,2,3,4,5,6,7]},{name:'Season Two',heroes:[cursedPirate.id,artificer.id,seraph.id,vampireLord.id,gunslinger.id,samurai.id,tactician.id,huntress.id]},{name:'Outcasts',heroes:[headlessHorseman.id,necromancer.id]}];
+const sets=[{name:'Season One ReRolled',heroes:[0,1,2,3,4,5,6,7]},{name:'Season Two',heroes:[cursedPirate.id,artificer.id,seraph.id,vampireLord.id,gunslinger.id,samurai.id,tactician.id,huntress.id]},{name:'Outcasts',heroes:[headlessHorseman.id,necromancer.id,paleLady.id]}];
 const heroId=(s,seat)=>s.players[seat].hero??seat;
 const boardFor=(s,seat)=>{
  const hero=heroRoster[heroId(s,seat)];
+ if(s.players[seat].werewolf&&hero.werewolfBoard)return hero.werewolfBoard;
  return s.players[seat].cursed && hero.cursedBoard ? hero.cursedBoard : hero.board;
 };
 const heroNames=s=>{
@@ -735,7 +752,7 @@ function createMatch(roll, options) {
     state.version=2;
     state.cards=true;
     state.promo=!!options.promo;
-    state.stage=[7,artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id].includes(heroId(state,active))?'upkeep':'main1';
+    state.stage=[7,artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id,paleLady.id].includes(heroId(state,active))?'upkeep':'main1';
     state.income={skipped:'first-turn'};
     state.players.forEach((p,i)=>{
       heroRoster[heroId(state,i)].initialize?.(state,i);
@@ -794,7 +811,11 @@ function legal(state) {
   if(state.stage==='samuraiRoll')return {resolveBackStrike:true};
   if(state.stage==='gunReload')return {resolveReload:true,rerollReload:!!reloadRerolls(state).length};
   const defender = state.players[1-state.active];
+  const prey = state.pending?.preyBonuses?.length<(defender.prey??0)?{reopenPrey:true}:{};
   switch (state.stage) {
+    case 'petulant': return {resolvePetulant:true};
+    case 'paleMoonChoice': return {paleMoonChoice:true};
+    case 'prey': return state.preyRoll?{resolvePrey:true}:{rollPrey:state.pending.preyBonuses.length<(defender.prey??0),skipPrey:true};
     case 'undeadRoll': return {resolveUndead:true,rerollUndead:!!state.undeadRoll.rerolls};
     case 'undeadRemove': return {removeUndead:true};
     case 'necroChoice': return {necroChoice:true};
@@ -856,9 +877,9 @@ function legal(state) {
     case 'preventStatus': return {preventStatus:true};
     case 'main1': return {begin:true};
     case 'discard': return {next:state.players[state.active].hand.length<=6};
-    case 'locked': return {settle:true};
+    case 'locked': return {settle:true,...prey};
     case 'defence': return {defend:!state.pending.parlayBlocked&&!shadowAvoids(state), skipDefence:true};
-    case 'damage': return {settle:true, evade: defender.evasive > 0 && state.pending.damage > 0,
+    case 'damage': return {settle:true,...prey, evade: defender.evasive > 0 && state.pending.damage > 0,
       evadeReturn:state.cards&&state.players[state.active].evasive>0&&returnDamageFor(state)>0};
     case 'evasion': return {resolveEvade:true};
     case 'main': return state.cards?{endMain:true}:{next:true};
@@ -871,6 +892,7 @@ function actor(state) {
   if(state.stage==='horseRoll')return state.horseRoll.seat;
   if(state.growth)return state.growth.seat;
   if(state.retry)return state.retry.seat;
+  if(state.petulant)return 1-state.petulant.seat;
   if(state.mainChoice)return state.mainChoice.seat;
   if(state.pirateChoice)return state.pirateChoice.seat;
   if(state.monkChoice)return state.monkChoice.seat;
@@ -1207,6 +1229,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         if(action.status==='targeted'&&hit?.targetBonus&&seat!==s.active&&s.stage!=='postHit'){
           hit.targetBonus=false;hit.grossDamage-=2;updateDamage(hit);
         }
+        if(action.status==='prey')removePreyBonus(s,seat,0);
         s.log.unshift(`${heroNames(s)[seat]} cleanses ${statusLabel(action.status)}.`);
       } else {
         const n=action.amount;p.chi-=n;
@@ -1247,7 +1270,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       state.response=null;
       return transitionCore(state,deferred,roll,random,true);
     }
-    const responseActions=['begin','endMain','accept','resolveBlind','resolveEffect','resolveTarget','resolveDefence','settle','resolveEvade','finishCardRoll','continueHit','defend','skipDefence','resolveUpkeep','resolveSeraphRoll','resolvePurify','resolveGunContest','resolveReload','resolveGrimRoll','resolveUndead','resolveBackStrike','chooseDuel','resolveMesmerize','resolveBleed','resolveArtRoll','resolvePirateKeg','chooseMastery','payKnockdown','skipKnockdown','resolveSneak','chooseStolenCP','skipSneak','next','resolveNinjutsu','resolveSideDamage','end' ];
+    const responseActions=['begin','endMain','accept','resolveBlind','resolveEffect','rollPrey','resolvePrey','resolveTarget','resolveDefence','settle','resolveEvade','finishCardRoll','continueHit','defend','skipDefence','resolveUpkeep','resolveSeraphRoll','resolvePurify','resolveGunContest','resolveReload','resolveGrimRoll','resolveUndead','resolveBackStrike','chooseDuel','resolveMesmerize','resolveBleed','resolveArtRoll','resolvePirateKeg','chooseMastery','payKnockdown','skipKnockdown','resolveSneak','chooseStolenCP','skipSneak','next','resolveNinjutsu','resolveSideDamage','end' ];
     if(!bypassResponse && action.type==='evade' && legal(previous).evade && hasResponse(previous,previous.active)){
       return {...previous,response:{seat:previous.active,action}};
     }
@@ -1336,6 +1359,16 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       state.stage='dryadResponse';
       return;
     }
+    if(p.effect==='paleJaws'&&!p.jawsTargeted){
+      p.jawsTargeted=true;
+      p.jawsPrior=defender.prey??0;
+      if(!p.dryadBlocked?.includes('prey')){
+        if(p.jawsPrior===2&&!attacker.parlay)p.preyOverflow=1;
+        else grantStatus(defender,'prey');
+      }
+      state.stage='effect';
+      return;
+    }
     for(const key of p.paladinGain??[])grantStatus(attacker,key);
     if (p.evasive) grantStatus(state.players[p.grantSeat??state.active],'evasive',p.evasive);
     if(p.chiGain)grantStatus(attacker,'chi',p.chiGain);
@@ -1350,9 +1383,13 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     p.attack=p.damage>0;
     p.incomingStatus=negativeStatuses.filter(k=>p[k]&&!p.dryadBlocked?.includes(k));
     p.priorStatus=Object.fromEntries(p.incomingStatus.map(k=>[k,defender[k]||0]));
+    if(p.jawsTargeted&&p.incomingStatus.includes('prey'))p.priorStatus.prey=p.jawsPrior;
     for(const k of p.incomingStatus){
-      if(k==='powderKeg')grantPirateStatus(state,1-state.active,k,true);
-      else grantStatus(defender,k,k==='delayedPoison'||k==='nanite'||k==='bleed'||k==='shame'?p[k]:1);
+      if(k==='prey'&&p.jawsTargeted)continue;
+      if(k==='prey'&&p.damage>0&&!p.pure&&!attacker.parlay&&defender.prey+p.prey>2)
+        p.preyOverflow=p.prey;
+      else if(k==='powderKeg')grantPirateStatus(state,1-state.active,k,true);
+      else grantStatus(defender,k,k==='delayedPoison'||k==='nanite'||k==='bleed'||k==='shame'||k==='prey'?p[k]:1);
     }
     if(p.pirateInflict)cursedPirate.inflictCoins(state,state.active,p.pirateInflict);
     if(p.artSynth)grantStatus(attacker,'synth',p.artSynth);
@@ -1411,6 +1448,11 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     p.shadowSkippedDefence=shadowAvoids(state)&&p.attack&&!p.undefendable&&!p.pure&&!p.stun;
     if (p.damage||p.stun||p.attack&&(parlayBlocked||attacker.wither||p.shameReduction||p.decrepReduction)) state.stage = p.stun || p.ultimate ? 'locked' : p.undefendable||p.pure||!p.attack||p.shadowSkippedDefence||parlayBlocked ? 'damage' : 'defence';
     else finishRoll();
+    if(state.cards&&p.attack&&!p.pure&&!p.parlayBlocked&&defender.prey){
+      p.preyBonuses=[];
+      p.preyResume=state.stage;
+      state.stage='prey';
+    }
     if(p.grim)gainGrim(state,state.active,p.grim);
     if(p.tacticalCap){
       attacker.tacticalCap=statusCap(attacker,'tactical')+1;
@@ -1473,11 +1515,22 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       p.ninjaTokens=0;
     }
     if(state.cards&&attacker.sneak&&attackExpected&&!p.pure)state.stage='sneakOffer';
-    else if(state.cards&&!p.stun&&!p.ultimate&&!p.showdownTargeted&&(p.damage||p.burn||p.knockdown||p.collateral||p.poison||p.delayedPoison||p.barbed||p.powderKeg||p.wither||p.parlay||p.pirateInflict||p.nanite||p.blindingLight||p.bleed||p.bounty||p.shame||p.constrict||p.decrepify))enterTargeting(p);
+    else if(state.cards&&!p.stun&&!p.ultimate&&!p.showdownTargeted&&!p.jawsTargeted&&(p.damage||p.burn||p.knockdown||p.collateral||p.poison||p.delayedPoison||p.barbed||p.powderKeg||p.wither||p.parlay||p.pirateInflict||p.nanite||p.blindingLight||p.bleed||p.bounty||p.shame||p.constrict||p.decrepify||p.prey))enterTargeting(p);
     else activate();
   }
   function resolveAbility() {
     const p=state.pending;
+    if(p.pale){
+      const {shards,transform,shardDamage,shardHeal,skipShardLoss}=p.pale;
+      if(shards)paleLady.gain(attacker,shards);
+      if(transform){
+        attacker.werewolf=true;
+        paleLady.gain(attacker);
+      }
+      if(skipShardLoss)attacker.keepMoonShard=true;
+      if(shardDamage&&p.effect!=='paleJaws')p.damage+=shardDamage*attacker.moonShard;
+      if(shardHeal)p.heal+=attacker.moonShard;
+    }
     if(p.cpGain)attacker.cp=bounded(attacker.cp+p.cpGain,15);
     if(p.cpDamage)p.damage+=Math.ceil(attacker.cp*p.cpDamage);
     if(p.corpses)necromancer.gain(attacker,p.corpses);
@@ -1495,7 +1548,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       p.dreadful=3;
       p.grim=1;
     }
-    if(p.showdown)enterTargeting(p);
+    if(p.showdown||p.effect==='paleJaws')enterTargeting(p);
     else if(p.search&&state.cards&&attacker.deck.length)state.stage='vampireSearch';
     else if(p.possessChoice||p.bloodMagic&&attacker.mesmerize&&!state.offenceFlight)state.stage='vampireChoice';
     else if(p.purify||p.flightTarget)state.stage='seraphTarget';
@@ -1552,6 +1605,11 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     if(state.cards)state.stage='main1';
   }
   function advanceTurn(){
+    if(attacker.werewolf){
+      if(!attacker.keepMoonShard)attacker.moonShard=Math.max(0,attacker.moonShard-1);
+      if(!attacker.moonShard){attacker.werewolf=false;add('Twilight returns Werewolf to Pale Lady.');}
+    }
+    delete attacker.keepMoonShard;
     if(heroId(state,state.active)===headlessHorseman.id&&attacker.hauntedHeadSeat===1-state.active){
       grantStatus(attacker,'dreadful');
       add('The Haunted Head grants Dreadful at the end of the turn.');
@@ -1582,7 +1640,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     if(state.holyPresenceChecked)delete state.holyPresenceChecked;
     if(state.bleedChecked)delete state.bleedChecked;
     if(state.quickDrawChecked)delete state.quickDrawChecked;
-    if(upkeepDamage(player,state.active)||player.fireMastery||heroId(state,state.active)===7||player.cursed||player.powderKeg||player.nanite||player.holyPresence||player.bleed||player.nyra?.downed||[artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id].includes(heroId(state,state.active))){
+    if(upkeepDamage(player,state.active)||player.fireMastery||heroId(state,state.active)===7||player.cursed||player.powderKeg||player.nanite||player.holyPresence||player.bleed||player.nyra?.downed||[artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id,paleLady.id].includes(heroId(state,state.active))){
       state.pending=null;
       state.stage='upkeep';
       state.upkeepEvaded=false;state.upkeepPrevention=0;state.upkeepProtect=0;
@@ -1610,6 +1668,12 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       else income(attacker);
     }
     else {state.stage='finished';state.winner=`${names[1-state.active]} wins`;add(state.winner);}
+  }
+  function addOverflowPrey(p){
+    if(p.preyOverflow){
+      grantStatus(defender,'prey',p.preyOverflow);
+      delete p.preyOverflow;
+    }
   }
   function completeGrowth(){
     const g=state.growth;
@@ -1994,6 +2058,10 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     }
     case 'resolveUpkeep':
+      if(attacker.moonShard===3&&!attacker.werewolf){
+        attacker.werewolf=true;
+        add('Twilight transforms Pale Lady into Werewolf.');
+      }
       if(heroId(state,state.active)===gunslinger.id&&!state.quickDrawChecked){
         state.quickDrawChecked=true;
         const before=attacker.reload??0;
@@ -2058,6 +2126,49 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       releaseChangedAnnouncement(state,ctx,before);
       break;
     }
+    case 'resolvePetulant': {
+      const {seat,resume}=state.petulant, player=state.players[seat], target=state.players[1-seat];
+      if(![0,1].includes(action.choice)||action.choice===1&&target.cp<1)return previous;
+      if(action.choice===1){target.cp--;player.cp=bounded(player.cp+1,15);}
+      else player.werewolf=true;
+      state.stage=resume;
+      delete state.petulant;
+      break;
+    }
+    case 'paleMoonChoice':
+      if(![0,1].includes(action.choice))return previous;
+      if(action.choice===0)attacker.cp=bounded(attacker.cp+1,15);
+      else paleLady.gain(attacker);
+      continueOffence(state.pending);
+      break;
+    case 'reopenPrey':
+      state.pending.preyResume=state.stage;
+      state.stage='prey';
+      break;
+    case 'rollPrey':
+      state.preyRoll=[roll()];
+      break;
+    case 'resolvePrey': {
+      const face=state.preyRoll[0], p=state.pending;
+      delete state.preyRoll;
+      if(face===1)removeStatus(defender,'prey');
+      else if(p.preyBonuses.length<(defender.prey??0)){
+        const bonus=face===6?2:1;
+        p.preyBonuses.push(bonus);
+        p.grossDamage+=bonus;
+        updateDamage(p);
+      }
+      add(`Prey rolls ${face}.`);
+      if(p.preyBonuses.length>=(defender.prey??0)){
+        addOverflowPrey(p);
+        if(p.preyBonuses.length>=(defender.prey??0))state.stage=p.preyResume;
+      }
+      break;
+    }
+    case 'skipPrey':
+      addOverflowPrey(state.pending);
+      state.stage=state.pending.preyResume;
+      break;
     case 'finishCardRoll': completeCardRoll(state,roll,random,add);break;
     case 'finishMainCard': {
       const {seat,id,choice}=state.mainAction;
@@ -2254,6 +2365,11 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         poison:ability.poison||ability.dagger&&counts.Shadow,sneak:ability.sneak,enterShadows:ability.shadows,afterShadows:ability.afterShadows,pure:ability.type==='pure',
         undefendable:!!state.offenceFlight||ability.type==='undefendable'||matching>=ability.matchUndefendable, ultimate:ability.type==='ultimate', returnDamage:0,
         stun:!!ability.stun, targeted:!!ability.targeted, effect:ability.effect, recoil:ability.recoil ?? 0};
+      if(heroId(state,state.active)===paleLady.id)Object.assign(state.pending,{
+        pale:{shards:ability.paleStraight?(counts.largeStraight?2:1):ability.shards,transform:ability.transform,
+          shardDamage:ability.sunder&&counts.largeStraight?2:ability.shardDamage,shardHeal:ability.shardHeal,skipShardLoss:ability.skipShardLoss},
+        prey:ability.prey,bleed:ability.sunder?(counts.largeStraight?2:1):ability.bleed??Number(matching>=ability.bleedMatch)
+      });
       if(heroId(state,state.active)===necromancer.id)Object.assign(state.pending,{
         corpses:(ability.corpses?.(counts)??0)+Number(matching>=ability.corpseMatch),
         reanimate:ability.reanimate,harvest:ability.harvest,explosion:ability.explosion,shroud:ability.shroud,
@@ -2342,7 +2458,17 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'resolveEffect': {
       const p=state.pending;
       const counts = tally(p.effectDice,heroId(state,state.active));
-      if(p.harvest){
+      if(p.effect==='paleJaws'){
+        if(counts['Full Moon'])paleLady.gain(attacker);
+        p.damage+=p.pale.shardDamage*attacker.moonShard;
+      } else if(p.effect==='paleFullMoon'){
+        p.damage+=counts.Slash??0;
+        if(counts['Full Moon']){
+          paleLady.gain(attacker);
+          attacker.cp=bounded(attacker.cp+1,15);
+        }
+        if(counts.Crescent){state.stage='paleMoonChoice';break;}
+      } else if(p.harvest){
         if(counts.Soul){
           necromancer.gain(attacker,1);
           finishRoll(true);
@@ -2409,6 +2535,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       }
       if(action.status && (defender[action.status]||0)>p.priorStatus[action.status]){
         removeStatus(defender,action.status);
+        if(action.status==='prey')removePreyBonus(state,1-state.active,0);
         if(action.status==='bounty')removeBountyBonus(state,1-state.active);
         if(action.status==='targeted'&&p.targetBonus){
           p.grossDamage-=2;p.targetBonus=false;updateDamage(p);
@@ -2421,7 +2548,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       const key=state.stage==='defenceResponse'&&!card?(p.seraphDefenceReroll?'seraphDefenceReroll':'ninjaDefenceRerolls'):'ninjaRerolls';
       const source=card??p,indices=action.indices;
       if(!Array.isArray(indices)||!indices.length||indices.length>source[key]||new Set(indices).size!==indices.length||
-        !indices.every(i=>Number.isInteger(i)&&i>=0&&i<ctx.dice.length&&(!card||![4,5].includes(ctx.dice[i]))))return previous;
+        !indices.every(i=>Number.isInteger(i)&&i>=0&&i<ctx.dice.length&&(!card||heroId(state,card.seat)===paleLady.id||![4,5].includes(ctx.dice[i]))))return previous;
       for(const i of indices)ctx.dice[i]=roll();
       source[key]=0;
       add(`${names[ctx.seat]} rerolls ${indices.length} dice: ${ctx.dice.join(', ')}.`);
@@ -2531,6 +2658,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       add(`${names[1-state.active]} takes ${defenderDamage} damage${returnDamage ? ` and ${names[state.active]} takes ${returnDamage}` : ''}.`);
       if(defenderSaved)add(`${names[1-state.active]} survives through Blessing of Divinity.`);
       if(attackerSaved)add(`${names[state.active]} survives through Blessing of Divinity.`);
+      if(p.quenched&&attacker.hp&&attackDamage)paleLady.heal(attacker,p.quenched*attacker.moonShard);
       if(state.bloodHealPlanned&&attacker.hp&&attackDamage){
         const before=attacker.hp;
         attacker.hp=bounded(attacker.hp+attackDamage,60);
@@ -2595,6 +2723,9 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       } else if(event.endTurn)advanceTurn();
       else {
         state.stage=event.resume;
+        if(event.ravage){
+          state.cardRoll={seat:event.seat,id:20,dice:Array.from({length:5},()=>roll()),ninjaRerolls:5};
+        }
         if(event.terrorize){
           gainGrim(state,state.active,1);
           attacker.cp=bounded(attacker.cp+1,15);
