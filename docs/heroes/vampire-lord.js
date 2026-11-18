@@ -97,6 +97,7 @@ const vampireLord = (() => {
         attacker.hp=1;
         add(`${names[1-seat]} survives through Blessing of Divinity.`);
       }
+      reviveNecromancer(attacker);
       if(!attacker.hp){
         delete state.bloodOverflow;
         state.winner=`${names[seat]} wins`;
