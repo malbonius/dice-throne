@@ -37,10 +37,13 @@ function board(seat) {
   return `<figure class="board-panel">${button('inspect-board',
     `<img src="${boardImage(state,seat)}" alt="">`,`class="board-open" data-index="${seat}" aria-label="Zoom ${names[seat]} board"`)}
     ${heroId(state,seat)===alchemist.id?`<details class="board-upgrades"><summary>Attached Potions (${alchemist.tokens(state,seat).length})</summary>${Object.entries(alchemist.slots(state.players[seat])).map(([slot,cap])=>`<p><strong>${slot==='defence'?'Passivation':slot}</strong> · ${alchemist.tokens(state,seat).filter(t=>t.slot===slot).length}/${cap} slots<br>${alchemist.tokens(state,seat).filter(t=>t.slot===slot).map(t=>alchemist.tokenLabel(t)).join('<br>')||'Empty'}</p>`).join('')}</details>`:''}
+    ${heroId(state,seat)===krampus.id?`<details class="board-upgrades"><summary>Rejects (${state.players[seat].rejects.length}/3)</summary><div class="controls">${state.players[seat].rejects.map(id=>button('inspect-reject',`<img src="${art.krampusRejects[id]}" alt="${krampus.names[id]}" style="width:100px;max-width:100%"><br>${krampus.names[id]}${state.players[seat].rejectUsed[id]===state.turn?' · used this turn':''}`,`data-index="${id}" data-seat="${seat}"`)).join('')||'No Rejects in play'}</div><p>Draw pile: ${state.players[seat].rejectDeck.length} · Discard: ${state.players[seat].rejectDiscard.map(id=>krampus.names[id]).join(', ')||'empty'}</p></details>`:''}
     ${upgrades.length?`<details class="board-upgrades" data-seat="${seat}"><summary>Equipped upgrades (${upgrades.length})</summary>
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  coal:'Negative, stack limit 4. With four Coal, the next CP gain first removes all Coal and reduces that gain by 1 CP. At 15 CP, an attempted gain cannot clear Coal. Amounts below four have no CP penalty.',
+  gift:'Unique, stack limit 3. During your own Main Phase, spend one to draw a Reject into play. Removable, never transferable. Rejects are Companions with a separate draw/discard pile, not hand cards.',
   punchify:'Unique Potion, limit 6 across the whole board. Offensive slots only. Spend at the end of its ability’s Offensive Roll Phase for +2 Attack damage. Cannot be transferred.',
   bolsterate:'Unique Potion, limit 2 across the whole board. Defensive slots only. After resolving Passivation’s attachments, spend to prevent 2 damage. You must have activated the defence. Cannot be transferred.',
   cleansitude:'Unique Potion, limit 3 across the whole board. Attach to any printed Potion slot. Spend with the activated ability to heal 1 or remove one status from yourself, including an incoming status during defence. Cannot be transferred.',
@@ -246,6 +249,8 @@ function hero(seat) {
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
     heroId(state,seat)===jeanGrey.id&&`<span class="token">${p.darkPhoenix?'Dark Phoenix':'Jean Grey'} active</span>`,
     ...alchemist.types.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
+    p.coal&&token(seat,'coal',`Coal ${p.coal}/4`),
+    p.gift&&token(seat,'gift',`Gift ${p.gift}/3`),
     p.rage&&token(seat,'rage',`Rage ${p.rage}/3`),
     p.alpha&&token(seat,'alpha','Alpha'),
     p.tornado&&token(seat,'tornado',`Tornado ${p.tornado}/4`),
@@ -348,7 +353,7 @@ function incomeSummary(income) {
   else if(income.skipped==='alpha')message='Skipped due to Alpha.';
   else if(income.skipped==='concussion')message='Skipped due to Concussion.';
   else {
-    const cp=income.cp ? '+1 CP' : 'CP already at the cap';
+    const cp=income.coal?'Coal prevented the 1 CP gain':income.cp ? '+1 CP' : 'CP already at the cap';
     const card=income.drawn ? 'drew 1 card' : 'no cards available to draw';
     message=`${cp} · ${card}`;
   }
@@ -370,7 +375,17 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(!state.response&&state.alchemistTask&&state.stage==='alchemistChoices'){
+  if(state.krampusOverflow!==undefined){
+    const seat=state.krampusOverflow,player=state.players[seat];phase='Reject limit';heading=`${names[seat]} must discard down to 3 Rejects`;detail='The whole draw batch has finished. Excess Rejects must be discarded without activation.';content=player.rejects.map(id=>button('discardReject',`Discard ${krampus.names[id]}`,`data-index="${id}"`)).join('');
+  } else if(state.krampusActivation){
+    const a=state.krampusActivation;phase='Activate Reject';heading=krampus.names[a.reject];detail=`${a.free?'This activation keeps the Reject in play.':'The Reject is discarded after its effect.'} Each Reject can activate only once per global turn. Eligible Krampus cards can be played before finishing.`;content=`<img src="${art.krampusRejects[a.reject]}" alt="${krampus.names[a.reject]}" style="max-width:240px;width:100%">`+button('finishReject','Resolve Reject effect','class="primary"');
+  } else if(state.krampusTask&&state.stage==='krampusChoices'){
+    const h=state.krampusTask.queue[0];phase='Krampus';heading=names[state.krampusTask.seat];
+    if(h.kind==='draw'){heading=`Draw ${h.amount} Reject${h.amount===1?'':'s'}`;detail='Activate eligible existing Rejects first if desired, then draw the whole batch. If over the limit, discard down to three without activating the excess.';content=button('collectRejects','Draw the whole batch','class="primary"');}
+    if(h.kind==='gift'){heading=`Gain ${h.amount} Gifts`;detail='Spend existing Gifts first if desired, then collect the whole batch. Excess Gifts are lost.';content=button('collectGifts','Collect Gifts','class="primary"');}
+    if(h.kind==='free'){heading='Optional free Reject activation';detail='Activate one eligible Reject without discarding it. The once-per-turn limit still applies.';content=krampus.options(state,responding,true).map((c,i)=>button('krampusFree',c.label,`data-choice="${i}"`)).join('')+button('krampusFreeSkip','Keep the Rejects without activating','class="primary"');}
+    if(h.kind==='rejection'){heading='Rejection · choose the benefit';content=button('krampusRejection','Draw 1 Reject','data-status="draw"')+button('krampusRejection','Activate a Reject without discarding','data-status="free"');}
+  } else if(!state.response&&state.alchemistTask&&state.stage==='alchemistChoices'){
     const h=state.alchemistTask.queue[0];phase='Alchemist';heading=h.kind==='attach'?`Attach Potions · ${h.left} remaining`:h.kind==='remove'?`Remove Potions · up to ${h.left}`:h.kind==='target'?'Tonic! · choose a player':'Transmogrify! · choose a status';
     detail=h.kind==='attach'?'Choose an open slot and an available potion. All attachments resolve before potions can be spent.':h.kind==='remove'?'Removing a potion does not activate its potion effect.':'';
     content=`<label>Choose <select id="alchemist-choice">${alchemist.taskChoices(state).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('alchemistChoice','Confirm choice','class="primary"')+(allowed.alchemistDone?button('alchemistDone','Finish removing Potions'):'');
@@ -1116,6 +1131,12 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'krampusAbility':
+      phase='Krampus';heading=p.name;content=button('finishKrampusAbility','Resolve ability effects','class="primary"');break;
+    case 'krampusPrepared':
+      phase='Krampus';heading=p.name;content=button('finishKrampusPrepared','Continue ability','class="primary"');break;
+    case 'krampusResolved':
+      phase='Krampus';heading=p.name;content=button('finishKrampusResolved','Continue after the effect roll','class="primary"');break;
     case 'alchemistDefence':
       phase='Defensive Potions · attacker priority';heading=`${activeName} may respond`;detail='The defence attachments have resolved. The attacker may use legal effects before Alchemist spends these Potions.';content=button('alchemistDefenceReady','Continue to defensive Potions','class="primary"');break;
     case 'alchemistAbility':
@@ -1200,11 +1221,13 @@ function arena() {
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
   if(!state.psyReveal){
+  if(krampus.canGift(state,responding))content+=button('spendGift','Spend Gift · draw 1 Reject');
+  if(!(state.krampusTask&&state.stage==='krampusChoices'&&state.krampusTask.queue[0]?.kind==='free'))for(const [i,c] of krampus.options(state,responding).entries())content+=button('activateReject',c.label,`data-choice="${i}"`);
   const lab=alchemist.labChoices(state,responding);
   if(lab.length)content+=`<div class="token-actions"><label>The Lab <select id="alchemist-lab">${lab.map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>${button('alchemistLab','Remove Potion and reroll')}</div>`;
   for(const [i,c] of wolverine.rageChoices(state,responding).entries())content+=button('spendRage',c.label,`data-choice="${i}"`);
   }
-  if(!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
   if(storm.canTornado(state,responding))content+=button('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
   if(storm.canWind(state,responding))content+=button('spendWindShear',state.players[responding].ragingWindsTurn===state.turn?'Spend Wind Shear · prevent 4 and deal 4 isolated damage':'Spend Wind Shear · prevent 2 and deal 2 isolated damage');
   if(storm.oppReroll(state,responding))content+=`<div class="controls">${button('stormOppReroll','Reroll effect die 1','data-status="first"')}${button('stormOppReroll','Reroll effect die 2','data-status="second"')}${button('stormOppReroll','Reroll both effect dice','data-status="both"')}</div>`;
@@ -1213,7 +1236,7 @@ function arena() {
   if(rogue.canSkyward(state,responding))content+=button('spendSkyward','Spend Skyward · both players roll');
   if(rogue.boostLeach(state,responding))content+=button('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
   }
-  if(!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
   for(const c of psylocke.swaps(state,responding))content+=button('manifestSwap',c.label,`data-index="${c.index}"`);
   if(psylocke.canBoost(state,responding))content+=button('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
   for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=button('spendInfiltration',c.label,`data-choice="${i}"`);
@@ -1360,6 +1383,9 @@ function handleAction(event) {
     renderHand();
     handContent.querySelector(`button[data-action="select-card"][data-index="${index}"]`)?.focus();
     return;
+  }
+  if(type==='inspect-reject'){
+    viewerSeat=Number(target.dataset.seat);viewerCard=null;viewerLeaflet=false;front.hidden=back.hidden=true;viewerImage.alt=krampus.names[index];viewerImage.src=art.krampusRejects[index];document.getElementById('viewer-title').textContent=viewerImage.alt;viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);return;
   }
   if(type==='inspect-forging'){
     const key=target.dataset.status;
