@@ -40,6 +40,10 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  influence:'Negative, stack limit 3. At the start of the holder’s actual Offensive Roll Phase, roll one die per token. Each 1–3 removes one Roll Attempt. Then remove all Influence. Dice Cube and Manifest do not affect these separate dice.',
+  ionicEnergy:'Positive. Ionic (1) and Ionic (2) share a stack limit of 4 unless increased by Ionic Intensity! Spend to add the indicated damage to an Attack; two tokens per global turn, or pay 1 CP to permit four. A full stack cannot replace an old token with a stronger new one.',
+  ionicEnergy2:'Positive, Ionic Energy (2). Shares a stack limit with Ionic Energy (1). Spend to add 2 Attack damage. The same two-token/four-token allowance applies to both values together.',
+  skyward:'Positive, stack limit 2. When Attacked, spend and both players roll one die. Pay 1 CP per reroll of your own die. Greater returns 3 damage; equal prevents 4; lower has no effect. Resolve only once after the final roll.',
   paralyze:'Negative, stack limit 1. Blocks status effects gained or inflicted by normal Offensive Abilities. Ultimates, passives, cards and token actions are unaffected. Remove at the end of the holder’s actual Offensive Roll Phase.',
   infiltration:'Positive, stack limit 2. Spend one to force a reroll of any player’s Defensive Roll Attempt die. Cannot affect subsidiary defence rolls such as Agility.',
   manifestDie:'A separate Psylocke die rolled with her first Offensive Roll Attempt. Once per turn, use it to replace one offensive die or add half its value rounded up to an attack. Only effects naming Manifest can alter it while separate; once inserted it is a normal die.',
@@ -231,6 +235,10 @@ function hero(seat) {
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
     heroId(state,seat)===jeanGrey.id&&`<span class="token">${p.darkPhoenix?'Dark Phoenix':'Jean Grey'} active</span>`,
+    p.influence&&token(seat,'influence',`Influence ${p.influence}/3`),
+    p.ionicEnergy&&token(seat,'ionicEnergy',`Ionic (1) ×${p.ionicEnergy} · ${rogue.total(p)}/${rogue.cap(p)}`),
+    p.ionicEnergy2&&token(seat,'ionicEnergy2',`Ionic (2) ×${p.ionicEnergy2} · ${rogue.total(p)}/${rogue.cap(p)}`),
+    p.skyward&&token(seat,'skyward',`Skyward ${p.skyward}/2`),
     p.paralyze&&token(seat,'paralyze','Paralyze'),
     p.infiltration&&token(seat,'infiltration',`Infiltration ${p.infiltration}/2`),
     heroId(state,seat)===psylocke.id&&token(seat,'manifestDie',`Manifest die · ${p.manifestDie||'not rolled'}${p.manifestUsedTurn===state.turn?' · used this turn':''}`),
@@ -347,6 +355,10 @@ function arena() {
   if(state.iceFreezeChoice){
     const f=state.iceFreezeChoice;phase='Dice Cube';heading=`${names[f.seat]} chooses a tied lowest die`;detail='The chosen original die will remain frozen for this Roll Phase, unless its Dice Cube is removed.';
     content=tray(state.dice,f.seat,false)+f.candidates.map(i=>button('iceChooseFrozen',`Freeze die ${i+1} (${state.dice[i]})`,`data-index="${i}"`)).join('');
+  } else if(!state.response&&state.rogueGain){
+    const t=state.rogueGain;phase='Ionic Energy';heading=`${names[t.seat]} collects Ionic Energy`;detail=`${t.ones} Ionic (1) and ${t.twos} Ionic (2) are waiting. The two values share one stack limit. Spend existing tokens first if eligible, then choose what fits; excess is lost.`;content=rogue.collectChoices(state).map((c,i)=>button('rogueCollect',c.label,`data-choice="${i}"`)).join('');
+  } else if(!state.response&&state.rogueRoll&&!state.cardRoll&&!state.retry){
+    const t=state.rogueRoll;phase=t.kind==='influence'?'Influence · start of Roll Phase':'Skyward';heading=names[t.seat];detail=t.kind==='influence'?'Each 1–3 removes one Roll Attempt, then all Influence is removed. These dice may be modified before resolution.':'Greater returns 3 damage; equal prevents 4. You may pay 1 CP for each reroll of your own die before resolving once.';content=rollDisplay(rollContext(state))+(allowed.rerollSkyward?button('rerollSkyward','Pay 1 CP · reroll own Skyward die'):'')+button('resolveRogueRoll','Resolve the roll','class="primary"');
   } else if(state.psyReveal){
     const t=state.psyReveal;phase='Deft Maneuver';heading=`${names[t.seat]} examines ${names[1-t.seat]}’s hand`;detail=t.cards.length?'The examined hand stays unchanged.':'The opponent’s hand is empty.';content=t.cards.map(card=>`<figure class="reveal-card"><img src="${cardArtwork(state,1-t.seat,card)}" alt="${seatCard(state,1-t.seat,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,1-t.seat,card).name}</figcaption></figure>`).join('')+button('psyRevealDone','Finish examining','class="primary"');
   } else if(!state.response&&state.jeanTask&&state.stage==='jeanChoices'&&!state.cardRoll&&!state.retry){
@@ -604,7 +616,7 @@ function arena() {
   } else if(state.cardRoll) {
     phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,seat,state.cardRoll.id).name;
     detail=`${names[seat]} can modify the roll before it resolves.`;
-    content=tray(state.cardRoll.dice,seat,false)+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>heroId(state,seat)===paleLady.id||v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
+    content=tray(state.cardRoll.dice,state.cardRoll.roller??seat,false)+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>heroId(state,seat)===paleLady.id||v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
   } else if(state.stage==='gunContest') {
     const contest=state.gunContest;
     phase=contest.kind==='duel'?'Defensive Roll':'Ability roll';
@@ -644,7 +656,7 @@ function arena() {
     case 'offence':
       phase='Offensive Roll';
       heading=`${actingName} rolls`;
-      detail=state.players[state.active].decrepify&&state.attempts?'Decrep-ify · hold at least three dice to reroll.':state.attempts ? 'Tap dice to keep them, reroll the rest, or announce an available ability.' : 'Roll all five dice to begin.';
+      detail=state.budget===0?'Influence removed all Roll Attempts. End this phase, spend Déjà Vu, or play One More Time! to gain a Roll Attempt.':state.players[state.active].decrepify&&state.attempts?'Decrep-ify · hold at least three dice to reroll.':state.attempts ? 'Tap dice to keep them, reroll the rest, or announce an available ability.' : 'Roll all five dice to begin.';
       content=tray(state.dice.length ? state.dice : Array(5).fill(null),seat,!!allowed.hold,state.held)
         + `<div class="controls">${button('roll',state.attempts?(constrictCost(state)?'Reroll · 1 CP':'Reroll'):'Roll dice',`class="primary" ${allowed.roll?'':'disabled'}`)}
         ${button('end','End without an ability',allowed.end?'':'disabled')}</div>`
@@ -1068,6 +1080,8 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'rogueAbility':
+      phase='Rogue';heading=p.name;content=button('finishRogueAbility','Continue ability','class="primary"');break;
     case 'psyAbility':
       phase='Psylocke';heading=p.name;content=button('finishPsyAbility','Continue ability','class="primary"');break;
     case 'paralyzeAfter':
@@ -1128,6 +1142,12 @@ function arena() {
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
   if(!state.psyReveal){
+  for(const c of rogue.ionicChoices(state,responding))content+=button('spendIonic',c.label,`data-status="${c.key}"`);
+  if(rogue.canExpand(state,responding))content+=button('expandIonic','Pay 1 CP · allow four Ionic tokens this turn');
+  if(rogue.canSkyward(state,responding))content+=button('spendSkyward','Spend Skyward · both players roll');
+  if(rogue.boostLeach(state,responding))content+=button('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
+  }
+  if(!state.psyReveal&&!state.rogueGain){
   for(const c of psylocke.swaps(state,responding))content+=button('manifestSwap',c.label,`data-index="${c.index}"`);
   if(psylocke.canBoost(state,responding))content+=button('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
   for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=button('spendInfiltration',c.label,`data-choice="${i}"`);
