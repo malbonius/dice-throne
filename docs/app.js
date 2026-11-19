@@ -40,6 +40,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  paralyze:'Negative, stack limit 1. Blocks status effects gained or inflicted by normal Offensive Abilities. Ultimates, passives, cards and token actions are unaffected. Remove at the end of the holder’s actual Offensive Roll Phase.',
+  infiltration:'Positive, stack limit 2. Spend one to force a reroll of any player’s Defensive Roll Attempt die. Cannot affect subsidiary defence rolls such as Agility.',
+  manifestDie:'A separate Psylocke die rolled with her first Offensive Roll Attempt. Once per turn, use it to replace one offensive die or add half its value rounded up to an attack. Only effects naming Manifest can alter it while separate; once inserted it is a normal die.',
   acuity:'Positive, stack limit 4. Spend 1 to reroll one own die, 2 to gain 1 CP, or 4 to inflict Phoenix Burn on an opponent. Whole incoming batches cannot be split to make room.',
   flameBlast:'Positive, stack limit 5. Dark Phoenix may spend 1 for +1 attack damage or 3 for +4. Synthesis permits Jean Grey to spend them for the current turn. Pure damage cannot be modified.',
   forceField:'Positive, stack limit 1. Remove this token and one other Positive Status token from your board to prevent half a chosen player’s incoming damage, rounded up.',
@@ -147,7 +150,7 @@ const statusNotes = {
 const token = (seat,key,label,suffix=key) => {
   const id = `status-${seat}-${suffix}`;
   const hero=heroId(state,seat);
-  const tokenArt=hero===thor.id&&key==='guardBreak'?'thorGuardBreak':hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
+  const tokenArt=hero===psylocke.id&&key==='agility'?'psylockeAgility':hero===thor.id&&key==='guardBreak'?'thorGuardBreak':hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
     hero===gunslinger.id&&key==='knockdown'?'gunslingerKnockdown':
     hero===tactician.id&&key==='targeted'?'tacticianTargeted':
     hero===tactician.id&&key==='protect'?'tacticianProtect':
@@ -228,6 +231,9 @@ function hero(seat) {
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
     heroId(state,seat)===jeanGrey.id&&`<span class="token">${p.darkPhoenix?'Dark Phoenix':'Jean Grey'} active</span>`,
+    p.paralyze&&token(seat,'paralyze','Paralyze'),
+    p.infiltration&&token(seat,'infiltration',`Infiltration ${p.infiltration}/2`),
+    heroId(state,seat)===psylocke.id&&token(seat,'manifestDie',`Manifest die · ${p.manifestDie||'not rolled'}${p.manifestUsedTurn===state.turn?' · used this turn':''}`),
     p.acuity&&token(seat,'acuity',`Acuity ${p.acuity}/4`),
     p.flameBlast&&token(seat,'flameBlast',`Flame Blast ${p.flameBlast}/5`),
     p.forceField&&token(seat,'forceField','Force Field'),
@@ -341,6 +347,8 @@ function arena() {
   if(state.iceFreezeChoice){
     const f=state.iceFreezeChoice;phase='Dice Cube';heading=`${names[f.seat]} chooses a tied lowest die`;detail='The chosen original die will remain frozen for this Roll Phase, unless its Dice Cube is removed.';
     content=tray(state.dice,f.seat,false)+f.candidates.map(i=>button('iceChooseFrozen',`Freeze die ${i+1} (${state.dice[i]})`,`data-index="${i}"`)).join('');
+  } else if(state.psyReveal){
+    const t=state.psyReveal;phase='Deft Maneuver';heading=`${names[t.seat]} examines ${names[1-t.seat]}’s hand`;detail=t.cards.length?'The examined hand stays unchanged.':'The opponent’s hand is empty.';content=t.cards.map(card=>`<figure class="reveal-card"><img src="${cardArtwork(state,1-t.seat,card)}" alt="${seatCard(state,1-t.seat,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,1-t.seat,card).name}</figcaption></figure>`).join('')+button('psyRevealDone','Finish examining','class="primary"');
   } else if(!state.response&&state.jeanTask&&state.stage==='jeanChoices'&&!state.cardRoll&&!state.retry){
     const t=state.jeanTask,h=t.queue[0],player=state.players[t.seat];phase='Jean Grey';heading=names[t.seat];
     if(h.kind==='gain'){heading=`Gain ${h.amount} ${statusLabel(h.key)}`;detail=`You hold ${player[h.key]??0}/${statusCap(player,h.key)}. Spend existing tokens first if desired, then collect the whole batch; excess is lost.`;content=button('jeanCollect','Collect the whole batch','class="primary"');}
@@ -1060,6 +1068,10 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'psyAbility':
+      phase='Psylocke';heading=p.name;content=button('finishPsyAbility','Continue ability','class="primary"');break;
+    case 'paralyzeAfter':
+      phase='Paralyze · ability effects';heading=p.name;detail='Paralyze prevented the status gains. Eligible responses such as Forced! may be played before concluding the Roll Phase.';content=button('finishParalyze','Conclude the Roll Phase','class="primary"');break;
     case 'jeanAbility':
       phase='Jean Grey';heading=p.name;detail='The activation bonus and initial gains have resolved.';content=button('finishJeanAbility','Continue ability','class="primary"');break;
     case 'jeanResolved':
@@ -1115,6 +1127,10 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
+  if(!state.psyReveal){
+  for(const c of psylocke.swaps(state,responding))content+=button('manifestSwap',c.label,`data-index="${c.index}"`);
+  if(psylocke.canBoost(state,responding))content+=button('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
+  for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=button('spendInfiltration',c.label,`data-choice="${i}"`);
   for(const [i,c] of jeanGrey.acuityChoices(state,responding).entries())content+=button('spendAcuity',c.label,`data-choice="${i}"`);
   for(const [i,c] of jeanGrey.flameChoices(state,responding).entries())content+=button('spendFlameBlast',c.label,`data-choice="${i}"`);
   for(const [i,c] of jeanGrey.fieldChoices(state,responding).entries())content+=button('spendForceField',c.label,`data-choice="${i}"`);
@@ -1212,10 +1228,12 @@ function arena() {
   ];
   if(titheActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · ${state.players[responding].upgrades?.Tithe?'Tithe II':'Tithe'}</strong><div class="controls">${titheActions.join('')}</div></div>`;
   }
+  }
   return `<section class="arena" aria-label="Match actions">
     <div class="phase"><span>Turn ${state.turn} · ${phase}</span><span>${state.stage==='offence' ? `Roll ${state.attempts}/${state.budget}` : ''}</span></div>
     <h2 tabindex="-1" id="action-title">${heading}</h2><p>Active hero · ${activeName}</p>
-    ${detail?`<p>${detail}</p>`:''}${content}
+    ${detail?`<p>${detail}</p>`:''}
+    ${state.pending?.paralyzePrevented?.length?`<p>Paralyze prevented: ${state.pending.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}${content}
     <details class="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
     </section>`;
 }
