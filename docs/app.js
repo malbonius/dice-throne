@@ -39,6 +39,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  covertOps:'Stack limit 3. Once per turn in your Main Phase, spend to put an upgrade from hand into play for free, or inspect the top 3 cards. If none are upgrades, you may reveal them and search for an upgrade; otherwise reorder them. Cannot be removed or transferred.',
+  agility:'Stack limit 2. Spend when receiving damage and roll: on 1–3, prevent half incoming damage, rounded up. Two successful uses prevent all damage. Cannot prevent Ultimate damage.',
+  timeBomb:'Stack limit 2. Each bomb has its own countdown. During Upkeep, roll for each: a 6 removes it; otherwise advance it. Advancing 0:01 explodes for 4 isolated undefendable damage. Transfers preserve the countdown.',
   kineticEnergy: 'Every 2 tokens add 1 attack damage. At the stack limit, remove all, gain 2 CP, draw 2 and deal 5 isolated undefendable damage.',
   vibraniumSuit: 'Spend to prevent 3 incoming damage. Can be removed and cannot be transferred.',
   sunDial: 'Dusk gains 1 in upkeep and flips to Dawn at 5. Dawn can add the dial value to an attack, then loses 4 after damage. At 0, flip to Dusk.',
@@ -140,6 +143,9 @@ function hero(seat) {
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
       return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
     }),
+    p.covertOps>0&&token(seat,'covertOps',`Covert Ops ×${p.covertOps}`),
+    p.agility>0&&token(seat,'agility',`Agility ×${p.agility}`),
+    ...(p.timeBombTimers??[]).map((b,i)=>token(seat,'timeBomb',`Time Bomb ${i+1} · 0:0${b.ticks}`,`timeBomb-${b.id}`)),
     p.kineticEnergy>0&&token(seat,'kineticEnergy',`Kinetic Energy ${p.kineticEnergy}/${statusCap(p,'kineticEnergy')}`),
     p.vibraniumSuit&&token(seat,'vibraniumSuit','Vibranium Suit'),
     p.sunDial!==undefined&&token(seat,'sunDial',`${p.sunDawn?'Dawn':'Dusk'} · ${p.sunDial}/5`),
@@ -262,7 +268,38 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(allowed.collectShapeShift){
+  if(state.widowReveal){
+    const r=state.widowReveal;
+    phase='Baton Strike II';heading=`${names[r.target]} reveals their hand`;
+    content=r.cards.map(id=>button('inspect-card',seatCard(state,r.target,id).name,`data-seat="${r.target}" data-index="${id}"`)).join('')+button('widowRevealDone','Continue','class="primary"');
+  } else if(state.widowTask){
+    const t=state.widowTask,player=state.players[t.seat];
+    phase='Black Widow';heading=t.kind==='covert'?'Spend Covert Ops':t.kind==='order'?'Choose the order of your deck':t.kind==='search'?'Put upgrades into play':'Covert Ops · search your deck';
+    if(t.revealed?.length)detail='Revealed upgrades/cards: '+t.revealed.map(id=>seatCard(state,t.seat,id).name).join(', ')+'.';
+    if(t.kind==='covert'){
+      detail='Put an upgrade from your hand into play for free, or look at the top 3 cards of your deck.';
+      content=blackWidow.upgradeChoices(state,t.seat,'hand').map(id=>button('widowHandUpgrade',`Play ${seatCard(state,t.seat,id).name}`,`data-index="${id}"`)).join('')+button('widowPeek','Look at top 3 cards');
+    } else if(t.kind==='order'){
+      detail+=' Choose the next card from top to bottom.';
+      if(t.ordered?.length)detail+=' Chosen: '+t.ordered.map(id=>seatCard(state,t.seat,id).name).join(' → ')+'.';
+      content=t.cards.map(id=>button('widowOrder',seatCard(state,t.seat,id).name,`data-index="${id}"`)).join('')+button('widowKeep','Keep remaining order','class="primary"');
+    } else {
+      if(t.kind==='covertSearch')detail='No upgrades in the top 3. You may reveal these cards and search for an upgrade: '+(t.revealed??[]).map(id=>seatCard(state,t.seat,id).name).join(', ')+'.';
+      else detail=`Choose up to ${t.left} more upgrades. Your deck is shuffled before any passive card draws.`;
+      content=(t.kind==='search'&&!t.left?[]:blackWidow.upgradeChoices(state,t.seat)).map(id=>button('widowSearch',seatCard(state,t.seat,id).name,`data-index="${id}"`)).join('')+button(t.kind==='search'?'widowSearchDone':'widowKeep',t.kind==='search'?'Finish selection and shuffle':'Do not search','class="primary"');
+    }
+  } else if(!state.response&&state.widowAgility&&!state.cardRoll&&!state.retry){
+    phase='Agility';heading=`${actingName} rolls for Agility`;
+    detail='On 1–3, prevent half incoming damage. Elude! may be played on a 5–6 before resolving this roll.';
+    content=tray(state.widowAgility.dice,seat,false)+button('resolveAgility','Resolve Agility','class="primary"');
+  } else if(!state.response&&state.widowBombRoll&&!state.cardRoll&&!state.retry){
+    phase='Time Bomb';heading=`${actingName} attempts to defuse a bomb`;
+    detail='On a 6, remove the bomb. Otherwise advance its countdown.';
+    content=tray(state.widowBombRoll.dice,seat,false)+button('widowBombResolve','Resolve bomb roll','class="primary"');
+  } else if(allowed.widowBombRoll){
+    phase='Upkeep · Time Bombs';heading=`${actingName} checks Time Bombs`;
+    content=(state.players[state.active].timeBombTimers??[]).filter(b=>!(state.widowBombChecked??[]).includes(b.id)).map(b=>button('widowBombRoll',`Roll for bomb · 0:0${b.ticks}`,`data-index="${b.id}"`)).join('');
+  } else if(allowed.collectShapeShift){
     phase='Status effect';heading='Collect Shape Shift';
     detail='You may spend an existing Shape Shift to make room for incoming tokens.';
     content=button('collectShapeShift','Collect Shape Shift','class="primary"');
@@ -789,6 +826,9 @@ function arena() {
       phase='Avoid damage'; heading=`${actingName} checks ${statusLabel(state.evasionToken??'evasive')}`;
       detail=state.evasionToken==='smoke'?'A 1–3 avoids the incoming damage.':'A 1 or 2 avoids the incoming damage.';
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
+    case 'widowAbility':
+      phase='Black Widow';heading='Finish resolving the ability';
+      content=button('finishWidowAbility','Continue ability','class="primary"');break;
     case 'main1':
       phase='Main Phase 1'; heading=`${actingName} can play or sell cards`;
       content=incomeSummary(state.income)+button('begin','Start Offensive Roll','class="primary"');break;
@@ -811,6 +851,11 @@ function arena() {
     if(sunElf.canGem(state,state.active))content+=button('spendChargedGem','Spend Charged Gem');
     const player=state.players[state.active];
     if(sunElf.canDawn(state,state.active))content+=button('spendSunDawn',`Use Dawn · +${player.sunDial} damage`);
+  }
+  if(blackWidow.canCovert(state,responding))content+=button('spendCovertOps','Spend Covert Ops');
+  if(state.players[responding].agility&&blackWidow.incoming(state,responding))content+=button('spendAgility','Spend Agility · roll to prevent half damage');
+  if(state.stage==='defenceResponse'&&!state.response&&!state.cardRoll&&heroId(state,1-state.active)===blackWidow.id&&blackWidow.count(state.players[1-state.active])>=4&&!state.pending.widowDefenceRerolled){
+    content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="widow-defence-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+button('widowDefenceReroll','Sabotage · additional Roll Attempt');
   }
   if(state.players[responding].vibraniumSuit&&blackPanther.incoming(state,responding))
     content+=button('spendVibraniumSuit','Spend Vibranium Suit · prevent 3 damage');
@@ -858,7 +903,7 @@ function arena() {
     ...(tokens.ninjutsu?[button('ninjutsu','Spend Ninjutsu')]:[]),
     ...(tokens.evadeSide?[button('evadeSide','Spend Evasive')]:[]),
     ...paladinBuffs.filter(key=>tokens[key]).map(key=>button(key,`Spend ${statusLabel(key)}`)),
-    ...tokens.cleanse.map(status=>button('useCleanse',`Cleanse ${statusLabel(status)}`,`data-status="${status}"`)),
+    ...tokens.cleanse.flatMap(status=>status==='timeBomb'?(state.players[responding].timeBombTimers??[]).map(b=>button('useCleanse',`Cleanse Time Bomb 0:0${b.ticks}`,`data-status="timeBomb" data-index="${b.id}"`)):[button('useCleanse',`Cleanse ${statusLabel(status)}`,`data-status="${status}"`)]),
     ...Array.from({length:tokens.boost},(_,i)=>button('boostChi',`Spend ${i+1} Chi · +${i+1} damage`,`data-amount="${i+1}"`)),
     ...Array.from({length:tokens.prevent},(_,i)=>button('preventChi',`Spend ${i+1} Chi · prevent ${i+1}`,`data-amount="${i+1}"`))
   ];
@@ -952,6 +997,7 @@ function handleAction(event) {
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
+  if(type==='widowDefenceReroll')action.indices=[...match.querySelectorAll('input[name="widow-defence-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='abilityReroll')action.indices=[...match.querySelectorAll('input[name="ability-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='extraDefence')action.indices=[...match.querySelectorAll('input[name="defence-reroll"]:checked')].map(input=>Number(input.value));
   state=transition(state,action,roll);
