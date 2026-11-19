@@ -27,6 +27,7 @@ function boardImage(state,seat,full=false) {
   if(id===cursedPirate.id && state.players[seat].cursed)
     return full?art.cursedPirateFullBoard:art.cursedPirateBoard;
   if(id===paleLady.id&&state.players[seat].werewolf)return full?art.werewolfFullBoard:art.werewolfBoard;
+  if(id===jeanGrey.id&&state.players[seat].darkPhoenix)return full?art.jeanDarkFullBoard:art.jeanDarkBoard;
   const form=state.players[seat].druidForm;
   if(id===druid.id&&form!=='druid')return art[form+(full?'DruidFullBoard':'DruidBoard')];
   return (full?art.fullBoards:art.boards)[id];
@@ -39,6 +40,10 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  acuity:'Positive, stack limit 4. Spend 1 to reroll one own die, 2 to gain 1 CP, or 4 to inflict Phoenix Burn on an opponent. Whole incoming batches cannot be split to make room.',
+  flameBlast:'Positive, stack limit 5. Dark Phoenix may spend 1 for +1 attack damage or 3 for +4. Synthesis permits Jean Grey to spend them for the current turn. Pure damage cannot be modified.',
+  forceField:'Positive, stack limit 1. Remove this token and one other Positive Status token from your board to prevent half a chosen player’s incoming damage, rounded up.',
+  phoenixBurn:'Negative, stack limit 1. In Upkeep receive 2 damage, then roll 1 die; a 5 or 6 removes it. If removed and inflicted again during the same Upkeep, the new token triggers again.',
   diceCube:'Negative, stack limit 2. Freeze the lowest die (two lowest at cap) from the first Offensive Roll Attempt. Ties let the roller choose. Those original dice cannot be changed by either player; separate subsidiary rolls are unaffected. Remove at the end of that Roll Phase.',
   iceShard:'Positive, stack limit 5. Spend 5 at any time to gain Glide. Incoming gains arrive as one batch: spend existing shards before collecting, without using a partial incoming batch to make room.',
   glide:'Unique, stack limit 1. Cannot be removed or transferred. At the end of a qualifying Roll Phase, spend once per turn to activate the ability at the end of the printed Glide Path, against the same opponent. No dice objective, Income or Main Phase between the abilities.', 
@@ -222,6 +227,11 @@ function hero(seat) {
     p.grim&&token(seat,'grim',`Grim Pursuit ×${p.grim}`),
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
+    heroId(state,seat)===jeanGrey.id&&`<span class="token">${p.darkPhoenix?'Dark Phoenix':'Jean Grey'} active</span>`,
+    p.acuity&&token(seat,'acuity',`Acuity ${p.acuity}/4`),
+    p.flameBlast&&token(seat,'flameBlast',`Flame Blast ${p.flameBlast}/5`),
+    p.forceField&&token(seat,'forceField','Force Field'),
+    p.phoenixBurn&&token(seat,'phoenixBurn','Phoenix Burn'),
     p.iceShard&&token(seat,'iceShard',`Ice Shards ${p.iceShard}/5`),
     p.diceCube&&token(seat,'diceCube',`Dice Cube ×${p.diceCube}`),
     p.glide&&token(seat,'glide','Glide'),
@@ -302,6 +312,7 @@ function incomeSummary(income) {
   if(!income)return '';
   let message;
   if(income.skipped==='first-turn')message='Skipped on the starting hero’s first turn.';
+  else if(income.skipped==='dark-phoenix')message='Skipped while Dark Phoenix is Active.';
   else if(income.skipped==='disarm')message='Skipped due to Disarm.';
   else if(income.skipped==='concussion')message='Skipped due to Concussion.';
   else {
@@ -330,6 +341,11 @@ function arena() {
   if(state.iceFreezeChoice){
     const f=state.iceFreezeChoice;phase='Dice Cube';heading=`${names[f.seat]} chooses a tied lowest die`;detail='The chosen original die will remain frozen for this Roll Phase, unless its Dice Cube is removed.';
     content=tray(state.dice,f.seat,false)+f.candidates.map(i=>button('iceChooseFrozen',`Freeze die ${i+1} (${state.dice[i]})`,`data-index="${i}"`)).join('');
+  } else if(!state.response&&state.jeanTask&&state.stage==='jeanChoices'&&!state.cardRoll&&!state.retry){
+    const t=state.jeanTask,h=t.queue[0],player=state.players[t.seat];phase='Jean Grey';heading=names[t.seat];
+    if(h.kind==='gain'){heading=`Gain ${h.amount} ${statusLabel(h.key)}`;detail=`You hold ${player[h.key]??0}/${statusCap(player,h.key)}. Spend existing tokens first if desired, then collect the whole batch; excess is lost.`;content=button('jeanCollect','Collect the whole batch','class="primary"');}
+    if(h.kind==='passive'){heading='Dark Phoenix · matching numbers';detail='The activated ability has three matching numbers. Choose the bonus before resolving its other effects.';content=(!p.pure?button('jeanPassive','Add 2 attack damage','data-status="damage"'):'')+button('jeanPassive','Inflict Phoenix Burn','data-status="burn"');}
+    if(h.kind==='essence'){heading='Essence';content=button('jeanEssence','Gain 2 Flame Blast','data-status="flameBlast"')+button('jeanEssence','Gain 4 Acuity','data-status="acuity"');}
   } else if(!state.response&&state.iceTask&&state.stage==='iceChoices'&&!state.cardRoll&&!state.retry){
     const t=state.iceTask,h=t.queue[0],player=state.players[t.seat];phase='Iceman';heading=names[t.seat];
     if(h.kind==='gain'){
@@ -532,6 +548,12 @@ function arena() {
     detail=g.original?'Grow each original Spirit at most once.':`${g.left} growth ${g.left===1?'step':'steps'} left.`;
     content=growthChoices(state).map(status=>button('growSpirit',status==='seedling'?'Gain Seedling':`Grow ${statusLabel(spiritTypes[spiritTypes.indexOf(status)-1])} into ${statusLabel(status)}`,`data-status="${status}"`)).join('');
     if(allowed.finishGrowth)content+=button('finishGrowth','Finish growing','class="primary"');
+  } else if(allowed.jeanSwitch){
+    phase='Upkeep · Call of the Phoenix';heading=`${activeName} changes form`;detail='Switching form preserves all status effects. Jean Grey draws at the start of Main Phase 1; Dark Phoenix skips Income.';content=button('jeanSwitch',`Become ${state.players[state.active].darkPhoenix?'Jean Grey':'Dark Phoenix'}`,'class="primary"');
+  } else if(allowed.checkPhoenixBurn){
+    phase='Upkeep · Phoenix Burn';heading=`${activeName} resolves Phoenix Burn`;detail='Receive 2 damage first, then roll to remove the token. Damage can be prevented normally.';content=button('checkPhoenixBurn','Resolve Phoenix Burn damage','class="primary"');
+  } else if(!state.response&&state.jeanBurnRoll&&!state.cardRoll&&!state.retry){
+    phase='Upkeep · Phoenix Burn';heading='Roll to remove Phoenix Burn';detail='A 5 or 6 removes the token. This roll may be modified before it resolves.';content=tray(state.jeanBurnRoll.dice,state.jeanBurnRoll.seat,false)+button('resolvePhoenixBurn','Resolve removal roll','class="primary"');
   } else if(allowed.gambitHighStakes){
     phase='Upkeep · High Stakes';heading='Choose two or five dice';detail='With five dice, any 1 loses every reward and removes one charge token. With two dice, a 1 does not cause a bust.';
     content=button('gambitHighStakes','Roll 2 dice','data-amount="2"')+button('gambitHighStakes','Roll 5 dice','data-amount="5"');
@@ -1038,6 +1060,10 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'jeanAbility':
+      phase='Jean Grey';heading=p.name;detail='The activation bonus and initial gains have resolved.';content=button('finishJeanAbility','Continue ability','class="primary"');break;
+    case 'jeanResolved':
+      phase='Jean Grey';heading=p.name;content=button('finishJeanResolved','Continue after the effect roll','class="primary"');break;
     case 'iceAbility':
       phase='Iceman';heading=p.name;content=button('finishIcemanAbility','Continue ability','class="primary"');break;
     case 'iceResolved':
@@ -1089,6 +1115,9 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
+  for(const [i,c] of jeanGrey.acuityChoices(state,responding).entries())content+=button('spendAcuity',c.label,`data-choice="${i}"`);
+  for(const [i,c] of jeanGrey.flameChoices(state,responding).entries())content+=button('spendFlameBlast',c.label,`data-choice="${i}"`);
+  for(const [i,c] of jeanGrey.fieldChoices(state,responding).entries())content+=button('spendForceField',c.label,`data-choice="${i}"`);
   if(!state.iceFreezeChoice&&iceman.canConvert(state,responding))content+=button('iceConvert','Spend 5 board Ice Shards · gain Glide');
   if(!state.iceFreezeChoice&&iceman.canFreezerConvert(state,responding))content+=button('iceFreezerConvert','Convert 5 stored Ice Shards into stored Glide');
   const explode=gambit.canExplode(state,responding),dissolve=gambit.dissolveChoices(state,responding);
