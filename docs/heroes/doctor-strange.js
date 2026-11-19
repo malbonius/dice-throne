@@ -27,7 +27,7 @@ const doctorStrange=(()=>{
    return (zone??[]).filter(card=>isSpell(card)&&!st.active.includes(card)&&!(t.used??[]).includes(card)).map(card=>({card,label:spells[card]}));
   }
   if(t.kind==='heal'||t.kind==='dejaTarget')return heroNames(s).map((name,target)=>({target,label:`${name}${t.kind==='heal'?` · heal ${t.amount}`:' · gain Déjà Vu'}`}));
-  if(t.kind==='remove')return s.players.flatMap((p,target)=>statusKeys.filter(key=>p[key]).flatMap(status=>status==='timeBomb'?(p.timeBombTimers??[]).map(b=>({target,status,bombId:b.id,label:`${heroNames(s)[target]} · Time Bomb 0:0${b.ticks}`})):[{target,status,label:`${heroNames(s)[target]} · ${statusLabel(status)}`} ]));
+  if(t.kind==='remove')return s.players.flatMap((p,target)=>statusKeys.filter(key=>p[key]).flatMap(status=>status==='spellbound'?(p.boundAbilities??[]).map(b=>({target,status,tokenId:b.id,label:`${heroNames(s)[target]} · Spellbound: ${b.key}`})):status==='bagOfTricks'?(p.trickBags??[]).map(b=>({target,status,tokenId:b.id,label:`${heroNames(s)[target]} · Bag of Tricks from ${heroNames(s)[b.owner]}`})):status==='timeBomb'?(p.timeBombTimers??[]).map(b=>({target,status,bombId:b.id,label:`${heroNames(s)[target]} · Time Bomb 0:0${b.ticks}`})):[{target,status,label:`${heroNames(s)[target]} · ${statusLabel(status)}`} ]));
   if(t.kind==='order')return (st.peek??[]).map(card=>({card,label:seatCard(s,st.seat,card).name}));
   return [];
  }
@@ -149,7 +149,7 @@ const doctorStrange=(()=>{
       if(t.kind==='dejaTarget')grantStatus(s.players[choice.target],'dejaVu');
       if(t.kind==='remove'){
        if(choice.status==='timeBomb')blackWidow.removeBomb(s.players[choice.target],choice.bombId);
-       else removeMatchStatus(s,choice.target,choice.status);
+       else removeMatchStatus(s,choice.target,choice.status,choice.tokenId);
        if(choice.status==='crimsonBands'&&choice.target!==s.active&&s.pending?.strangeBandsApplied)s.pending.crimsonBands=false;
       }
      }

@@ -1,6 +1,6 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.34.0, 19 November 2026. Base: the supplied 0.31.2 project archive.
+Version: Playtest 0.35.0, 19 November 2026. Base: the supplied 0.31.2 project archive.
 
 ## Project structure
 
@@ -10,13 +10,13 @@ Version: Playtest 0.34.0, 19 November 2026. Base: the supplied 0.31.2 project ar
 - `docs/app.js`: rendering, controls, hand viewer, board/leaflet zoom, local saves and hero picker.
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
-- `docs/art-hero-1.js` through `art-hero-28.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.34.0.
+- `docs/art-hero-1.js` through `art-hero-29.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.35.0.
 - `tests/`: Node-based rules tests and interface/asset checks.
 
 ## Compatibility
 
-The roster is append-only: the previous 25 heroes retain IDs 0–24; Black Panther is 24, Black Widow is 25 and Captain Marvel is 26. Card IDs are hero-local. Black Widow uses shared 1–18, upgrades 19–26, standard actions 27–32, optional promo 33.
+The roster is append-only: the previous 25 heroes retain IDs 0–24; Black Panther is 24, Black Widow is 25, Captain Marvel is 26, Doctor Strange is 27 and Loki is 28. Card IDs are hero-local. Black Widow uses shared 1–18, upgrades 19–26, standard actions 27–32, optional promo 33.
 
 Save version remains 2, storage key remains `dice-throne-card-pilot-v2`. All new state is serialisable. No save migration or cache-clearing of localStorage is required.
 
@@ -37,7 +37,7 @@ Keep existing legacy timing, Income (draw one and gain one CP, except the first 
 
 ## Verification and remaining manual checks
 
-34 Black Widow rules test groups and 40 interface rendering states passed. Checked all 26 hero artwork bundles, Black Widow's 15 card images against their IDs, Marvel shared art selection, cached file references, syntax, and serialised saved-state round-trip. Differential checks against 0.31.2 passed 3,933 comparisons across all 25 old heroes, including 1,857 state transitions.
+Current verification: 42 Loki, 34 Doctor Strange, 34 Black Widow and 35 Captain Marvel rules groups passed, along with 74 interface rendering states, all 29 artwork bundle lengths, Marvel shared artwork selection, cached scripts, syntax and saved-state JSON round-trips. Differential checks against 0.34.0 passed 4,017 comparisons across the previous 28 heroes, including 1,886 state transitions. All 15 Loki card crops were inspected against their IDs/costs; supplied token bytes are preserved exactly.
 
 A real Chromium session could not start in this execution environment. Manual checks still required on the user's Windows/Android browsers: hero selection, touch controls, card/board zoom, reload of an existing save, online installation/update then offline launch, and gameplay against other heroes. The interface tests simulate DOM elements; they do not validate browser layout or service-worker lifecycle.
 
@@ -96,3 +96,18 @@ Validation: 34 Doctor Strange groups, 34 Black Widow groups, 35 Captain Marvel g
 Additional correction: Captain Marvel's Barrel Roll On-Photon bonus now adds 2 once, even for two Photon results. Its Ascend bonus still uses the printed multiplication. A dedicated duplicate-Photon test covers the change.
 
 Browser layout, live service-worker update/install, offline launch and hands-on playtesting still need manual verification; automated UI checks simulate DOM elements. Keep the prior legacy rules model. Future January 2027 changes remain disabled.
+
+
+## Loki 0.35.0
+
+Loki is appended as hero ID 28 in Marvel. Module: `docs/heroes/loki.js`; artwork: `docs/art-hero-29.js`. All source artwork comes from the supplied Loki archive. Marvel shared card artwork is selected automatically. Unique card IDs: 19 Mockery II; 20 Antics II; 21 Confuddle II / Liar’s Gifts; 22 Tip the Scale II; 23 Vex II; 24 Vilify II; 25 Double Take II / Made You Look; 26 Kneel to Me II / Bewilder; 27 Loki’n to My Eyes!; 28 How Lovely!; 29 Liar Liar!; 30 Pantaloons on Fire!; 31 Outwit!; 32 Take Backsies!; 33 optional Dash of Mischief!. The three Illusion cards are separate reference assets, excluded from the draw deck. No starting status tokens are granted.
+
+- Illusion is Unique, cap 2, removable and non-transferable. `lokiIllusion` stores arrangement, attacker choice, revealed result and resume stage. The arrangement is visible only in the setup screen; the attacker sees three face-down positions. Shuffle is available when the player does not wish to arrange them. Each spend starts with all three cards. Success means the attacker found Loki: no prevention and the attacker gains a Bag created by the defending Loki. Partial Success adds a half-prevention counter; Fail sets full prevention. Defensive abilities and attack-inflicted statuses still resolve. Flat prevention applies before half prevention; two halves prevent all incoming damage. Cannot be used on Ultimate, pure, return, isolated or upkeep damage.
+- Bag of Tricks is Positive, cap 2. `trickBags` stores token ID and original Loki seat; numeric `bagOfTricks` is synchronised for common status logic. Each token is removed before its individual upkeep roll. A 1 loses 1 CP; a 6 gains 2 CP; on 2–5 the original Loki chooses heal 2, gain 1 CP or receive 2 damage. `lokiBag` stores the actual roller separately from the chooser. Transfers preserve token identity/owner. `upkeepBagDamage` and `upkeepBagHeal` accumulate until Upkeep concludes, with normal prevention and simultaneous net healing/damage at the Health cap. Pending Bags cannot be skipped by proceeding to Income.
+- Outwit! removes a selected Bag and uses the caster as chooser. On 1–5, choose heal 3, gain 3 CP or receive 3 damage; on 6 gain 4 CP. Its damage is a separate preventable source preserving the parent attack. Nested Outwit rolls retain and resume a parent Bag roll, including after isolated damage. Dice use the roller's Hex and normal legal manipulation for the original phase; Ultimate subsidiary dice stay locked.
+- Spellbound is Unique, cap 3, removable and non-transferable. `boundAbilities` stores individual IDs and canonical ability names; numeric `spellbound` stays synchronised. Generic declaration filters covered abilities. Small/large straight entries for one named ability share a binding; independent named upgrade abilities do not. Upgrades retain the binding, Ultimates are ineligible, an Unearth-covered name cannot be newly bound, and at least one Offensive Ability must remain uncovered.
+- `spellboundExpires` snapshots tokens when an own Roll Phase begins. Only those tokens clear at that phase's conclusion. A token inflicted by Loki's defence therefore permits the current attack and survives for the attacker's following Roll Phase. Déjà Vu and extra Roll Phases respect normal expiry. Actual Cursed Pirate/Pale Lady board flips clear bindings, following the supplied advanced clarification. Shared cards, Cleanse, Blood Power and Winds can remove a specific binding; shared/Tactical transfers preserve a selected Bag's owner.
+- `lokiTask` serialises Spellbound targeting and Bag distribution. Mandatory choices resolve before continuing the ability; optional distribution may finish early. Repeated recipients are legal, subject to caps. Antics II selects the three-Lies distribution option instead of its two-Lies gain. Vilify compares Health at activation, applying its upgraded Spellbound before distributing Bags. Kneel to Me and Tip the Scale trigger each “On” outcome once; explicit Scepter multiplication counts every matching die.
+- Liar Liar! adds one damage per Scepter and resolves its Lies/Mischief Bag outcomes once each. Pantaloons on Fire! adds 2 alone or 4 if Liar Liar! is used on the same attack; either play order is supported. How Lovely! charges 1 CP plus the optional 2 extra. Take Backsies! selects a printed-cost-at-most-2 discard card and records its revealed name. Promo resolves Mischief or draws one on other outcomes.
+
+Validation for this update: 42 Loki rules groups; the prior 103 Marvel rules groups; 74 interface states; all 29 art bundle lengths/cache entries; source token byte equality; and 4,017 baseline comparisons over 1,886 transitions for the previous 28 heroes. Live browser layout, service-worker lifecycle and installed-PWA playtesting remain manual checks. Continue providing update ZIPs only unless the user asks for a complete build.

@@ -39,6 +39,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  illusion:'Stack limit 2. Spend when attacked to arrange three hidden Illusion cards for the attacker to choose. Success gives the attacker Bag of Tricks; Partial Success prevents half damage; Fail prevents all damage. Cannot be transferred. Defence still resolves.',
+  bagOfTricks:'Stack limit 2. Remove and roll each token separately in Upkeep: 1 loses 1 CP; 2–5 lets its original Loki choose heal 2, gain 1 CP or take 2 damage; 6 gains 2 CP. Healing and damage accumulate until Upkeep ends.',
+  spellbound:'Stack limit 3. Blocks a named non-Ultimate Offensive Ability through upgrades. Existing tokens expire after your next Offensive Roll Phase; tokens inflicted by defence wait for your following Roll Phase. Cannot be transferred. Removed when the board flips.',
   premonition:'Stack limit 3. Once in your Income Phase, spend 1 to draw 2 cards or 3 to draw 3, instead of the usual 1. Return one of those drawn cards to the top or bottom of your deck. Cannot be used when Income is skipped.',
   dejaVu:'Spend before activating an ability to conclude your Offensive Roll Phase and start a new one. No new Income Phase. Statuses that expire at the end of the old Roll Phase are removed.',
   crimsonBands:'Cannot play cards during your next own Roll Phase, until its Defensive Roll Phase concludes. Passives, statuses and casting spells still work. Removed when that Roll Phase ends.',
@@ -149,6 +152,9 @@ function hero(seat) {
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
       return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
     }),
+    p.illusion>0&&token(seat,'illusion',`Illusion ×${p.illusion}`),
+    ...(p.trickBags??[]).map(b=>token(seat,'bagOfTricks',`Bag of Tricks · ${names[b.owner]}`,`bag-${b.id}`)),
+    ...(p.boundAbilities??[]).map(b=>token(seat,'spellbound',`Spellbound · ${b.key}`,`bound-${b.id}`)),
     p.premonition>0&&token(seat,'premonition',`Premonition ×${p.premonition}`),
     p.dejaVu&&token(seat,'dejaVu','Déjà Vu'),
     p.crimsonBands&&token(seat,'crimsonBands','Crimson Bands'),
@@ -281,7 +287,36 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(state.premonitionTask){
+  if(state.lokiTask){
+    const t=state.lokiTask.queue[0];phase='Loki';heading=t.kind==='bind'?`Choose an ability to make Spellbound`:'Distribute Bags of Tricks';
+    detail=`${names[state.lokiTask.seat]} chooses · ${t.left} remaining.${t.kind==='bind'?' An Ultimate cannot be covered.':' You may choose the same player more than once; stack limit 2.'}`;
+    content=loki.options(state).map((choice,i)=>button('lokiChoose',choice.label,`data-choice="${i}"`)).join('')+(t.optional?button('lokiSkip','Finish distributing','class="primary"'):'');
+  } else if(state.lokiIllusion){
+    const t=state.lokiIllusion;phase='Illusion';
+    if(t.kind==='arrange'){
+      heading=`${names[t.seat]} arranges the hidden cards`;detail='Attacker, look away. Choose the card for the next position, or shuffle all three.';
+      if(t.order.length)detail+=' Position 1: '+loki.illusionNames[t.order[0]]+'.';
+      content=[0,1,2].filter(i=>!t.order.includes(i)).map(i=>button('arrangeIllusion',loki.illusionNames[i],`data-index="${i}"`)).join('')+button('shuffleIllusion','Shuffle the three cards');
+    } else if(t.kind==='pick'){
+      heading=`${activeName} chooses a hidden card`;detail='Choose one card to reveal. Loki may suggest a position.';
+      content=[0,1,2].map(i=>button('pickIllusion',`<img src="${art.back}" alt="Face-down Illusion card" style="width:90px;display:block">Card ${i+1}`,`data-index="${i}"`)).join('');
+    } else {
+      heading=loki.illusionNames[t.result];detail=`${incomingDamage(state)} attack damage remains. Your Defensive Ability can still resolve.`;
+      content=`<img src="${art.lokiIllusions[t.result]}" alt="${loki.illusionNames[t.result]}" style="max-width:230px;width:100%;display:block">`+button('finishIllusion','Continue attack','class="primary"');
+    }
+  } else if(!state.response&&state.lokiBag&&!state.cardRoll&&!state.retry){
+    const t=state.lokiBag;phase=t.outwit?'Outwit!':'Upkeep · Bag of Tricks';
+    if(t.kind==='roll'){
+      heading=`${names[t.seat]} rolls for ${t.outwit?'Outwit!':'Bag of Tricks'}`;detail=t.outwit?'On 1–5, Loki chooses heal 3, gain 3 CP or receive 3 damage. On 6, gain 4 CP.':'On 1 lose 1 CP; on 2–5 its original Loki chooses heal 2, gain 1 CP or receive 2 damage; on 6 gain 2 CP.';
+      content=tray(t.dice,t.seat,false)+button('resolveTrickBag','Resolve roll','class="primary"');
+    } else {
+      heading=`${names[t.owner]} chooses the result`;detail=`Choose for ${names[t.seat]}.${t.outwit?'':' Healing and damage apply together at the end of Upkeep.'}`;
+      content=button('chooseTrickBag',`Heal ${t.amount}`, 'data-status="heal"')+button('chooseTrickBag',`Gain ${t.outwit?3:1} CP`,'data-status="cp"')+button('chooseTrickBag',`Receive ${t.amount} damage`,'data-status="damage"');
+    }
+  } else if(!state.response&&allowed.rollTrickBag){
+    phase='Upkeep · Bag of Tricks';heading=`${activeName} resolves a Bag of Tricks`;detail='Resolve each token separately. Choose which to remove and roll first.';
+    content=(state.players[state.active].trickBags??[]).map(b=>button('rollTrickBag',`Roll Bag of Tricks from ${names[b.owner]}`,`data-index="${b.id}"`)).join('');
+  } else if(state.premonitionTask){
     const t=state.premonitionTask,player=state.players[t.seat];phase='Income Phase';heading=`${actingName} uses Premonition`;
     if(t.kind==='choose'){
       detail='Choose the normal draw or spend Premonition. After spending tokens, return one of the drawn cards to your deck.';
@@ -865,6 +900,8 @@ function arena() {
       phase='Avoid damage'; heading=`${actingName} checks ${statusLabel(state.evasionToken??'evasive')}`;
       detail=state.evasionToken==='smoke'?'A 1–3 avoids the incoming damage.':'A 1 or 2 avoids the incoming damage.';
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
+    case 'lokiAbility':
+      phase='Loki';heading=p.name;content=button('finishLokiAbility','Continue ability','class="primary"');break;
     case 'strangeAbility':
       phase='Ability';heading=p.name;content=button('finishStrangeAbility','Continue ability','class="primary"');break;
     case 'widowAbility':
@@ -888,11 +925,13 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
+  if(!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
   if(!state.response||state.response.seat===state.active){
     if(sunElf.canGem(state,state.active))content+=button('spendChargedGem','Spend Charged Gem');
     const player=state.players[state.active];
     if(sunElf.canDawn(state,state.active))content+=button('spendSunDawn',`Use Dawn · +${player.sunDial} damage`);
   }
+  if(loki.canIllusion(state,responding))content+=button('spendIllusion',`${names[responding]} · spend Illusion`);
   if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>button('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`)).join('')}</div></div>`;
   if(doctorStrange.canDeja(state,state.active))content+=button('spendDejaVu',`${activeName} · spend Déjà Vu and restart the roll`);
   if(captainMarvel.canRay(state,responding))content+=button('spendCosmicRay','Spend Cosmic Ray · roll 2 dice');
@@ -948,7 +987,7 @@ function arena() {
     ...(tokens.ninjutsu?[button('ninjutsu','Spend Ninjutsu')]:[]),
     ...(tokens.evadeSide?[button('evadeSide','Spend Evasive')]:[]),
     ...paladinBuffs.filter(key=>tokens[key]).map(key=>button(key,`Spend ${statusLabel(key)}`)),
-    ...tokens.cleanse.flatMap(status=>status==='timeBomb'?(state.players[responding].timeBombTimers??[]).map(b=>button('useCleanse',`Cleanse Time Bomb 0:0${b.ticks}`,`data-status="timeBomb" data-index="${b.id}"`)):[button('useCleanse',`Cleanse ${statusLabel(status)}`,`data-status="${status}"`)]),
+    ...tokens.cleanse.flatMap(status=>status==='spellbound'?(state.players[responding].boundAbilities??[]).map(b=>button('useCleanse',`Cleanse Spellbound · ${b.key}`,`data-status="spellbound" data-index="${b.id}"`)):status==='bagOfTricks'?(state.players[responding].trickBags??[]).map(b=>button('useCleanse',`Cleanse Bag of Tricks from ${names[b.owner]}`,`data-status="bagOfTricks" data-index="${b.id}"`)):status==='timeBomb'?(state.players[responding].timeBombTimers??[]).map(b=>button('useCleanse',`Cleanse Time Bomb 0:0${b.ticks}`,`data-status="timeBomb" data-index="${b.id}"`)):[button('useCleanse',`Cleanse ${statusLabel(status)}`,`data-status="${status}"`)]),
     ...Array.from({length:tokens.boost},(_,i)=>button('boostChi',`Spend ${i+1} Chi · +${i+1} damage`,`data-amount="${i+1}"`)),
     ...Array.from({length:tokens.prevent},(_,i)=>button('preventChi',`Spend ${i+1} Chi · prevent ${i+1}`,`data-amount="${i+1}"`))
   ];
@@ -959,6 +998,7 @@ function arena() {
     ...(tithe.dice??[]).map((value,i)=>button('titheReroll',`Reroll die ${i+1} (${value}) · 1 CP`,`data-index="${i}"`))
   ];
   if(titheActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · ${state.players[responding].upgrades?.Tithe?'Tithe II':'Tithe'}</strong><div class="controls">${titheActions.join('')}</div></div>`;
+  }
   return `<section class="arena" aria-label="Match actions">
     <div class="phase"><span>Turn ${state.turn} · ${phase}</span><span>${state.stage==='offence' ? `Roll ${state.attempts}/${state.budget}` : ''}</span></div>
     <h2 tabindex="-1" id="action-title">${heading}</h2><p>Active hero · ${activeName}</p>
