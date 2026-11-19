@@ -39,6 +39,8 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  electrokinesis:'Stack limit 4. Once per turn in your own Main Phase, spend 4 to draw a card. If gaining beyond the limit in that window, you may draw before adding the excess tokens.',
+  mjolnir:'Companion. Discard one card at any time to throw or retrieve your own Mjölnir. Throw: move to an opponent and deal 1 isolated undefendable damage. Retrieve: move back to Thor and gain Electrokinesis. Ability movements do not require a discard.', 
   combo:'Unique, stack limit 1. After your attack and its Defensive Roll Phase conclude, spend once per turn to start another Offensive Roll Phase against the same opponent. No Income or Main Phase between them. Cannot be transferred; can be removed.',
   invisibility:'Unique, stack limit 1. Spend when attacked with undefendable or pure damage to activate a Defensive Ability. Cannot defend twice against one attack, or against Ultimate or isolated damage. Spider-Sense may instead discard this token for an additional Roll Attempt. Cannot be transferred; can be removed.',
   webbed:'Negative, stack limit 1. A newly inflicted token deals 2 isolated undefendable damage. The next normal attack becomes undefendable and consumes it. Ensnare inflicts its new token after damage, so it affects a later attack. Existing Webbed is not consumed by pure, undefendable or Ultimate attacks.',
@@ -132,7 +134,7 @@ const statusNotes = {
 const token = (seat,key,label,suffix=key) => {
   const id = `status-${seat}-${suffix}`;
   const hero=heroId(state,seat);
-  const tokenArt=hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
+  const tokenArt=hero===thor.id&&key==='guardBreak'?'thorGuardBreak':hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
     hero===gunslinger.id&&key==='knockdown'?'gunslingerKnockdown':
     hero===tactician.id&&key==='targeted'?'tacticianTargeted':
     hero===tactician.id&&key==='protect'?'tacticianProtect':
@@ -212,6 +214,8 @@ function hero(seat) {
     p.grim&&token(seat,'grim',`Grim Pursuit ×${p.grim}`),
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
+    p.electrokinesis&&token(seat,'electrokinesis',`Electrokinesis ${p.electrokinesis}/4`),
+    ...state.players.map((owner,i)=>owner.mjolnirSeat===seat&&token(seat,'mjolnir',i===seat?'Own Mjölnir':`${names[i]}’s Mjölnir`,`mjolnir-${i}`)),
     p.tactical&&token(seat,'tactical',`Tactical Advantage ${p.tactical}/${statusCap(p,'tactical')}`),
     p.constrict&&token(seat,'constrict','Constrict'),
     p.honor&&token(seat,'honor',`Honor ×${p.honor}`),p.shame&&token(seat,'shame',`Shame ×${p.shame}`),
@@ -304,7 +308,15 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(state.conjureTask){
+  if(state.thorOverflow){
+    const t=state.thorOverflow;phase='Electrokinesis';heading=`${names[t.seat]} is at the stack limit`;
+    detail=`${t.amount} more Electrokinesis waiting. Spend 4 to draw once this turn, then receive the pending tokens, or keep the current 4 and discard the excess.`;
+    content=button('thorOverflowDraw','Spend 4 · draw a card, then gain the pending tokens','class="primary"')+button('thorOverflowKeep','Keep 4 Electrokinesis');
+  } else if(!state.response&&state.thorTask&&state.stage==='thorSequence'&&!state.cardRoll){
+    const t=state.thorTask,step=t.queue[0];phase='Mjölnir';heading=`${names[t.seat]} chooses the next movement`;
+    detail=`Up to ${step.left} further throw/retrieve movements. Each throw deals its own isolated damage before the next choice.`;
+    content=button('thorHammerChoice',thor.holder(state,t.seat)===t.seat?'Throw Mjölnir · 1 isolated damage':'Retrieve Mjölnir · gain Electrokinesis','class="primary"')+button('thorHammerStop','Finish moving Mjölnir');
+  } else if(state.conjureTask){
     const t=state.conjureTask,opponent=1-t.seat;phase='Conjure';heading=`${names[opponent]} may block Conjure`;
     detail=`${names[t.seat]} wants to gain ${statusLabel(t.choice.status)} from ${names[t.choice.source]}’s leaflet. Discard one card to prevent the gain, or allow it.`;
     content=state.players[opponent].hand.map(id=>button('conjureDiscard',`Discard ${seatCard(state,opponent,id).name}`,`data-index="${id}"`)).join('')+button('conjureAllow','Allow the status gain','class="primary"');
@@ -864,6 +876,11 @@ function arena() {
       detail=`${actingName} rolls ${effectDiceCount(p,state.players[state.active])} separate effect dice to determine the ability’s effects.`;
       content=button('rollEffect','Roll for effect','class="primary"'); break;
     case 'effectResponse':
+      if(p.effect==='thorChain'){
+        phase='Chain Lightning';heading='Choose any two dice';detail=`Their total becomes the attack damage. The separate ${p.thor.chain} collateral damage resolves first.`;
+        const dice=effectiveDice(p.effectDice,state.players[state.active]);let choice=0;
+        content=effectRoll;for(let i=0;i<dice.length;i++)for(let j=i+1;j<dice.length;j++)content+=button('chooseThorChain',`Dice ${i+1} + ${j+1} · ${dice[i]+dice[j]} damage`,`data-choice="${choice++}"`);break;
+      }
       phase='Ability roll'; heading=p.name;
       detail='Modify the ability roll or resolve it.';
       content=effectRoll+(allowed.abilityReroll?rerollDice(p.effectDice,p.ninjaRerolls):'')+`<div class="controls">${allowed.effectRetry?p.effectDice.map((_,i)=>button('effectRetry',`${p.tempestChi?'Spend 1 Chi to reroll':'Reroll'} die ${i+1}`,`data-index="${i}"`)).join(''):''}${button('resolveEffect','Resolve effect roll','class="primary"')}</div>`; break;
@@ -927,6 +944,9 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'thorAbility':
+      phase='Thor';heading=p.name;detail='The hammer movements and status gains have resolved.';
+      content=button('finishThorAbility','Continue ability','class="primary"');break;
     case 'spiderCombo':
       phase='Combo';heading=`${activeName} may attack again`;detail='Spend Combo for another Offensive Roll Phase against the same opponent. No Income or Main Phase occurs between these rolls. Combo can only be spent once per turn.';content=(allowed.spendCombo?button('spendCombo','Spend Combo · start another Offensive Roll Phase','class="primary"'):'')+button('skipCombo','Continue to Main Phase 2');break;
     case 'scarletAbility':
@@ -956,7 +976,9 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
-  if(!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
+  if(thor.canDraw(state,responding)&&!state.thorOverflow)content+=button('thorDraw','Spend 4 Electrokinesis · draw a card');
+  if(thor.canMove(state,responding))content+=`<details class="token-actions"><summary>Mjölnir · discard a card to ${thor.holder(state,responding)===responding?'throw':'retrieve'}</summary><div class="controls">${state.players[responding].hand.map((id,i)=>button('thorPassive',`Discard ${seatCard(state,responding,id).name}`,`data-index="${i}"`)).join('')}</div></details>`;
+  if(!state.thorOverflow&&!(state.thorTask&&state.stage==='thorSequence')&&!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
   const probability=scarletWitch.probabilityChoices(state,responding);
   if(probability.length)content+=`<div class="token-actions"><strong>${names[responding]} · Probability Manipulation</strong><div class="controls">${probability.map((choice,i)=>button('spendProbability',choice.label,`data-choice="${i}"`)).join('')}</div></div>`;
   const scarletChanges=scarletWitch.defenceChanges(state,responding);
