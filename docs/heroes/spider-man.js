@@ -17,7 +17,7 @@ const spiderMan=(()=>{
   ['Venom Punch II',2,'Venom Punch',{damage:()=>8,text:'Gain Invisibility. Deal 8 undefendable damage.'},2,{name:'Combo Up',symbols:{Spider:3},combo:true,damage:()=>2,type:'undefendable',text:'Gain Combo. Deal 2 undefendable damage.'}]
  ];
  const cards=[['Milkshake Me!',1,'main'],['Cha-Ching!',0,'main'],['Web Shooters!',1,'main'],['Radioactive Blood!',3,'instant'],['Swing Escape!',1,'roll'],['Ambush!',0,'roll'],['Invisible Punch!',1,'roll'],['Nice Try!',0,'roll'],['Yikes!',1,'instant'],['Booyah!',1,'main'],['Tingling!',0,'main']];
- function inflict(s,target,source=s.active,locked=!!attackLocked(s)){
+ function inflict(s,target,source=s.active,locked=!!attackLocked(s)){if(psylocke.block(s,s.players[target],'webbed'))return false;
   if(s.players[target].webbed)return false;
   grantStatus(s.players[target],'webbed');
   (s.spiderWebHits??=[]).push({target,source,locked});

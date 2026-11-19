@@ -25,7 +25,7 @@ const cyclops=(()=>{
  function onCardPlayed(s,seat,card){if(!leadershipIds.includes(card))return;const p=s.players[seat];p.leadershipPlayed=count(s,seat)+1;p.leadershipTurn=s.turn;}
  const other=(s,seat)=>Math.max(0,count(s,seat)-1);
  const stage=s=>s.cyclopsTask&&s.stage==='cyclopsSequence'?stage({...s,cyclopsTask:s.cyclopsTask.parent??null,stage:s.cyclopsTask.resume}):s.stage;
- function begin(s,seat,queue,resume=s.stage,extra={}){const parent=s.cyclopsTask;s.cyclopsTask={seat,queue,resume,locked:!!attackLocked(s),...extra};if(parent)s.cyclopsTask.parent=parent;s.stage='cyclopsSequence';}
+ function begin(s,seat,queue,resume=s.stage,extra={}){const parent=s.cyclopsTask;s.cyclopsTask={seat,queue,resume,locked:!!attackLocked(s),...extra};psylocke.tag(s,s.cyclopsTask);if(parent)s.cyclopsTask.parent=parent;s.stage='cyclopsSequence';}
  function gain(s,seat,key,amount=1,exclude){begin(s,seat,[{kind:'gain',key,amount}],s.stage,{exclude});}
  function changeDamage(s,amount,modifier=true){const h=s.pending;if(h.grossDamage===undefined){h.damage+=amount;if(modifier)h.cyclopsModifiers=(h.cyclopsModifiers??0)+amount;}else {h.grossDamage+=amount;updateDamage(h);}}
  function focus(s,target,n=1,attack=false){if(attack)grantAttackStatus(s,s.players[target],'focusFire',n);else grantStatus(s.players[target],'focusFire',n);}
@@ -56,7 +56,7 @@ const cyclops=(()=>{
    const t=s.cyclopsTask,p=s.players[t.seat],step=t.queue[0];
    if(!step){s.cyclopsTask=t.parent??null;s.stage=t.resume;if(s.stage!=='cyclopsSequence')return;continue;}
    if(['then','choice','hand','scout','defence'].includes(step.kind))return;
-   if(step.kind==='gain'){
+   if(step.kind==='gain'){if(psylocke.block(s,p,step.key,step.amount)){t.queue.shift();continue;}
     if(!step.collect&&(step.overflow||(p[step.key]??0)+step.amount>statusCap(p,step.key))){step.overflow=true;return;}
     grantStatus(p,step.key,step.amount);
    }

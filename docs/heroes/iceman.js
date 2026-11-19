@@ -21,7 +21,7 @@ const iceman=(()=>{
  ];
  const cards=[['Skiing Is Believing!',1,'main'],['Froze and Cons!',0,'main'],['Freeze the Day!',1,'main'],['Ice Cool!',1,'instant'],['Gliding on Thin Ice!',2,'main'],['I Only Have Ice for You!',2,'roll'],['Winter Punderland!',3,'instant'],['Icesight!',1,'instant'],['I Thaw, I Conquered!',0,'main']];
  const phase=s=>s.iceTask&&s.stage==='iceChoices'?phase({...s,iceTask:s.iceTask.parent??null,stage:s.iceTask.resume}):s.stage;
- function begin(s,seat,queue,resume=s.stage,extra={}){const parent=s.iceTask;s.iceTask={seat,queue,resume,locked:!!attackLocked(s),...extra};if(parent)s.iceTask.parent=parent;s.stage='iceChoices';}
+ function begin(s,seat,queue,resume=s.stage,extra={}){const parent=s.iceTask;s.iceTask={seat,queue,resume,locked:!!attackLocked(s),...extra};psylocke.tag(s,s.iceTask);if(parent)s.iceTask.parent=parent;s.stage='iceChoices';}
  function gain(s,seat,amount=1,exclude){begin(s,seat,[{kind:'gain',amount}],s.stage,{exclude});}
  function changeDamage(s,n){const h=s.pending;if(h.grossDamage===undefined){h.damage+=n;h.icemanModifiers=(h.icemanModifiers??0)+n;}else {h.grossDamage+=n;updateDamage(h);}}
  function busy(s){return !!(s.cardRoll||s.retry||s.iceFreezeChoice||s.gambitRoll||gambit.forced(s)||s.conjureTask||s.scarletJinx||s.lokiTask||s.lokiIllusion||s.lokiBag||s.strangeTask||s.premonitionTask||s.widowTask||s.widowReveal||s.widowAgility||s.widowBombRoll||s.cosmicRayRoll||s.growth||s.mainChoice||s.mainAction||s.forgeTask||s.shapeOverflow||s.ravenFeathers||s.grimOverflow||s.tacticalOverflow||s.tacticalRemoval||s.honorOverflow||s.bloodOverflow||s.mesmerizeRoll||cyclops.choosing(s));}
@@ -47,6 +47,7 @@ const iceman=(()=>{
    if(!h){s.iceTask=t.parent??null;s.stage=t.resume;if(s.stage!=='iceChoices')return;continue;}
    if(['transfer','chill','frost'].includes(h.kind))return;
    if(h.kind==='gain'){
+    if(psylocke.block(s,p,'iceShard',h.amount)){t.queue.shift();continue;}
     if(!h.collect&&(h.overflow||(p.iceShard??0)+h.amount>5)){h.overflow=true;return;}
     grantStatus(p,'iceShard',h.amount);if(h.snapshot&&s.pending?.iceman)s.pending.iceman.shardSnapshot=Math.max(s.pending.iceman.shardSnapshot??0,p.iceShard??0);
    }

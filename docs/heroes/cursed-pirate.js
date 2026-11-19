@@ -40,7 +40,7 @@ const cursedPirate = (() => {
     const player = state.players[recipient];
     (player.pirateCoins ??= [0,0])[owner] = count;
   }
-  function inflictCoins(state, owner, count) {
+  function inflictCoins(state, owner, count) {if(psylocke.block(state,state.players[1-owner],'doubloon',count))return;
     const recipient = 1-owner;
     setCoins(state,recipient,owner,Math.min(3,coins(state,recipient,owner)+count));
   }
@@ -70,7 +70,7 @@ const cursedPirate = (() => {
         add(`Cursed Pirate (P${seat+1}) flips to the cursed board.`);
       }
     },
-    coinOptions(state, seat, count, resume) {
+    coinOptions(state, seat, count, resume) {if(psylocke.block(state,state.players[seat],'doubloon',count))return false;
       const max = Math.min(count,5-coins(state,seat,seat));
       if (max>0) choose(state,seat,'coins',{max,after:resume});
       return max>0;

@@ -25,7 +25,7 @@ const blackPanther=(()=>{
     ['Stop at Nothing!',0,'main'],['Energize!',1,'main'],['Warrior of Wakanda!',2,'roll'],['Strength of Will!',1,'roll'],
     ['Yibambe!',0,'instant'],['Vibin’!',1,'instant'],['Bast’s Blessing!',0,'main']
   ];
-  function gain(p,n){
+  function gain(p,n){if(psylocke.blockDirect(p,'kineticEnergy',n))return;
     const cap=p.upgrades?.['Energy Absorption']?7:8;
     p.kineticEnergy=Math.min(cap,(p.kineticEnergy??0)+n);
     if(p.kineticEnergy>=cap){p.kineticEnergy=0;p.kineticBursts=(p.kineticBursts??0)+1;}

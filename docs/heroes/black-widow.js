@@ -22,7 +22,7 @@ const blackWidow=(()=>{
   const cards=[['Cunning!',2,'main'],['Undercover Mission!',2,'main'],['Elude!',1,'roll'],['Subversion!',1,'roll'],['Recoil!',0,'roll'],['Assemblé!',1,'instant'],['Smoke Screen!',0,'main']];
   const count=p=>Object.keys(p.upgrades??{}).length;
   function sync(p){p.timeBomb=(p.timeBombTimers??[]).length;}
-  function inflict(s,seat,source=s.active,ticks){
+  function inflict(s,seat,source=s.active,ticks){if(psylocke.block(s,s.players[seat],'timeBomb'))return;
     const p=s.players[seat];p.timeBombTimers??=[];
     if(p.timeBombTimers.length<2)p.timeBombTimers.push({id:(s.widowBombSerial=(s.widowBombSerial??0)+1),ticks:ticks??(count(s.players[source])>=6?1:2)});
     sync(p);

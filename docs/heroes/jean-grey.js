@@ -23,7 +23,7 @@ const jeanGrey=(()=>{
  function needsSwitch(s){const p=s.players[s.active];return p.hero===id&&p.jeanOwnTurns>1&&p.jeanFormTurn!==s.turn;}
  function needsBurn(s){const p=s.players[s.active];return !!(p.phoenixBurn&&s.jeanBurnChecked!==(p.phoenixBurnEpoch??0));}
  function phase(s){return s.jeanTask&&s.stage==='jeanChoices'?phase({...s,jeanTask:s.jeanTask.parent??null,stage:s.jeanTask.resume}):s.stage;}
- function begin(s,seat,queue,resume=s.stage,extra={}){const parent=s.jeanTask;s.jeanTask={seat,queue,resume,locked:!!attackLocked(s),...extra};if(parent)s.jeanTask.parent=parent;s.stage='jeanChoices';}
+ function begin(s,seat,queue,resume=s.stage,extra={}){const parent=s.jeanTask;s.jeanTask={seat,queue,resume,locked:!!attackLocked(s),...extra};psylocke.tag(s,s.jeanTask);if(parent)s.jeanTask.parent=parent;s.stage='jeanChoices';}
  function gain(s,seat,key,amount=1,exclude){begin(s,seat,[{kind:'gain',key,amount}],s.stage,{exclude});}
  function busy(s){return !!(s.iceFreezeChoice||s.retry||s.jeanBurnRoll||s.gambitRoll||gambit.forced(s)||s.conjureTask||s.lokiTask||s.lokiIllusion||s.lokiBag?.kind==='choose'||s.strangeTask||s.premonitionTask||s.widowTask||s.widowReveal||s.forgeTask||s.growth||s.mainAction||s.mainChoice||s.pirateChoice||s.mesmerizeRoll?.choosing||s.tacticalOverflow||s.tacticalRemoval||s.honorOverflow||s.bloodOverflow||cyclops.choosing(s));}
  function window(s,seat){return !!(s.cards&&!['finished','discard','nyraDamage'].includes(s.stage)&&(!attackLocked(s)||seat===s.active));}
@@ -61,7 +61,7 @@ const jeanGrey=(()=>{
   if(s.stage!=='jeanChoices'||s.response||s.cardRoll||s.retry||s.sideDamage)return;
   while(s.jeanTask){const t=s.jeanTask,p=s.players[t.seat],h=t.queue[0];if(!h){s.jeanTask=t.parent??null;s.stage=t.resume;if(s.stage!=='jeanChoices')return;continue;}
    if(['passive','essence'].includes(h.kind))return;
-   if(h.kind==='gain'){if(!h.collect&&(h.overflow||(p[h.key]??0)+h.amount>statusCap(p,h.key))){h.overflow=true;return;}grantStatus(p,h.key,h.amount);}
+   if(h.kind==='gain'){if(psylocke.block(s,p,h.key,h.amount)){t.queue.shift();continue;}if(!h.collect&&(h.overflow||(p[h.key]??0)+h.amount>statusCap(p,h.key))){h.overflow=true;return;}grantStatus(p,h.key,h.amount);}
    if(h.kind==='field')grantStatus(p,'forceField');
    if(h.kind==='draw')drawCards(p,h.amount,random,t.exclude);
    t.queue.shift();
@@ -121,7 +121,7 @@ const jeanGrey=(()=>{
     else {s.pending.protect=(s.pending.protect??0)+1;updateDamage(s.pending);}
    }
    if(a.type==='jeanCollect')s.jeanTask.queue[0].collect=true;
-   if(a.type==='jeanPassive'){if(a.status==='damage')changeDamage(s,2);else s.pending.phoenixBurn=true;s.jeanTask.queue.shift();}
+   if(a.type==='jeanPassive'){if(a.status==='damage')changeDamage(s,2);else {s.pending.phoenixBurn=true;s.pending.phoenixBurnPassive=true;}s.jeanTask.queue.shift();}
    if(a.type==='jeanEssence')s.jeanTask.queue.splice(0,1,{kind:'gain',key:a.status,amount:a.status==='acuity'?4:2});
    return s;
   }

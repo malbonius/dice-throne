@@ -33,7 +33,7 @@ const paleLady = (() => {
     ['Petulant!',1,'main'],['Transformation!',3,'main'],['Waxing Moon!',3,'main'],['Life Trade!',0,'main'],
     ['Trick of the Light!',1,'main'],['Waning Moon!',1,'main'],['Apogee of the Moon!',0,'main']
   ];
-  const gain = (p,n=1)=>{p.moonShard=Math.min(3,p.moonShard+n);};
+  const gain = (p,n=1)=>{if(psylocke.blockDirect(p,'moonShard',n))return;p.moonShard=Math.min(3,p.moonShard+n);};
   const heal = (p,n)=>{p.hp=Math.min(60,p.hp+n);};
   const cp = (p,n)=>{p.cp=Math.min(15,p.cp+n);};
   return {id,board,werewolfBoard,cards,upgrades:[],promoId:33,gain,heal,

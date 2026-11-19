@@ -26,13 +26,13 @@ const druid=(()=>{
   const formName=form=>({druid:'Druid',bear:'Bear',cat:'Cat'})[form];
   const regenTotal=p=>(p.regenerate??0)+(p.regenerate1??0);
   const heal=(p,amount)=>{p.hp=Math.min(60,p.hp+amount);};
-  function regenerate(p,amount=1){
+  function regenerate(p,amount=1){if(psylocke.blockDirect(p,'regenerate',amount))return;
     for(let i=0;i<amount;i++){
       if(regenTotal(p)<2)p.regenerate=(p.regenerate??0)+1;
       else if(p.regenerate1){p.regenerate1--;p.regenerate=(p.regenerate??0)+1;}
     }
   }
-  function gainShifts(s,seat,amount){
+  function gainShifts(s,seat,amount){if(psylocke.block(s,s.players[seat],'shapeShift',amount))return;
     if(!amount)return;
     const p=s.players[seat];
     if(p.shapeShift+amount>2&&p.shapeShift)s.shapeOverflow={seat,amount};

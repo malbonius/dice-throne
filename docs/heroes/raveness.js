@@ -40,7 +40,7 @@ const raveness = (() => {
     s.ravenActivation={owner,left,after,resume:s.stage,locked:!!attackLocked(s),parent:s.ravenActivation??null};
     s.stage='ravenActivate';
   }
-  function feathers(s,seat,amount){
+  function feathers(s,seat,amount){if(psylocke.block(s,s.players[seat],'feather',amount))return;
     const p=s.players[seat], cap=p.featherCap??5;
     if(!amount)return;
     const incoming=amount==='max'?cap:amount;

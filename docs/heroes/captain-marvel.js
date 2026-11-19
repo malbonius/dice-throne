@@ -33,7 +33,7 @@ const captainMarvel=(()=>{
       !s.cardRoll&&!s.retry&&!s.cosmicRayRoll&&!s.widowTask&&!s.widowAgility&&!s.widowBombRoll&&!s.widowReveal&&!s.growth&&!s.mainChoice&&!s.mainAction&&
       (['targeting','effect','effectResponse','defence','defenceResponse','damage','locked'].includes(s.stage)||s.cosmicRayOverflow?.seat===seat));
   }
-  function gainRay(s,seat,amount=1,ready=false){
+  function gainRay(s,seat,amount=1,ready=false){if(psylocke.block(s,s.players[seat],'cosmicRay',amount))return;
     const p=s.players[seat];p.cosmicRays??=[];
     while(amount-->0){
       if(p.cosmicRays.length<2)p.cosmicRays.push({gainedTurn:s.turn,ready});

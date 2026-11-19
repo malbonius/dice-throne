@@ -27,12 +27,12 @@ const thor=(()=>{
  const holder=(s,seat)=>s.players[seat].mjolnirSeat??seat;
  function begin(s,seat,queue,resume=s.stage,extra={}){
   const parent=s.thorTask;
-  s.thorTask={seat,queue,resume,...extra};if(parent)s.thorTask.parent=parent;
+  s.thorTask={seat,queue,resume,...extra};psylocke.tag(s,s.thorTask);if(parent)s.thorTask.parent=parent;
   s.stage='thorSequence';
  }
  function mainWindow(s){let t=s.thorTask;while(t?.parent)t=t.parent;return t?.resume??s.thorOverflow?.resume??s.stage;}
  function canDraw(s,seat){const p=s.players[seat];return !!(s.cards&&seat===s.active&&['main','main1'].includes(mainWindow(s))&&p.electrokinesis>=4&&p.electroDrawTurn!==s.turn&&!s.cardRoll&&!s.mainAction&&!s.response&&!s.sideDamage&&!s.conjureTask);}
- function gain(s,seat,amount=1,exclude){
+ function gain(s,seat,amount=1,exclude){if(psylocke.block(s,s.players[seat],'electrokinesis',amount))return;
   const p=s.players[seat];
   while(amount-->0){
    if((p.electrokinesis??0)<4)grantStatus(p,'electrokinesis');
@@ -44,7 +44,7 @@ const thor=(()=>{
  function move(s,seat,mode='toggle',exclude){
   const p=s.players[seat],away=holder(s,seat)!==seat;
   if(mode==='throw'&&away||mode==='retrieve'&&!away)return;
-  if(away){p.mjolnirSeat=seat;s.log.unshift(`${heroNames(s)[seat]} retrieves Mjölnir.`);gain(s,seat,1,exclude);}
+  if(away){p.mjolnirSeat=seat;s.log.unshift(`${heroNames(s)[seat]} retrieves Mjölnir.`);psylocke.withoutAbility(s,()=>gain(s,seat,1,exclude));}
   else {
    p.mjolnirSeat=1-seat;p.hammerThrows=p.hammerThrowTurn===s.turn?(p.hammerThrows??0)+1:1;p.hammerThrowTurn=s.turn;
    const locked=!!(attackLocked(s)||s.thorTask?.locked);

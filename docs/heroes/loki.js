@@ -24,14 +24,14 @@ const loki=(()=>{
  const illusionNames=['Success! · take the incoming damage; attacker gains Bag of Tricks','Partial Success · prevent half incoming damage','Fail! · prevent all incoming damage'];
  function serial(s){return s.lokiSerial=(s.lokiSerial??0)+1;}
  function sync(p){p.bagOfTricks=(p.trickBags??[]).length;p.spellbound=(p.boundAbilities??[]).length;}
- function give(s,target,owner,amount=1,bag){
+ function give(s,target,owner,amount=1,bag){if(psylocke.block(s,s.players[target],'bagOfTricks',amount))return;
   const p=s.players[target];p.trickBags??=[];
   while(amount-->0&&p.trickBags.length<2)p.trickBags.push(bag??{id:serial(s),owner});sync(p);
  }
  function removeBag(p,bagId){const i=bagId===undefined?(p.trickBags?.length??0)-1:p.trickBags?.findIndex(b=>b.id===bagId);if(i===undefined||i<0)return;const b=p.trickBags.splice(i,1)[0];sync(p);return b;}
  function key(a){return a.name.replace(/ \(large straight\)$/,'');}
  function blocked(s,seat,a){return (s.players[seat].boundAbilities??[]).some(b=>b.key===key(a));}
- function bindChoices(s,target){
+ function bindChoices(s,target){if(psylocke.suppressed(s))return [];
   if((s.players[target].boundAbilities??[]).length>=3)return [];
   const abilities=abilitiesFor(s,target).filter(a=>a.type!=='ultimate');
   const unique=abilities.filter((a,i)=>abilities.findIndex(b=>key(a)===key(b))===i);
@@ -39,7 +39,7 @@ const loki=(()=>{
   return abilitiesFor(s,target).filter(a=>!blocked(s,target,a)).length<=1?[]:unique.filter(a=>!blocked(s,target,a));
  }
  function removeBound(p,boundId){const i=boundId===undefined?(p.boundAbilities?.length??0)-1:p.boundAbilities?.findIndex(b=>b.id===boundId);if(i===undefined||i<0)return;const b=p.boundAbilities.splice(i,1)[0];sync(p);return b;}
- function begin(s,seat,queue,resume=s.stage){if(queue.length){s.lokiTask={seat,queue,resume};s.stage='lokiChoices';}}
+ function begin(s,seat,queue,resume=s.stage){if(queue.length){s.lokiTask={seat,queue,resume};psylocke.tag(s,s.lokiTask);s.stage='lokiChoices';}}
  function options(s){
   const st=s.lokiTask,t=st?.queue[0];if(!t)return [];
   if(t.kind==='bind')return bindChoices(s,t.target).map(a=>({key:key(a),label:a.label??a.name}));

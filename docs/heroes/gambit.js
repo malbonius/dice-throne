@@ -21,7 +21,7 @@ const gambit=(()=>{
  ];
  const cards=[['X-Treme Remy!',2,'main'],['Gumbo!',1,'main'],['3 Card Monte!',2,'main'],['Call Your Bluff!',0,'main'],['Rogue’s Kiss!',1,'roll'],['Cajun Kick!',1,'roll'],['Gambit’s Gambit!',1,'roll'],['Card Magic!',1,'instant'],['Charged Up!',0,'main']];
  const phase=s=>s.gambitTask&&s.stage==='gambitSequence'?phase({...s,gambitTask:s.gambitTask.parent??null,stage:s.gambitTask.resume}):s.stage;
- function begin(s,seat,queue,resume=s.stage,extra={}){const parent=s.gambitTask;s.gambitTask={seat,queue,resume,locked:!!attackLocked(s),...extra};if(parent)s.gambitTask.parent=parent;s.stage='gambitSequence';}
+ function begin(s,seat,queue,resume=s.stage,extra={}){const parent=s.gambitTask;s.gambitTask={seat,queue,resume,locked:!!attackLocked(s),...extra};psylocke.tag(s,s.gambitTask);if(parent)s.gambitTask.parent=parent;s.stage='gambitSequence';}
  function accel(n,allowed=suits){return {kind:'accelerate',left:n,allowed,allocation:{}};}
  function available(s,seat,step){const p=s.players[seat];return (step.allowed??suits).filter(k=>p.aces?.[k].up&&p.aces[k].charge+(step.allocation?.[k]??0)<caps[k]);}
  function regainChoices(s,seat,step={}){return suits.filter(k=>!s.players[seat].aces?.[k].up&&k!==step.exclude);}
@@ -71,7 +71,7 @@ const gambit=(()=>{
    }
    if(h.kind==='regain'&&h.left&&regainChoices(s,t.seat,h).length)return;
    if(h.kind==='loseCharge'&&suits.some(k=>p.aces[k].charge))return;
-   if(h.kind==='dissolution'){
+   if(h.kind==='dissolution'){if(psylocke.block(s,p,'dissolution',h.amount)){t.queue.shift();continue;}
     const canSpend=t.seat===s.active&&['main','main1'].includes(phase(s));
     if(!h.collect&&canSpend&&(h.overflow||(p.dissolution??0)+h.amount>2)){h.overflow=true;return;}
     grantStatus(p,'dissolution',h.amount);
