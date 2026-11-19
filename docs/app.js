@@ -39,6 +39,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  battlePlan:'Positive, stack limit 4. Each option once per turn: spend 1 to examine an opponent’s hand; spend 3 to inspect your top 3, take up to 1 Leadership card and discard/order the rest; spend 3 to inflict Focus Fire. Incoming gains arrive as one batch; spend existing tokens before collecting excess.',
+  support:'Positive, stack limit 3. Spend 1 to give any player 1 CP or reroll one of their dice; spend 3 to let any player draw 1. No turn limit. Incoming gains arrive as one batch; existing tokens may be spent before collecting excess. Ultimate dice cannot be altered.',
+  focusFire:'Negative, persistent, stack limit 2. Each token adds +1 incoming Attack damage as an Attack Modifier. Cannot increase pure damage or non-Attack damage.', 
   electrokinesis:'Stack limit 4. Once per turn in your own Main Phase, spend 4 to draw a card. If gaining beyond the limit in that window, you may draw before adding the excess tokens.',
   mjolnir:'Companion. Discard one card at any time to throw or retrieve your own Mjölnir. Throw: move to an opponent and deal 1 isolated undefendable damage. Retrieve: move back to Thor and gain Electrokinesis. Ability movements do not require a discard.', 
   combo:'Unique, stack limit 1. After your attack and its Defensive Roll Phase conclude, spend once per turn to start another Offensive Roll Phase against the same opponent. No Income or Main Phase between them. Cannot be transferred; can be removed.',
@@ -214,6 +217,9 @@ function hero(seat) {
     p.grim&&token(seat,'grim',`Grim Pursuit ×${p.grim}`),
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
+    p.battlePlan&&token(seat,'battlePlan',`Battle Plan ${p.battlePlan}/4`),
+    p.support&&token(seat,'support',`Support ${p.support}/3`),
+    p.focusFire&&token(seat,'focusFire',`Focus Fire ×${p.focusFire}`),
     p.electrokinesis&&token(seat,'electrokinesis',`Electrokinesis ${p.electrokinesis}/4`),
     ...state.players.map((owner,i)=>owner.mjolnirSeat===seat&&token(seat,'mjolnir',i===seat?'Own Mjölnir':`${names[i]}’s Mjölnir`,`mjolnir-${i}`)),
     p.tactical&&token(seat,'tactical',`Tactical Advantage ${p.tactical}/${statusCap(p,'tactical')}`),
@@ -308,7 +314,29 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(state.thorOverflow){
+  if(!state.response&&state.cyclopsTask&&state.stage==='cyclopsSequence'&&!state.cardRoll&&!state.retry){
+    const t=state.cyclopsTask,h=t.queue[0];phase='Cyclops';heading=names[t.seat];
+    if(h.kind==='then'){
+      heading='Before “then”';detail=`${h.label}. You may play eligible Leadership cards first; later bonuses use the cards played by the time they resolve.`;
+      content=button('cyclopsContinue','Continue after “then”','class="primary"');
+    } else if(h.kind==='gain'){
+      heading=`Collect ${h.amount} ${statusLabel(h.key)}`;detail=`You currently hold ${state.players[t.seat][h.key]??0}; stack limit ${statusCap(state.players[t.seat],h.key)}. Spend existing tokens now if desired, then collect the entire incoming batch. Excess tokens are lost.`;
+      content=button('cyclopsCollect','Collect the whole batch','class="primary"');
+    } else if(h.kind==='choice'){
+      heading='Hand to Hand · matching numbers';content=button('cyclopsTokenChoice','Gain Battle Plan','data-status="battlePlan"')+button('cyclopsTokenChoice','Gain Support','data-status="support"');
+    } else if(h.kind==='hand'){
+      heading=`${names[t.seat]} examines ${names[h.target]}’s hand`;
+      content=h.cards.map(card=>`<figure class="reveal-card"><img src="${cardArtwork(state,h.target,card)}" alt="${seatCard(state,h.target,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,h.target,card).name}</figcaption></figure>`).join('')+button('cyclopsHandDone','Finish examining','class="primary"');
+      detail=h.cards.length?'This does not discard, draw or transfer any cards.':'The opponent’s hand is empty.';
+    } else if(h.kind==='scout'){
+      heading='Battle Plan · top three cards';detail=h.picking?'Reveal and add up to one Leadership card to your hand, or skip.':'For each remaining card, discard it or choose it as the next card returned. The first returned card will be on top.';
+      content=h.cards.map((card,i)=>`<figure class="reveal-card"><img src="${cardArtwork(state,t.seat,card)}" alt="${seatCard(state,t.seat,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,t.seat,card).name}</figcaption>${h.picking?(cyclops.isLeadership(state,t.seat,card)?button('cyclopsScoutTake','Reveal and take',`data-index="${i}"`):''):button('cyclopsScoutTop','Return next to deck',`data-index="${i}"`)+button('cyclopsScoutDiscard','Discard',`data-index="${i}"`)}</figure>`).join('')+(h.picking?button('cyclopsScoutSkip','Take no Leadership card','class="primary"'):'');
+      if(h.order.length)detail+=` ${h.order.length} card(s) already ordered.`;
+    } else if(h.kind==='defence'){
+      heading='Recourse · Blast result';detail='This choice applies once, regardless of the number of Blast symbols.';
+      content=button('cyclopsDefenceChoice','Deal 3 return damage','data-status="damage"')+button('cyclopsDefenceChoice','Prevent 2 damage','data-status="prevent"')+(h.optional?button('cyclopsDefenceChoice','No additional effect','data-status="skip"'):'');
+    }
+  } else if(state.thorOverflow){
     const t=state.thorOverflow;phase='Electrokinesis';heading=`${names[t.seat]} is at the stack limit`;
     detail=`${t.amount} more Electrokinesis waiting. Spend 4 to draw once this turn, then receive the pending tokens, or keep the current 4 and discard the excess.`;
     content=button('thorOverflowDraw','Spend 4 · draw a card, then gain the pending tokens','class="primary"')+button('thorOverflowKeep','Keep 4 Electrokinesis');
@@ -944,6 +972,9 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'cyclopsAbility':
+      phase='Cyclops';heading=p.name;detail=`${cyclops.count(state,state.active)} Leadership card(s) played this turn.`;
+      content=button('finishCyclopsAbility','Continue ability','class="primary"');break;
     case 'thorAbility':
       phase='Thor';heading=p.name;detail='The hammer movements and status gains have resolved.';
       content=button('finishThorAbility','Continue ability','class="primary"');break;
@@ -976,9 +1007,13 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
+  const support=cyclops.supportChoices(state,responding),battlePlan=cyclops.battleChoices(state,responding);
+  if(support.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Support</summary><div class="controls">${support.map((choice,i)=>button('spendSupport',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  if(battlePlan.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Battle Plan</summary><div class="controls">${battlePlan.map((choice,i)=>button('spendBattlePlan',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  if(cyclops.canRecourse(state,responding))content+=button('cyclopsRecourse','Remove 2 Battle Plan · activate Recourse II against this undefendable attack');
   if(thor.canDraw(state,responding)&&!state.thorOverflow)content+=button('thorDraw','Spend 4 Electrokinesis · draw a card');
   if(thor.canMove(state,responding))content+=`<details class="token-actions"><summary>Mjölnir · discard a card to ${thor.holder(state,responding)===responding?'throw':'retrieve'}</summary><div class="controls">${state.players[responding].hand.map((id,i)=>button('thorPassive',`Discard ${seatCard(state,responding,id).name}`,`data-index="${i}"`)).join('')}</div></details>`;
-  if(!state.thorOverflow&&!(state.thorTask&&state.stage==='thorSequence')&&!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
+  if(!cyclops.choosing(state)&&!state.thorOverflow&&!(state.thorTask&&state.stage==='thorSequence')&&!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
   const probability=scarletWitch.probabilityChoices(state,responding);
   if(probability.length)content+=`<div class="token-actions"><strong>${names[responding]} · Probability Manipulation</strong><div class="controls">${probability.map((choice,i)=>button('spendProbability',choice.label,`data-choice="${i}"`)).join('')}</div></div>`;
   const scarletChanges=scarletWitch.defenceChanges(state,responding);

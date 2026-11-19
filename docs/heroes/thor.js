@@ -23,7 +23,7 @@ const thor=(()=>{
  ];
  const cards=[['He Is Worthy!',1,'roll'],['Invulnerability!',2,'roll'],['Time to Hammer!',0,'instant'],['Power Trip!',1,'instant'],['Indomitable Will!',2,'roll'],['Stormbreak!',0,'instant'],['Bifrost!',0,'main']];
  const isolated=s=>!!(s.stage==='sideDamage'&&['Mjölnir','Chain Lightning'].includes(s.sideDamage?.source)&&!s.cardRoll&&!s.widowAgility&&!s.retry);
- const isolatedCard=(s,seat,card)=>card===10||heroId(s,seat)===id&&card===29||heroId(s,seat)===blackPanther.id&&card===32||heroId(s,seat)===captainMarvel.id&&card===31||heroId(s,seat)===sunElf.id&&card===33||heroId(s,seat)===3&&card===31&&s.sideDamage?.source==='Chain Lightning'&&s.sideDamage.seat===seat;
+ const isolatedCard=(s,seat,card)=>heroId(s,seat)===cyclops.id&&card===28||card===10||heroId(s,seat)===id&&card===29||heroId(s,seat)===blackPanther.id&&card===32||heroId(s,seat)===captainMarvel.id&&card===31||heroId(s,seat)===sunElf.id&&card===33||heroId(s,seat)===3&&card===31&&s.sideDamage?.source==='Chain Lightning'&&s.sideDamage.seat===seat;
  const holder=(s,seat)=>s.players[seat].mjolnirSeat??seat;
  function begin(s,seat,queue,resume=s.stage,extra={}){
   const parent=s.thorTask;
