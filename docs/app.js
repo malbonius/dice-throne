@@ -40,6 +40,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  tornado:'Positive, stack limit 4. Spend before the first Offensive Roll Attempt to borrow one opposing die per token, up to five. The holder controls these dice; foreign symbols cannot activate abilities, but numbers can form straights and matching-number bonuses. Same-hero dice retain usable symbols.',
+  windShear:'Positive, stack limit 1. When Attacked, spend to prevent 2 damage, then deal 2 isolated undefendable damage to the opponent. Works even if the incoming damage is avoided or blocked by Parlay. Raging Winds! doubles the next spend this turn.',
+  lightning:'Companion. Place on a chargeable ability. On activating a previously Charged ability, optionally remove it for that ability’s Charged Effect, once per ability per turn. Placing a second Lightning immediately removes both and deals 2 isolated undefendable damage.',
   influence:'Negative, stack limit 3. At the start of the holder’s actual Offensive Roll Phase, roll one die per token. Each 1–3 removes one Roll Attempt. Then remove all Influence. Dice Cube and Manifest do not affect these separate dice.',
   ionicEnergy:'Positive. Ionic (1) and Ionic (2) share a stack limit of 4 unless increased by Ionic Intensity! Spend to add the indicated damage to an Attack; two tokens per global turn, or pay 1 CP to permit four. A full stack cannot replace an old token with a stronger new one.',
   ionicEnergy2:'Positive, Ionic Energy (2). Shares a stack limit with Ionic Energy (1). Spend to add 2 Attack damage. The same two-token/four-token allowance applies to both values together.',
@@ -235,6 +238,9 @@ function hero(seat) {
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
     heroId(state,seat)===jeanGrey.id&&`<span class="token">${p.darkPhoenix?'Dark Phoenix':'Jean Grey'} active</span>`,
+    p.tornado&&token(seat,'tornado',`Tornado ${p.tornado}/4`),
+    p.windShear&&token(seat,'windShear','Wind Shear'),
+    p.lightningCharges&&`<details class="token-actions"><summary>Lightning · ${Object.values(p.lightningCharges).filter(Boolean).length} charged abilities</summary>${storm.slots.map(key=>`<span class="token">${token(seat,'lightning',key+': '+(p.lightningCharges[key]?'Charged':'empty'))}</span>`).join('')}</details>`,
     p.influence&&token(seat,'influence',`Influence ${p.influence}/3`),
     p.ionicEnergy&&token(seat,'ionicEnergy',`Ionic (1) ×${p.ionicEnergy} · ${rogue.total(p)}/${rogue.cap(p)}`),
     p.ionicEnergy2&&token(seat,'ionicEnergy2',`Ionic (2) ×${p.ionicEnergy2} · ${rogue.total(p)}/${rogue.cap(p)}`),
@@ -291,8 +297,9 @@ function tray(values,seat,editable,held=[]) {
     if (!value) return '<span class="die empty" aria-hidden="true">·</span>';
     const blank=!dieValue(value,state.players[seat]);
     const foreign=values===state.dice&&state.realityDie?.seat===seat&&state.realityDie.index===i;
-    const dieHero=foreign?scarletWitch.id:heroId(state,seat);
-    const label = blank?'Blank · Hex':foreign&&heroId(state,seat)!==scarletWitch.id?`${value} · Scarlet Witch die, symbol unavailable`:`${value} ${HEROES[dieHero].symbols[value-1]}`;
+    const borrowed=values===state.dice&&storm.borrowed(state,seat,i);
+    const dieHero=foreign?scarletWitch.id:values===state.dice?storm.dieHero(state,seat,i):heroId(state,seat);
+    const label = blank?'Blank · Hex':borrowed?`${value} ${HEROES[dieHero].symbols[value-1]} · borrowed ${HEROES[dieHero].name} die${dieHero!==heroId(state,seat)?', symbol unavailable':''}`:foreign&&heroId(state,seat)!==scarletWitch.id?`${value} · Scarlet Witch die, symbol unavailable`:`${value} ${HEROES[dieHero].symbols[value-1]}`;
     const picture = blank?'<span aria-label="Blank due to Hex">—</span>':
       `<img src="${art.dice[dieHero][value-1]}" alt="${label}">`;
     if(values===state.dice&&iceman.locked(state,seat,i))return `<span class="die frozen" style="outline:2px solid #b8f5ff" aria-label="Die ${i+1}, ${label}, frozen by Dice Cube">${picture}<small>Frozen</small></span>`;
@@ -355,6 +362,8 @@ function arena() {
   if(state.iceFreezeChoice){
     const f=state.iceFreezeChoice;phase='Dice Cube';heading=`${names[f.seat]} chooses a tied lowest die`;detail='The chosen original die will remain frozen for this Roll Phase, unless its Dice Cube is removed.';
     content=tray(state.dice,f.seat,false)+f.candidates.map(i=>button('iceChooseFrozen',`Freeze die ${i+1} (${state.dice[i]})`,`data-index="${i}"`)).join('');
+  } else if(!state.response&&state.stormTask&&state.stage==='stormChoices'){
+    const t=state.stormTask,h=t.queue[0];phase='Lightning';heading=`${names[t.seat]} places Lightning`;detail=`${h.left} remaining. A second Lightning on an ability removes both and immediately deals 2 isolated damage.`;content=storm.places(state).map(key=>button('stormPlace',`${key}${state.players[t.seat].lightningCharges?.[key]?' · overload for 2 damage':' · Charge'}`,`data-status="${key}"`)).join('')+(allowed.stormPlaceDone?button('stormPlaceDone','Finish placing Lightning','class="primary"'):'');
   } else if(!state.response&&state.rogueGain){
     const t=state.rogueGain;phase='Ionic Energy';heading=`${names[t.seat]} collects Ionic Energy`;detail=`${t.ones} Ionic (1) and ${t.twos} Ionic (2) are waiting. The two values share one stack limit. Spend existing tokens first if eligible, then choose what fits; excess is lost.`;content=rogue.collectChoices(state).map((c,i)=>button('rogueCollect',c.label,`data-choice="${i}"`)).join('');
   } else if(!state.response&&state.rogueRoll&&!state.cardRoll&&!state.retry){
@@ -582,8 +591,8 @@ function arena() {
     content=(allowed.gambitPayDisruption?button('gambitPayDisruption','Lose 1 CP'):'')+button('gambitTakeDisruption','Receive 2 Upkeep damage','class="primary"');
   } else if(state.retry) {
     const context=rollContext(state);
-    phase='Try, Try Again!'; heading=`${actingName} can reroll once more`;
-    content=rollDisplay(context)+`<div class="controls">${diceOwnedBy(context,seat).map((value,i)=>button('retryDie',`Reroll die ${i+1} (${value})`,`data-index="${i}"`)).join('')}
+    phase=state.retry.remaining?'Tsunami!':'Try, Try Again!'; heading=state.retry.remaining?`${actingName} may reroll up to ${state.retry.remaining} more ${state.retry.remaining===1?"time":"times"}`:`${actingName} can reroll once more`;
+    content=rollDisplay(context)+`<div class="controls">${diceOwnedBy(context,seat,state).map((value,i)=>button('retryDie',`Reroll die ${i+1} (${value})`,`data-index="${i}"`)).join('')}
       ${button('finishRetry','Keep this roll','class="primary"')}</div>`;
   } else if(state.mainChoice) {
     const {seat,id}=state.mainChoice;
@@ -657,7 +666,8 @@ function arena() {
       phase='Offensive Roll';
       heading=`${actingName} rolls`;
       detail=state.budget===0?'Influence removed all Roll Attempts. End this phase, spend Déjà Vu, or play One More Time! to gain a Roll Attempt.':state.players[state.active].decrepify&&state.attempts?'Decrep-ify · hold at least three dice to reroll.':state.attempts ? 'Tap dice to keep them, reroll the rest, or announce an available ability.' : 'Roll all five dice to begin.';
-      content=tray(state.dice.length ? state.dice : Array(5).fill(null),seat,!!allowed.hold,state.held)
+      if(state.stormDice)detail+=` ${state.stormDice.count} borrowed ${HEROES[state.stormDice.hero].name} ${state.stormDice.count===1?"die":"dice"} join the five ordinary dice.`;
+      content=tray(state.dice.length ? state.dice : Array(5+(state.stormDice?.count??0)).fill(null),seat,!!allowed.hold,state.held)
         + `<div class="controls">${button('roll',state.attempts?(constrictCost(state)?'Reroll · 1 CP':'Reroll'):'Roll dice',`class="primary" ${allowed.roll?'':'disabled'}`)}
         ${button('end','End without an ability',allowed.end?'':'disabled')}</div>`
         + `<div class="abilities">${abilitiesFor(state,seat).map((a,i)=>button('declare',`<strong>${a.label??a.name}</strong><small>${a.text}</small>`,
@@ -1080,6 +1090,12 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'stormCharge':
+      phase='Charged Effect';heading=p.name;detail='The ability was Charged before activation. Remove its Lightning for the Charged Effect, or keep it.';content=button('stormUseCharge','Remove Lightning · use Charged Effect','class="primary"')+button('stormKeepCharge','Keep the Lightning');break;
+    case 'stormAbility':
+      phase='Storm';heading=p.name;detail='Resolve the ability’s printed effects. Lightning Strike! can activate an eligible uncharged ability’s Charged Effect now.';content=button('finishStormAbility','Continue ability','class="primary"');break;
+    case 'stormResolved':
+      phase='Storm';heading=p.name;content=button('finishStormResolved','Continue after Lightning placements','class="primary"');break;
     case 'rogueAbility':
       phase='Rogue';heading=p.name;content=button('finishRogueAbility','Continue ability','class="primary"');break;
     case 'psyAbility':
@@ -1141,13 +1157,16 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
-  if(!state.psyReveal){
+  if(!state.psyReveal&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(storm.canTornado(state,responding))content+=button('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
+  if(storm.canWind(state,responding))content+=button('spendWindShear',state.players[responding].ragingWindsTurn===state.turn?'Spend Wind Shear · prevent 4 and deal 4 isolated damage':'Spend Wind Shear · prevent 2 and deal 2 isolated damage');
+  if(storm.oppReroll(state,responding))content+=`<div class="controls">${button('stormOppReroll','Reroll effect die 1','data-status="first"')}${button('stormOppReroll','Reroll effect die 2','data-status="second"')}${button('stormOppReroll','Reroll both effect dice','data-status="both"')}</div>`;
   for(const c of rogue.ionicChoices(state,responding))content+=button('spendIonic',c.label,`data-status="${c.key}"`);
   if(rogue.canExpand(state,responding))content+=button('expandIonic','Pay 1 CP · allow four Ionic tokens this turn');
   if(rogue.canSkyward(state,responding))content+=button('spendSkyward','Spend Skyward · both players roll');
   if(rogue.boostLeach(state,responding))content+=button('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
   }
-  if(!state.psyReveal&&!state.rogueGain){
+  if(!state.psyReveal&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
   for(const c of psylocke.swaps(state,responding))content+=button('manifestSwap',c.label,`data-index="${c.index}"`);
   if(psylocke.canBoost(state,responding))content+=button('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
   for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=button('spendInfiltration',c.label,`data-choice="${i}"`);
@@ -1343,6 +1362,7 @@ function handleAction(event) {
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
+  if(type==='stormOppReroll')action.indices=action.status==='both'?[0,1]:action.status==='first'?[0]:[1];
   if(type==='spiderSenseReroll')action.indices=[...match.querySelectorAll('input[name="spider-sense-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='widowDefenceReroll')action.indices=[...match.querySelectorAll('input[name="widow-defence-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='abilityReroll')action.indices=[...match.querySelectorAll('input[name="ability-reroll"]:checked')].map(input=>Number(input.value));
