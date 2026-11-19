@@ -1,24 +1,25 @@
-# Dice Throne Playtest 0.45.0 — Storm
+# Dice Throne Playtest 0.46.0 — Wolverine
 
-Storm joins X-Men with her board abilities, five upgrades, nine standard action cards, optional Atmokinesis! promo, leaflets, dice and three supplied token/Companion images. She uses the Marvel/X-Men shared card artwork. Her normal deck has 32 cards, or 33 with the promo.
+Wolverine joins X-Men with his board abilities, five upgrades, three standard action cards, six Recovery/Frenzy discard cards, optional Feral! promo, leaflets, dice and two supplied token images. He uses the Marvel/X-Men shared card artwork. His normal deck has 32 cards, or 33 with the promo.
 
-To update from 0.44.0, extract this Storm update and merge its `dice-throne-offline` folder into your existing project, replacing matching files and keeping the other files. Upload the updated `docs` contents to your existing hosting location. This archive includes changed and new files only. Existing hero IDs, card IDs, schema-2 saves and local storage remain compatible.
+To update from 0.45.0, extract this Wolverine update and merge its `dice-throne-offline` folder into your existing project, replacing matching files and keeping the other files. Upload the updated `docs` contents to your existing hosting location. This archive includes changed and new files only. Existing hero IDs, card IDs, schema-2 saves and local storage remain compatible.
 
-Lightning is a Companion placed on one of eight outlined abilities. An ability already Charged before activation offers its Charged Effect or lets you keep the token. Each ability's Charged Effect can be used once per global turn. Placing a second Lightning on the same ability immediately removes both and deals a separate, preventable 2 damage. Multiple gains are placed one at a time. Maelstrom places up to four Lightning on different other abilities; Gust's two straights share one charge.
+Rage can be spent immediately: one token and a selected hand card add 3 Attack damage, or three tokens draw one card. Incoming gains pause when necessary so existing Rage can be spent before collecting the whole batch. Excess is lost. Any holder can use Rage, and ordinary card-play restrictions such as Crimson Bands do not prevent spending it.
 
-Tornado borrows opposing dice before the first Offensive Roll Attempt. These join all Roll Attempts and count as the holder's dice for manipulation and Hex. Foreign symbols cannot activate abilities, but their numbers form straights and numerical matches. Same-hero borrowed dice retain their symbols. Borrowed dice keep their original artwork, can be held, and are considered by Dice Cube. They return when the Roll Phase ends. Super Tornado! removes three tokens to borrow five dice, respecting the opponent's available five.
+Wolverine's Recovery/Frenzy cards cannot be played normally. They count towards the hand limit and can be sold for 1 CP. Discarding one through Rage triggers its effect without gaining CP: Recovery may return to hand; Astonishing Recovery heals 2 if no Mask is rolled; Frenzy regains Rage; Astonishing Frenzy makes that token add 4 damage and regains Rage. Other discards and sales do not trigger these effects.
 
-Maelstrom requires the six-number straight. Lightning Strike! activates an eligible uncharged ability's Charged Effect. Charged Opposites Attract can reroll one or both effect dice once. Tsunami! permits up to three sequential rerolls of the same or different eligible dice; unused rerolls cannot be saved.
+Alpha is Unique, removable and non-transferable. When inflicted by an Attack, both players immediately roll a separate die. If the attacker's result is lower, remove Alpha; ties retain it. The holder skips their next Income and removes Alpha, without an additional delayed skip when other Income restrictions coincide.
 
-Wind Shear prevents 2 incoming Attack damage, then deals a separate, preventable 2 damage to the opponent. It still works when Shadows avoids the Attack or Parlay reduces it to zero, following the updated supplied clarification. Raging Winds! doubles the next Wind Shear spent that turn. Ultimates cannot be interrupted with Wind Shear.
+Healing, Rage gains and Alpha choices resolve before the affected Attack continues. Regenerate offers optional removal of a selected own status. Severe Threat II offers its Mask choice, and Barrage's large straight offers Rage or Alpha. Fastball Special! resolves its Rage gain, separate preventable self-damage, and Attack bonus in order. The Ultimate targets the sole opponent in this two-seat engine.
 
-Paralyze blocks ordinary board Tornado/Wind Shear gains. Lightning remains a Companion, and its independent spend effects, cards and Ultimates remain available. Existing Upkeep fixes, legacy timing, Income rules and deck reshuffling remain in use. January 2027 global rules changes have not been enabled.
+Paralyze blocks ordinary Offensive Ability Rage and Alpha, including subsidiary-roll gains, while retaining healing, drawing and damage. Cards, independent Rage spending and Ultimate effects remain available. Existing Upkeep fixes, legacy timing, Income rules and deck reshuffling remain in use. January 2027 global rules changes have not been enabled.
 
-Validation: 84 Storm and 811 existing rules test groups passed (895 total), plus 316 simulated interface states, 39 artwork bundle lengths, offline script references, saved-state JSON and 84 JavaScript syntax checks. Differential checks against 0.44.0 passed 5,524 comparisons across all 38 previous heroes (2,592 transitions). All fifteen card crops and dice faces were inspected; 28 new WebP payloads validate and all three supplied token/Companion images are preserved byte-for-byte. Real-browser layout, touch controls and installed-PWA update/offline launch still require manual playtesting.
+Validation: 71 Wolverine and 895 existing rules test groups passed (966 total), plus 334 simulated interface states, 40 artwork bundle lengths, offline script references, saved-state JSON and 86 JavaScript syntax checks. Differential checks against 0.45.0 passed 5,371 comparisons across all 39 previous heroes (2,504 transitions). All fifteen card crops and dice faces were inspected; 27 new WebP payloads validate and both supplied token images are preserved byte-for-byte. Real-browser layout, touch controls and installed-PWA update/offline launch still require manual playtesting.
 
 Run checks with Node.js:
 
 ```sh
+node tests/wolverine.test.cjs
 node tests/storm.test.cjs
 node tests/rogue.test.cjs
 node tests/psylocke.test.cjs
