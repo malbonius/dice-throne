@@ -90,7 +90,7 @@ const psylocke=(()=>{
    const choice=a.type==='spendInfiltration'?infiltrationChoices(previous,seat)[a.choice]:null;if(a.type==='spendInfiltration'&&!choice)return previous;
    const s=structuredClone(previous),p=s.players[seat];s.response=null;
    if(a.type==='manifestSwap'){
-    const before=s.dice.slice(),old=s.dice[a.index],value=p.manifestDie;s.dice[a.index]=value;p.manifestDie=old;p.manifestReady=false;p.manifestUsedTurn=s.turn;p.manifestSwapped=true;
+    const before=s.dice.slice(),old=s.dice[a.index],value=p.manifestDie;s.dice[a.index]=value;if(s.stormDice)s.stormDice.indices=s.stormDice.indices.filter(i=>i!==a.index);p.manifestDie=old;p.manifestReady=false;p.manifestUsedTurn=s.turn;p.manifestSwapped=true;
     if(s.realityDie?.seat===seat&&s.realityDie.index===a.index)delete s.realityDie;
     if(s.iceFirstRoll){s.iceFirstRoll.values[a.index]=value;s.iceFirstRoll.selected=[];delete s.iceFreezeChoice;}
     releaseChangedAnnouncement(s,rollContext(s),before);
