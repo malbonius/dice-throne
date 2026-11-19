@@ -1,6 +1,6 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.32.0, 19 November 2026. Base: the supplied 0.31.2 project archive.
+Version: Playtest 0.32.1, 19 November 2026. Base: the supplied 0.31.2 project archive.
 
 ## Project structure
 
@@ -11,7 +11,7 @@ Version: Playtest 0.32.0, 19 November 2026. Base: the supplied 0.31.2 project ar
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-26.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.32.0.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.32.1.
 - `tests/`: Node-based rules tests and interface/asset checks.
 
 ## Compatibility
@@ -42,3 +42,7 @@ Keep existing legacy timing, Income (draw one and gain one CP, except the first 
 A real Chromium session could not start in this execution environment. Manual checks still required on the user's Windows/Android browsers: hero selection, touch controls, card/board zoom, reload of an existing save, online installation/update then offline launch, and gameplay against other heroes. The interface tests simulate DOM elements; they do not validate browser layout or service-worker lifecycle.
 
 For the next hero: append its module and artwork arrays, register it in the correct set, load both scripts before the engine, and add both files to the service worker. Marvel/X-Men shared artwork selection is automatic through the set. Keep each new hero's distinctive rules in its own module, retaining common state-machine hooks in the engine.
+
+## Artwork patch 0.32.1
+
+Replaced only `window.diceThroneArt.vibraniumSuit` in `docs/art-hero-25.js` with the exact bytes of the newly supplied `vibraniumSuit.webp`. The standalone token replaces the previous placeholder/crop. Other Black Panther artwork and all gameplay code are unchanged. Version label and offline cache bumped to 0.32.1.

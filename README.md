@@ -1,10 +1,12 @@
-# Dice Throne Playtest 0.32.0 — Black Widow
+# Dice Throne Playtest 0.32.1 — Vibranium Suit artwork
 
 Black Widow joins the Marvel set, using the supplied Marvel shared card artwork. Includes her complete standard deck, optional Smoke Screen! promo, board, leaflets, dice and status artwork.
 
-To update from 0.31.2, extract the update archive and merge its `dice-throne-offline` folder into your existing project, replacing matching files. Upload the changed `docs` files to GitHub Pages. The full archive contains the complete build instead.
+This artwork patch replaces the previous Vibranium Suit image with the supplied standalone token. Gameplay is unchanged.
 
-Open the hosted game online once after updating and allow the offline-ready indicator to appear before using it offline. The service-worker cache is now version 0.32.0. Existing saves use the same storage key, save schema and hero IDs.
+Apply this patch over 0.32.0: extract it and merge its `dice-throne-offline` folder into your existing project, replacing matching files. Upload the three changed `docs` files to GitHub Pages. It requires the preceding Black Widow update.
+
+Open the hosted game online once after updating and allow the offline-ready indicator to appear before using it offline. The service-worker cache is now version 0.32.1. Existing saves use the same storage key, save schema and hero IDs.
 
 Black Widow includes upgrades during Roll Phases; free upgrades, top-card ordering and searches through Covert Ops; individual Time Bomb countdowns and transfers; Agility and Elude!; Sabotage's additional Roll Attempt; upgrade-sensitive attacks; and Recon/Ultimate searches that shuffle before passive draws.
 
