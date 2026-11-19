@@ -1,6 +1,6 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.35.0, 19 November 2026. Base: the supplied 0.31.2 project archive.
+Version: Playtest 0.36.0, 19 November 2026. Base: the supplied 0.31.2 project archive.
 
 ## Project structure
 
@@ -10,13 +10,13 @@ Version: Playtest 0.35.0, 19 November 2026. Base: the supplied 0.31.2 project ar
 - `docs/app.js`: rendering, controls, hand viewer, board/leaflet zoom, local saves and hero picker.
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
-- `docs/art-hero-1.js` through `art-hero-29.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.35.0.
+- `docs/art-hero-1.js` through `art-hero-30.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.36.0.
 - `tests/`: Node-based rules tests and interface/asset checks.
 
 ## Compatibility
 
-The roster is append-only: the previous 25 heroes retain IDs 0–24; Black Panther is 24, Black Widow is 25, Captain Marvel is 26, Doctor Strange is 27 and Loki is 28. Card IDs are hero-local. Black Widow uses shared 1–18, upgrades 19–26, standard actions 27–32, optional promo 33.
+The roster is append-only: the previous 25 heroes retain IDs 0–24; Black Panther is 24, Black Widow is 25, Captain Marvel is 26, Doctor Strange is 27, Loki is 28 and Scarlet Witch is 29. Card IDs are hero-local. Black Widow uses shared 1–18, upgrades 19–26, standard actions 27–32, optional promo 33.
 
 Save version remains 2, storage key remains `dice-throne-card-pilot-v2`. All new state is serialisable. No save migration or cache-clearing of localStorage is required.
 
@@ -37,7 +37,7 @@ Keep existing legacy timing, Income (draw one and gain one CP, except the first 
 
 ## Verification and remaining manual checks
 
-Current verification: 42 Loki, 34 Doctor Strange, 34 Black Widow and 35 Captain Marvel rules groups passed, along with 74 interface rendering states, all 29 artwork bundle lengths, Marvel shared artwork selection, cached scripts, syntax and saved-state JSON round-trips. Differential checks against 0.34.0 passed 4,017 comparisons across the previous 28 heroes, including 1,886 state transitions. All 15 Loki card crops were inspected against their IDs/costs; supplied token bytes are preserved exactly.
+Current verification: 51 Scarlet Witch rules groups and the previous 145 Marvel groups passed, along with 123 interface states, all 30 artwork bundle lengths, Marvel shared artwork selection, cached scripts, syntax and saved-state JSON round-trips. Differential checks against 0.35.0 passed 4,085 comparisons across the previous 29 heroes, including 1,914 state transitions. All 15 Scarlet Witch card crops were inspected against IDs/costs; supplied token bytes are preserved exactly.
 
 A real Chromium session could not start in this execution environment. Manual checks still required on the user's Windows/Android browsers: hero selection, touch controls, card/board zoom, reload of an existing save, online installation/update then offline launch, and gameplay against other heroes. The interface tests simulate DOM elements; they do not validate browser layout or service-worker lifecycle.
 
@@ -111,3 +111,22 @@ Loki is appended as hero ID 28 in Marvel. Module: `docs/heroes/loki.js`; artwork
 - Liar Liar! adds one damage per Scepter and resolves its Lies/Mischief Bag outcomes once each. Pantaloons on Fire! adds 2 alone or 4 if Liar Liar! is used on the same attack; either play order is supported. How Lovely! charges 1 CP plus the optional 2 extra. Take Backsies! selects a printed-cost-at-most-2 discard card and records its revealed name. Promo resolves Mischief or draws one on other outcomes.
 
 Validation for this update: 42 Loki rules groups; the prior 103 Marvel rules groups; 74 interface states; all 29 art bundle lengths/cache entries; source token byte equality; and 4,017 baseline comparisons over 1,886 transitions for the previous 28 heroes. Live browser layout, service-worker lifecycle and installed-PWA playtesting remain manual checks. Continue providing update ZIPs only unless the user asks for a complete build.
+
+
+## Scarlet Witch 0.36.0
+
+Scarlet Witch is appended as hero ID 29 in Marvel. Module: `docs/heroes/scarlet-witch.js`; artwork: `docs/art-hero-30.js`. Source artwork comes from the supplied Scarlet Witch archive; Marvel shared art is automatic through set membership. Card IDs: 19 Hex Bolt II / Conjuration; 20 Jinx II; 21 Darkhold II; 22 Spellcraft II; 23 Pure Chaos II / Chaos; 24 Bewitch II / Energy Drain; 25 Mind Blast II; 26 Double Trouble II; 27 Incantation!; 28 Hex Shield!; 29 Warped!; 30 No Dice!; 31 Chaos Manipulation!; 32 Snap Crackle!; 33 optional Hexellent!.
+
+- Reality Warp is Negative, cap 1. At actual Offensive Roll Phase entry, consume it and set serialisable `realityDie={seat,index:4}`. V2 Income prepares Main Phase 1 without consuming it, so it can still be removed before beginning the ORP. Knockdown defers actual entry until paid; skipping that ORP retains the token. `finishRoll` clears the borrowed die; extra ORPs and Déjà Vu start without it unless a new token is present.
+- The borrowed die belongs to its roller for cards/statuses. Its number remains available for straights and numeric matching bonuses, but its symbol is excluded from activation and damage/reward counts for non-Scarlet heroes. Scarlet mirror matches retain symbols and may activate Ultimates. Symbol filtering applies only to the five offensive dice, not subsidiary rolls or defence. The UI uses Scarlet Witch's artwork and explicitly labels the unavailable symbol. `qualifies` accepts separate optional symbol dice; callers without a borrowed die retain prior behaviour.
+- Probability Manipulation is Positive, cap 2. At instant timing after a roll, spend one to change an owned visible 2/4/6 by one; no increasing 6 or wrapping. Hex blanks are ineligible. Uses the actual current `rollContext`, including subsidiary/status rolls, foreign dice and mixed-owner contests. Announcement changes release the declaration. Ultimate subsidiary rolls remain locked. Crimson Bands blocks cards, not this status spend.
+- Conjure is Positive, cap 1, once per global turn in own Main Phases. Choose Reality Warp for the opponent, or one Positive Status from either player's leaflet. A copied token need not be present on the source board and is gained rather than taken. `leafletPositives` explicitly records the supplied leaflets for all 30 heroes. Companions, resources/dials and Unique effects are excluded, including Holy Presence, Vibranium Suit, Cosmic Ray, Covert Ops and Blessing of Divinity. Kinetic Energy is Positive and eligible. Future heroes must extend this registry.
+- For Conjure's gain option, an opponent with cards receives a serialisable `conjureTask`: discard any chosen hand card without CP gain to block it, or allow the gain. No cards means immediate gain. Conjure is spent and its once-per-turn marker recorded before the block choice. The Reality Warp option has no discard block. Copying Bag of Tricks records the source Loki seat. Existing helpers handle Regenerate, Kinetic Energy and resource overflow correctly.
+- Crackle is Positive, cap 3. On an activated non-pure attack, spend at most twice per turn. Count every remaining Positive/Negative token instance after removing the spent Crackle; add the count up to three as attack damage. Unique effects, companions and dials do not count. Remaining Crackle counts; both Regenerate sides count as their token instances. The supplied advanced clarification overrides the old leaflet's misleading Spellbound example. Can boost own Ultimate; cannot modify pure damage. Counts are evaluated at each spend, including after defence inflicts a status.
+- Base Jinx resolves each On-symbol once across its whole ability: Warp adds two once; Chaos gains one Probability once; Spell inflicts Reality Warp once; Crown adds one and rerolls one die once. Thus maximum base damage is nine. Jinx II adds two per Warp and gains one Probability per Chaos; Spell remains an On effect; every Crown adds one and creates another reroll. No artificial repeat cap is imposed.
+- `scarletJinx` queues Crown rerolls one at a time. Each new die is the sole active context once earlier dice have resolved. Cards cannot affect or match resolved original dice. Probability gained by earlier results can alter a new even result. Opponent responses occur before resolving each new die. Spell inflicts Reality Warp when its roll resolves, before any Crown reroll; prior-token metadata preserves defensive status prevention, and removal during a later response is not undone when the attack continues. The task and seen outcomes survive save/reload. Completion resumes through `scarletAbility` without applying the ability's initial gains twice.
+- Mind Blast gains Crackle and rolls for five pure damage plus Probability on even, or eight pure on odd (nine upgraded). Hex blanks trigger neither parity result. Darkhold draws and gains its printed CP/tokens; both Spellcraft straight activators share one upgrade/binding while retaining distinct effects. Energy Drain steals up to three actual Health through the existing health-steal helper and does not activate defence or ordinary prevention.
+- Double Trouble rolls five dice. Each pair threshold triggers once: two Warp gain one Crackle; two Chaos gain Probability; two Spell gain Conjure; two Crown return four damage. The upgrade grants two Crackle for at least three Warp and permits one pre-resolution Probability discard to set any defence die to any value. This is separate from ordinary even-number Probability spends.
+- Warped! sets an owned current die to 1/2/3; No Dice! discards one Probability to set an opposing current die to 1; Chaos Manipulation! discards two to set any current die. Hex Shield! prevents one per Warp and inflicts Reality Warp on a Crown pair; it remains playable for that status effect after all attack damage has been prevented. Snap Crackle! gains one on even and two on odd. Hexellent! gains Conjure, Probability and Crackle on Crown, otherwise draws one.
+
+Validation: 51 Scarlet Witch groups, 42 Loki, 34 Doctor Strange, 34 Black Widow and 35 Captain Marvel groups; 123 interface states including every earlier leaflet's Conjure gain; all 30 art bundle lengths/cache references; exact source token bytes; and 4,085 baseline comparisons over 1,914 transitions for all previous 29 heroes. Live browser/PWA lifecycle and touch-layout checks remain manual. Keep update-only packaging unless the user requests a complete build; retain the legacy rules model and save storage key/schema.

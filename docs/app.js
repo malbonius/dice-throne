@@ -39,6 +39,10 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  probabilityManipulation:'Stack limit 2. Spend as an instant action to change one of your dice showing 2, 4 or 6 by one. Cannot increase a 6 or wrap it to 1. A borrowed Reality Warp die belongs to its current roller.',
+  realityWarp:'At the beginning of your next Offensive Roll Phase, remove this token and replace die 5 with a Scarlet Witch die. Its number still counts; its symbol does not count for another hero. Scarlet Witch mirror matches keep its symbols. Lasts for that Offensive Roll Phase.',
+  conjure:'Once per turn in your own Main Phase, spend to inflict Reality Warp or gain one Positive Status Effect from a chosen player’s leaflet. The opponent may block the gain by discarding a card. Unique effects and companions are ineligible.',
+  crackle:'Stack limit 3. After activating an attack, spend for +1 damage per remaining Positive or Negative Status token on your board, maximum +3. Unique effects do not count. At most two Crackle per turn. Cannot modify pure damage.',
   illusion:'Stack limit 2. Spend when attacked to arrange three hidden Illusion cards for the attacker to choose. Success gives the attacker Bag of Tricks; Partial Success prevents half damage; Fail prevents all damage. Cannot be transferred. Defence still resolves.',
   bagOfTricks:'Stack limit 2. Remove and roll each token separately in Upkeep: 1 loses 1 CP; 2–5 lets its original Loki choose heal 2, gain 1 CP or take 2 damage; 6 gains 2 CP. Healing and damage accumulate until Upkeep ends.',
   spellbound:'Stack limit 3. Blocks a named non-Ultimate Offensive Ability through upgrades. Existing tokens expire after your next Offensive Roll Phase; tokens inflicted by defence wait for your following Roll Phase. Cannot be transferred. Removed when the board flips.',
@@ -152,6 +156,11 @@ function hero(seat) {
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
       return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
     }),
+    p.probabilityManipulation>0&&token(seat,'probabilityManipulation',`Probability Manipulation ×${p.probabilityManipulation}`),
+    p.realityWarp&&token(seat,'realityWarp','Reality Warp'),
+    state.realityDie?.seat===seat&&token(seat,'realityWarp','Reality Warp · Scarlet Witch die 5','active'),
+    p.conjure&&token(seat,'conjure','Conjure'),
+    p.crackle>0&&token(seat,'crackle',`Crackle ×${p.crackle}`),
     p.illusion>0&&token(seat,'illusion',`Illusion ×${p.illusion}`),
     ...(p.trickBags??[]).map(b=>token(seat,'bagOfTricks',`Bag of Tricks · ${names[b.owner]}`,`bag-${b.id}`)),
     ...(p.boundAbilities??[]).map(b=>token(seat,'spellbound',`Spellbound · ${b.key}`,`bound-${b.id}`)),
@@ -229,9 +238,11 @@ function tray(values,seat,editable,held=[]) {
   return `<div class="dice" role="group" aria-label="${names[seat]} dice">${values.map((value,i) => {
     if (!value) return '<span class="die empty" aria-hidden="true">·</span>';
     const blank=!dieValue(value,state.players[seat]);
-    const label = blank?'Blank · Hex':`${value} ${HEROES[heroId(state,seat)].symbols[value-1]}`;
+    const foreign=values===state.dice&&state.realityDie?.seat===seat&&state.realityDie.index===i;
+    const dieHero=foreign?scarletWitch.id:heroId(state,seat);
+    const label = blank?'Blank · Hex':foreign&&heroId(state,seat)!==scarletWitch.id?`${value} · Scarlet Witch die, symbol unavailable`:`${value} ${HEROES[dieHero].symbols[value-1]}`;
     const picture = blank?'<span aria-label="Blank due to Hex">—</span>':
-      `<img src="${art.dice[heroId(state,seat)][value-1]}" alt="${label}">`;
+      `<img src="${art.dice[dieHero][value-1]}" alt="${label}">`;
     return editable ? button('hold',picture,`class="die" data-index="${i}" aria-pressed="${!!held[i]}" aria-label="Die ${i+1}, ${label}, ${held[i]?'held':'available to reroll'}"`)
       : `<span class="die">${picture}</span>`;
   }).join('')}</div>`;
@@ -287,7 +298,15 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(state.lokiTask){
+  if(state.conjureTask){
+    const t=state.conjureTask,opponent=1-t.seat;phase='Conjure';heading=`${names[opponent]} may block Conjure`;
+    detail=`${names[t.seat]} wants to gain ${statusLabel(t.choice.status)} from ${names[t.choice.source]}’s leaflet. Discard one card to prevent the gain, or allow it.`;
+    content=state.players[opponent].hand.map(id=>button('conjureDiscard',`Discard ${seatCard(state,opponent,id).name}`,`data-index="${id}"`)).join('')+button('conjureAllow','Allow the status gain','class="primary"');
+  } else if(!state.response&&state.scarletJinx&&!state.cardRoll&&!state.retry){
+    const t=state.scarletJinx;phase='Jinx';heading=`${activeName} resolves a Crown reroll`;
+    detail=`${p.scarlet.jinxUpgrade?'Each Crown adds 1 damage and rolls again.':'Each On outcome can happen only once across the whole ability.'} ${t.left} reroll${t.left===1?'':'s'} pending. Earlier dice have resolved and cannot be changed or matched.`;
+    content=tray(t.dice,t.seat,false)+button('resolveScarletJinx','Resolve this reroll','class="primary"');
+  } else if(state.lokiTask){
     const t=state.lokiTask.queue[0];phase='Loki';heading=t.kind==='bind'?`Choose an ability to make Spellbound`:'Distribute Bags of Tricks';
     detail=`${names[state.lokiTask.seat]} chooses · ${t.left} remaining.${t.kind==='bind'?' An Ultimate cannot be covered.':' You may choose the same player more than once; stack limit 2.'}`;
     content=loki.options(state).map((choice,i)=>button('lokiChoose',choice.label,`data-choice="${i}"`)).join('')+(t.optional?button('lokiSkip','Finish distributing','class="primary"'):'');
@@ -900,6 +919,8 @@ function arena() {
       phase='Avoid damage'; heading=`${actingName} checks ${statusLabel(state.evasionToken??'evasive')}`;
       detail=state.evasionToken==='smoke'?'A 1–3 avoids the incoming damage.':'A 1 or 2 avoids the incoming damage.';
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
+    case 'scarletAbility':
+      phase='Scarlet Witch';heading=p.name;content=button('finishScarletAbility','Continue ability','class="primary"');break;
     case 'lokiAbility':
       phase='Loki';heading=p.name;content=button('finishLokiAbility','Continue ability','class="primary"');break;
     case 'strangeAbility':
@@ -925,7 +946,14 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
-  if(!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
+  if(!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
+  const probability=scarletWitch.probabilityChoices(state,responding);
+  if(probability.length)content+=`<div class="token-actions"><strong>${names[responding]} · Probability Manipulation</strong><div class="controls">${probability.map((choice,i)=>button('spendProbability',choice.label,`data-choice="${i}"`)).join('')}</div></div>`;
+  const scarletChanges=scarletWitch.defenceChanges(state,responding);
+  if(scarletChanges.length)content+=`<details class="token-actions"><summary>Double Trouble II · discard Probability Manipulation to change any die</summary><div class="controls">${scarletChanges.map((choice,i)=>button('scarletDefenceChange',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  if(scarletWitch.canCrackle(state,responding))content+=button('spendCrackle',`Spend Crackle · +${Math.min(3,Math.max(0,scarletWitch.countedStatuses(state.players[responding])-1))} damage`);
+  const conjure=scarletWitch.conjureChoices(state,responding);
+  if(conjure.length)content+=`<details class="token-actions"><summary>Spend Conjure</summary><div class="controls">${conjure.map((choice,i)=>button('spendConjure',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   if(!state.response||state.response.seat===state.active){
     if(sunElf.canGem(state,state.active))content+=button('spendChargedGem','Spend Charged Gem');
     const player=state.players[state.active];
