@@ -1,6 +1,6 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.41.0, 19 November 2026. Base: the supplied 0.31.2 project archive.
+Version: Playtest 0.41.1, 19 November 2026. Base: the supplied 0.31.2 project archive.
 
 ## Project structure
 
@@ -11,7 +11,7 @@ Version: Playtest 0.41.0, 19 November 2026. Base: the supplied 0.31.2 project ar
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-35.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.41.0.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.41.1.
 - `tests/`: Node-based rules tests and interface/asset checks.
 
 ## Compatibility
@@ -37,7 +37,7 @@ Keep existing legacy timing, Income (draw one and gain one CP, except the first 
 
 ## Verification and remaining manual checks
 
-Current verification: 87 Iceman rules groups and the previous 463 Marvel/X-Men groups passed (550 total), along with 221 simulated interface states, all 35 artwork bundle lengths, Marvel/X-Men shared artwork selection, cached scripts, syntax and saved-state JSON round-trips. Differential checks against 0.40.0 passed 4,815 comparisons across the previous 34 heroes, including 2,246 state transitions. All 15 Iceman deck-card crops and the separate Freezer crop were inspected; supplied Ice Shard, Dice Cube and Glide token bytes are preserved exactly.
+Current verification: 559 Marvel/X-Men rules groups, including 87 Gambit and 87 Iceman groups, passed along with 226 simulated interface states, all 35 artwork bundle lengths, Marvel/X-Men shared artwork selection, offline script references, syntax and saved-state JSON round-trips. The 0.41.1 fix adds nine Gambit integration groups and five interface states using actual turn transitions. Disruption is checked on all 35 heroes. Differential checks against 0.41.0 passed 4,986 comparisons across the 34 heroes other than Gambit, including 2,323 transitions; Gambit's intended changed flow has separate integration tests. The unchanged Iceman artwork retains the previous inspection and exact-token-byte validation.
 
 Real-browser layout and the installed-PWA lifecycle were not verified for this update. Manual checks still required on the user's Windows/Android browsers: hero selection, touch controls, card/board/Freezer zoom, reload of an existing save, online installation/update then offline launch, and gameplay against other heroes. The interface tests simulate DOM elements; they do not validate browser layout or service-worker lifecycle.
 
@@ -239,3 +239,13 @@ Validation: 78 Gambit plus 385 earlier Marvel/X-Men rules groups; 198 simulated 
 - Hail the King queues undefendable plus collateral as one incoming attack total (7 base, 9 upgraded). Not This Time!, Protect and Spider-Sense affect that total; Nyra may receive all of it. Heal Bot's six-damage threshold includes Hail's collateral as explicitly clarified in the supplied advanced rules. The threshold adjustment is scoped to Iceman; other heroes retain their existing behaviour.
 - Frosting inflicts two Cube without an attack; Dryad can prevent the negative status. Ice to Meet You gains one shard and inflicts Cube before resolving its five subsidiary dice: per Ice damage, per Slide storage, and an independent Glide-or-draw choice for each Frost. Froze and Cons! spends a Freezer shard; Freeze the Day! spends a board shard and creates a preventable non-Attack three-damage event. Promo and other roll-card results remain modifiable before resolution.
 - Legacy global timing, deck reshuffling, schema 2 and storage key remain unchanged. Do not enable future January 2027 global changes merely because the source advanced document contains them. Distribution is an update-only ZIP over 0.40.0; no full build was requested.
+
+## Upkeep entry fix 0.41.1
+
+Testing exposed an integration omission in `advanceTurn()`: its Upkeep-entry predicate included neither the incoming player's `disruption` nor Gambit's hero ID for High Stakes. The handlers and interface were correct once already in Upkeep, which is why earlier tests that directly assigned `stage='upkeep'` missed it. `createMatch()` already included Gambit in its starting-player Upkeep check, so High Stakes could work on turn one when Gambit started while failing when he went second or on later turns. Other heroes' existing Upkeep triggers (Burn, Poison, Time Bombs, passive mechanics, etc.) still worked and could incidentally expose both missing effects.
+
+The turn-entry predicate now includes `player.disruption` and `gambit.id`. Disruption requires Upkeep on any holder, including a transferred token in a match without Gambit. Gambit must enter Upkeep on every actual turn for High Stakes. Disruption's pay-one-CP or receive-two-damage choice resolves before Income; zero CP cannot use the subsequently gained Income CP. The existing first-player Income skip, damage/prevention handling, High Stakes once-per-turn marker and other Upkeep order remain unchanged. Empty Upkeep phases for heroes with no work continue directly to Income as before.
+
+Nine added Gambit groups exercise Main Phase 2 → Discard → next turn, zero-CP payment timing, all 35 recipients, second-seat Gambit's first turn, a complete round back to starting Gambit, both effects together, a resolved Bo Staff infliction, repeated turns without stale Disruption damage, and pending saves. Five added UI states follow actual turn transitions rather than assigning Upkeep directly. The original regression reproduced the reported failure before the fix (`main1` instead of `upkeep`). The final suite has 87 Gambit groups, 559 total rules groups and 226 UI states. The differential comparison intentionally excludes Gambit because his formerly skipped turn flow is the behaviour being corrected; 4,986 comparisons / 2,323 transitions across the other 34 heroes match 0.41.0 exactly.
+
+Distribution: update-only patch over 0.41.0, with version/cache 0.41.1; apply Iceman 0.41.0 before this fix if starting on Gambit 0.40.0. Existing saves remain compatible. Corrections apply at the next turn entry; the engine does not replay a phase skipped before installation or alter already-granted Income. No artwork, hero IDs, save schema, storage key, global rules timing or reshuffling changes.

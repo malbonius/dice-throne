@@ -1,8 +1,10 @@
-# Dice Throne Playtest 0.41.0 — Iceman
+# Dice Throne Playtest 0.41.1 — Upkeep fix
 
 Iceman joins X-Men with all board abilities, six upgrades, eight standard action cards, optional I Thaw, I Conquered! promo, Ice Shards, Dice Cube, Glide, The Freezer, board, leaflets and dice. He uses the supplied Marvel/X-Men shared card artwork. His normal deck has 32 cards, or 33 with the promo; The Freezer stays beside his board.
 
-To update from 0.40.0, extract the Iceman update archive and merge its `dice-throne-offline` folder into your existing project, replacing matching files. Keep the other existing files. Upload the updated `docs` contents to your existing hosting location. The update includes changed and new files only. Existing hero IDs, card IDs, schema-2 saves and local storage remain compatible.
+This hotfix corrects the actual start-of-turn Upkeep check. Disruption alone now enters Upkeep for any hero, and Gambit enters Upkeep for High Stakes on every own turn, including when he goes second. Previously these effects worked only if another effect independently triggered Upkeep, apart from Gambit's correctly handled opening turn as starting player. Disruption is resolved before Income, so its CP payment uses the CP already held.
+
+To update from 0.41.0, extract this Upkeep Fix archive and merge its `dice-throne-offline` folder into your existing project, replacing matching files and keeping all other files. Apply the 0.41.0 Iceman update first if you are still on 0.40.0. Upload the updated `docs` contents to your existing hosting location. This is an update-only archive; it does not include artwork or a complete build. Existing hero IDs, card IDs, schema-2 saves and local storage remain compatible. The fix applies when the next turn begins; an already-skipped phase is not replayed or retroactively charged.
 
 The five directed Glide Paths are Frostbite → Everybody Chill, Everybody Chill → Cold Treat, Cold Treat → Ice to Meet You, Hoarfrost → Thawsome, and Hail the King → Thawsome. Glide starts a distinct Roll Phase against the same opponent without a dice objective or an intervening Income or Main Phase. It can only be spent once per turn; secondary upgrade abilities cannot be glided to or from.
 
@@ -12,7 +14,7 @@ Dice Cube locks the original lowest offensive die, or two lowest at its stack li
 
 Existing legacy timing and deck reshuffling remain in use. The January 2027 global rules changes have not been enabled.
 
-Validation: 87 Iceman and 463 previous Marvel/X-Men rules groups passed (550 total). All 221 simulated interface states, 35 artwork bundle lengths, cached script references and saved-state JSON checks passed. Differential checks against 0.40.0 passed 4,815 comparisons across the previous 34 heroes (2,246 transitions). All 15 deck-card crops and the separate Freezer crop were inspected; supplied token bytes are preserved exactly. Browser layout and installed-PWA update/offline play still require manual playtesting.
+Validation: 559 rules groups passed, including 87 Gambit and 87 Iceman groups. Nine new Gambit groups exercise real turn entry, both seat positions, later turns, Disruption on all 35 heroes, CP timing, an actual Bo Staff attack and pending saved choices. All 226 simulated interface states, 35 artwork bundle lengths, offline script references, saved-state JSON checks and JavaScript syntax checks passed. Differential checks against 0.41.0 passed 4,986 comparisons across the 34 heroes other than Gambit (2,323 transitions), whose unrelated behaviour stays the same. Gambit's intended changed turn flow is covered by the new integration tests. Real-browser layout and installed-PWA update/offline play still require manual playtesting.
 
 Run checks with Node.js:
 

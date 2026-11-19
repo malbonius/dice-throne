@@ -2133,7 +2133,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     if(state.holyPresenceChecked)delete state.holyPresenceChecked;
     if(state.bleedChecked)delete state.bleedChecked;
     if(state.quickDrawChecked)delete state.quickDrawChecked;
-    if(player.bagOfTricks||player.cosmicFlare||player.timeBomb||player.disarm||player.wound||druid.regenTotal(player)||nevermoreOwner(state)!==null||upkeepDamage(player,state.active)||player.fireMastery||heroId(state,state.active)===7||player.cursed||player.powderKeg||player.nanite||player.holyPresence||player.bleed||player.nyra?.downed||[artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id,paleLady.id,duelist.id,forgemaster.id,sunElf.id].includes(heroId(state,state.active))){
+    if(player.disruption||player.bagOfTricks||player.cosmicFlare||player.timeBomb||player.disarm||player.wound||druid.regenTotal(player)||nevermoreOwner(state)!==null||upkeepDamage(player,state.active)||player.fireMastery||heroId(state,state.active)===7||player.cursed||player.powderKeg||player.nanite||player.holyPresence||player.bleed||player.nyra?.downed||[artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id,paleLady.id,duelist.id,forgemaster.id,sunElf.id,gambit.id].includes(heroId(state,state.active))){
       state.pending=null;
       state.stage='upkeep';
       state.upkeepEvaded=false;state.upkeepPrevention=0;delete state.upkeepInvulnerability;delete state.upkeepDisruptionDamage;state.upkeepProtect=0;
