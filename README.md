@@ -1,24 +1,23 @@
-# Dice Throne Playtest 0.32.1 — Vibranium Suit artwork
+# Dice Throne Playtest 0.33.0 — Captain Marvel
 
-Black Widow joins the Marvel set, using the supplied Marvel shared card artwork. Includes her complete standard deck, optional Smoke Screen! promo, board, leaflets, dice and status artwork.
+Captain Marvel joins the Marvel set with her complete standard deck, optional Ace Pilot! promo, board, leaflets, dice and status artwork. She uses the supplied Marvel shared cards. This build also retains Black Widow and the supplied Vibranium Suit artwork from 0.32.1.
 
-This artwork patch replaces the previous Vibranium Suit image with the supplied standalone token. Gameplay is unchanged.
+To update from 0.32.1, extract the Captain Marvel update archive and merge its `dice-throne-offline` folder into your existing project, replacing matching files. Upload the changed `docs` files to GitHub Pages. The full archive contains the complete build instead.
 
-Apply this patch over 0.32.0: extract it and merge its `dice-throne-offline` folder into your existing project, replacing matching files. Upload the three changed `docs` files to GitHub Pages. It requires the preceding Black Widow update.
+Open the hosted game online after updating and allow the offline-ready indicator to appear before using it offline. The service-worker cache is now version 0.33.0. Existing saves retain the same storage key, schema and hero IDs.
 
-Open the hosted game online once after updating and allow the offline-ready indicator to appear before using it offline. The service-worker cache is now version 0.32.1. Existing saves use the same storage key, save schema and hero IDs.
+Captain Marvel includes Cosmic Ray age tracking, once-per-turn spending, choice of two bonus dice, overflow handling and same-turn exceptions; Radiance on Defensive Roll Attempt dice; compulsory Cosmic Flare damage accumulated with the other Upkeep damage; all board upgrades and their bonus abilities; and her action cards.
 
-Black Widow includes upgrades during Roll Phases; free upgrades, top-card ordering and searches through Covert Ops; individual Time Bomb countdowns and transfers; Agility and Elude!; Sabotage's additional Roll Attempt; upgrade-sensitive attacks; and Recon/Ultimate searches that shuffle before passive draws.
+Existing legacy timing and deck reshuffling remain in use. The January 2027 rules change has not been enabled.
 
-The existing legacy timing and deck-reshuffle rules remain in use. The January 2027 rules change has not been enabled.
-
-Validation: 34 Black Widow rules test groups; 40 interface rendering states; all artwork bundle lengths and script/cache references; saved-state JSON round-trip; 3,933 comparisons against the 0.31.2 engine across all 25 existing heroes (1,857 state transitions). Live browser and installed-PWA playtesting remains to be done: this environment could not launch Chromium.
+Validation: 34 Captain Marvel test groups and the existing 34 Black Widow groups passed; 49 interface rendering states passed; all artwork bundle lengths and cached script references checked. Differential comparison against 0.32.1 passed 4,003 checks across the existing 26 heroes, covering 1,881 state transitions. The 15 Captain Marvel card images were checked against their IDs, titles and costs. Live browser and installed-PWA playtesting is still required; this environment could not launch Chromium during the preceding development work.
 
 Run the included checks with Node.js:
 
 ```sh
+node tests/captain-marvel.test.cjs
 node tests/black-widow.test.cjs
 node tests/ui-and-offline.test.cjs
 ```
 
-See `SYSTEM.md` for the current development handover and Black Widow timing decisions.
+See `SYSTEM.md` for the current development handover and timing decisions.

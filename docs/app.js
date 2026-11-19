@@ -39,6 +39,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  cosmicRay:'Stack limit 2. After choosing an attack, spend once per turn to roll 2 dice and add one chosen value. Cannot boost pure damage. Newly gained tokens normally cannot be spent until a later turn. Cosmic Ray cannot be removed or transferred.',
+  cosmicFlare:'Stack limit 3. During your Upkeep, deal 1 damage per token to the opponent, then remove 1 token. Compulsory. Damage applies with the other Upkeep damage.',
+  radiance:'Stack limit 2. Spend one token to change one of your Defensive Roll Attempt dice to 6. You can spend more than one token on different dice. Cannot change subsidiary card or status rolls.',
   covertOps:'Stack limit 3. Once per turn in your Main Phase, spend to put an upgrade from hand into play for free, or inspect the top 3 cards. If none are upgrades, you may reveal them and search for an upgrade; otherwise reorder them. Cannot be removed or transferred.',
   agility:'Stack limit 2. Spend when receiving damage and roll: on 1–3, prevent half incoming damage, rounded up. Two successful uses prevent all damage. Cannot prevent Ultimate damage.',
   timeBomb:'Stack limit 2. Each bomb has its own countdown. During Upkeep, roll for each: a 6 removes it; otherwise advance it. Advancing 0:01 explodes for 4 isolated undefendable damage. Transfers preserve the countdown.',
@@ -143,6 +146,9 @@ function hero(seat) {
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
       return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
     }),
+    p.cosmicRay>0&&token(seat,'cosmicRay',`Cosmic Ray ×${p.cosmicRay} · ${(p.cosmicRays??[]).filter(ray=>captainMarvel.readyRay(ray,state.turn)).length} ready`),
+    p.cosmicFlare>0&&token(seat,'cosmicFlare',`Cosmic Flare ×${p.cosmicFlare}`),
+    p.radiance>0&&token(seat,'radiance',`Radiance ×${p.radiance}`),
     p.covertOps>0&&token(seat,'covertOps',`Covert Ops ×${p.covertOps}`),
     p.agility>0&&token(seat,'agility',`Agility ×${p.agility}`),
     ...(p.timeBombTimers??[]).map((b,i)=>token(seat,'timeBomb',`Time Bomb ${i+1} · 0:0${b.ticks}`,`timeBomb-${b.id}`)),
@@ -268,7 +274,19 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(state.widowReveal){
+  if(!state.response&&state.cosmicRayRoll&&!state.cardRoll&&!state.retry){
+    phase='Cosmic Ray';heading=`${actingName} chooses the damage bonus`;
+    detail=state.cosmicRayRoll.locked?'Ultimate: these dice cannot be altered. Choose one die.':'Choose one of the two dice to add to your attack. Dice may be altered before this choice is final.';
+    content=tray(state.cosmicRayRoll.dice,seat,false)+state.cosmicRayRoll.dice.map((value,index)=>button('chooseCosmicRay',`Choose die ${index+1} · +${dieValue(value,state.players[seat])} damage`,`data-index="${index}"`)).join('');
+  } else if(!state.response&&state.cosmicRayOverflow&&!state.cosmicRayRoll){
+    phase='Cosmic Ray';heading='Make room for Cosmic Ray';
+    detail='You are about to gain Cosmic Ray at the stack limit. You may spend an eligible existing token first. Only one Cosmic Ray may be spent per turn.';
+    content=button('collectCosmicRay','Collect Cosmic Ray up to the stack limit','class="primary"');
+  } else if(allowed.resolveCosmicFlare){
+    phase='Upkeep · Cosmic Flare';heading=`${actingName} activates Cosmic Flare`;
+    detail=`Deal ${state.players[state.active].cosmicFlare} damage to ${names[1-state.active]}, then remove one Cosmic Flare. Damage applies at the end of Upkeep.`;
+    content=button('resolveCosmicFlare','Resolve Cosmic Flare','class="primary"');
+  } else if(state.widowReveal){
     const r=state.widowReveal;
     phase='Baton Strike II';heading=`${names[r.target]} reveals their hand`;
     content=r.cards.map(id=>button('inspect-card',seatCard(state,r.target,id).name,`data-seat="${r.target}" data-index="${id}"`)).join('')+button('widowRevealDone','Continue','class="primary"');
@@ -747,10 +765,10 @@ function arena() {
       phase='Attack modifier'; heading='Choose a Ninjutsu effect';
       content=tray([state.effectDie],seat,false)+ninjutsuOutcomes(state).map(status=>button('chooseNinjutsu',ninjutsuLabel(status),`data-status="${status}"`)).join(''); break;
     case 'sideDamage':
-      phase=state.sideDamage.endTurn?'End of turn':state.sideDamage.source==='Barbed Vine'?'End of Roll Phase':state.sideDamage.source==='Powder Keg'?'Powder Keg damage':'Main Phase damage';
+      phase=state.sideDamage.cosmicFlare?'Upkeep damage':state.sideDamage.endTurn?'End of turn':state.sideDamage.source==='Barbed Vine'?'End of Roll Phase':state.sideDamage.source==='Powder Keg'?'Powder Keg damage':'Main Phase damage';
       heading=state.sideDamage.source;
-      detail=`${actingName} has ${sideIncoming(state.sideDamage)} incoming damage.`;
-      content=button('resolveSideDamage','Resolve damage','class="primary"'); break;
+      detail=`${actingName} has ${sideIncoming(state.sideDamage)} incoming damage.${state.sideDamage.cosmicFlare?' This applies with the other damage at the end of Upkeep.':''}`;
+      content=button('resolveSideDamage',state.sideDamage.cosmicFlare?'Confirm Cosmic Flare damage':'Resolve damage','class="primary"'); break;
     case 'paladinReward':
       phase='After damage'; heading='Offensive Stance';
       content=['crit','accuracy'].map(status=>button('choosePaladinReward',`Gain ${statusLabel(status)}`,`data-status="${status}"`)).join('');
@@ -852,6 +870,8 @@ function arena() {
     const player=state.players[state.active];
     if(sunElf.canDawn(state,state.active))content+=button('spendSunDawn',`Use Dawn · +${player.sunDial} damage`);
   }
+  if(captainMarvel.canRay(state,responding))content+=button('spendCosmicRay','Spend Cosmic Ray · roll 2 dice');
+  for(const die of captainMarvel.radianceDice(state,responding))content+=button('spendRadiance',`Spend Radiance · defence die ${die.index+1} (${die.value}) → 6`,`data-index="${die.index}"`);
   if(blackWidow.canCovert(state,responding))content+=button('spendCovertOps','Spend Covert Ops');
   if(state.players[responding].agility&&blackWidow.incoming(state,responding))content+=button('spendAgility','Spend Agility · roll to prevent half damage');
   if(state.stage==='defenceResponse'&&!state.response&&!state.cardRoll&&heroId(state,1-state.active)===blackWidow.id&&blackWidow.count(state.players[1-state.active])>=4&&!state.pending.widowDefenceRerolled){
