@@ -125,7 +125,7 @@ const loki=(()=>{
    if(type==='resolveTrickBag'){
     const t=s.lokiBag,p=s.players[t.seat],value=dieValue(t.dice[0],p);
     s.log.unshift(`${heroNames(s)[t.seat]} rolls ${value} for ${t.outwit?'Outwit!':'Bag of Tricks'}.`);
-    if(value===6){p.cp=bounded(p.cp+(t.outwit?4:2),15);finishBag(s);}
+    if(value===6){gainCP(p,(t.outwit?4:2));finishBag(s);}
     else if(!t.outwit&&value===1){p.cp=Math.max(0,p.cp-1);finishBag(s);}
     else if(!value)finishBag(s);
     else t.kind='choose';
@@ -134,7 +134,7 @@ const loki=(()=>{
     if(!['heal','cp','damage'].includes(action.status))return previous;
     const t=s.lokiBag,p=s.players[t.seat];
     s.log.unshift(`${heroNames(s)[t.owner]} chooses ${action.status==='cp'?`gain ${t.outwit?3:1} CP`:action.status==='heal'?`heal ${t.amount}`:`receive ${t.amount} damage`} for ${heroNames(s)[t.seat]}.`);
-    if(action.status==='cp')p.cp=bounded(p.cp+(t.outwit?3:1),15);
+    if(action.status==='cp')gainCP(p,(t.outwit?3:1));
     if(!t.outwit){if(action.status==='heal')s.upkeepBagHeal=(s.upkeepBagHeal??0)+t.amount;if(action.status==='damage')s.upkeepBagDamage=(s.upkeepBagDamage??0)+t.amount;finishBag(s);}
     else {if(action.status==='heal')p.hp=bounded(p.hp+t.amount,60);finishBag(s);if(action.status==='damage'){const parent=s.lokiBag;s.lokiBag=null;startSideDamage(s,t.seat,t.amount,'Outwit!',false,{keepPending:true,lokiBagResume:parent,pantherLocked:t.locked});}}
    }

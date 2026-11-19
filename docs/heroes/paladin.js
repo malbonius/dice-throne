@@ -32,12 +32,12 @@ const paladin = (() => {
       if(p.effect==='righteousCombat'){
         p.damage+=2*Sword+Helmet;
         p.heal+=2*Heart;
-        attacker.cp=bounded(attacker.cp+Prayer,15);
+        gainCP(attacker,Prayer);
       } else {
         if(Sword)grantStatus(attacker,'crit');
         if(Helmet)grantStatus(attacker,'protect');
         if(Heart)drawCards(attacker,p.effectCount===3?Heart:1,random);
-        attacker.cp=bounded(attacker.cp+2*(p.effectCount===3?Prayer:Number(Prayer>0)),15);
+        gainCP(attacker,2*(p.effectCount===3?Prayer:Number(Prayer>0)));
       }
   }
   const effects = {
@@ -55,20 +55,20 @@ const paladin = (() => {
       if(id===31){
        if(counts.Sword)drawCards(p,2,random,id);
        if(counts.Helmet||counts.Heart)p.hp=bounded(p.hp+(counts.Heart?4:3),60);
-       if(counts.Prayer)p.cp=bounded(p.cp+3,15);
+       if(counts.Prayer)gainCP(p,3);
       }
       if(id===32){
        if(counts.Sword)hit.absolutionReturn=(hit.absolutionReturn??0)+3;
        else {
         hit.prevention=(hit.prevention??0)+(counts.Helmet?3:counts.Heart?5:2);
-        if(counts.Prayer)p.cp=bounded(p.cp+2,15);
+        if(counts.Prayer)gainCP(p,2);
         updateDamage(hit);
        }
       }
     },
 
     resolvePromo({p, bounded}) {
-      p.cp=bounded(p.cp+4,15);
+      gainCP(p,4);
     },
 
     applyCard({id, s, choice, grantStatus, paladinBuffs}) {
@@ -91,7 +91,7 @@ const paladin = (() => {
       const level=defender.upgrades?.defence,p=state.pending;
       p.returnDamage=level?Sword:Number(Sword>0);
       p.prevention=(p.prevention??0)+Helmet+2*Heart;
-      defender.cp=bounded(defender.cp+Prayer,15);
+      gainCP(defender,Prayer);
       if(level===28&&Helmet>=2&&Prayer)grantStatus(defender,'protect');
       updateDamage(p);
     }

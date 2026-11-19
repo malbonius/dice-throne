@@ -61,7 +61,7 @@ const wolverine=(()=>{
   },
   applyCard({id:card,s,seat,p,choice}){
    if(card===24){s.wolverineIntimidate={seat,target:1-seat,resume:s.stage};s.stage='wolverineIntimidate';return true;}
-   if(card===25){if(choice.skip){p.cp=bounded(p.cp+2,15);s.stage='damage';}gain(s,seat,2,card);return true;}
+   if(card===25){if(choice.skip){gainCP(p,2);s.stage='damage';}gain(s,seat,2,card);return true;}
    if(card===26){s.wolverineFastball={seat,step:'gain',locked:!!attackLocked(s)};gain(s,seat,1,card);return true;}return false;
   },
   cardRollSize:card=>card===33?1:0,

@@ -36,13 +36,13 @@ const shadowThief = (() => {
 
     resolvePromo({p, bounded, grantStatus}) {
       grantStatus(p,'sneak');
-      p.cp=bounded(p.cp+2,15);
+      gainCP(p,2);
     },
 
     applyCard({id, p, opponent, bounded, grantStatus, discardRandom, drawCards, random}) {
       if(id===27){grantStatus(p,'sneak');return true;}
       if(id===28){grantStatus(opponent,'poison');return true;}
-      if(id===30){p.cp=bounded(p.cp+(p.shadows?3:2),15);return true;}
+      if(id===30){gainCP(p,(p.shadows?3:2));return true;}
       if(id===31){grantStatus(p,'shadows');return true;}
       if(id===32){discardRandom(opponent,random);drawCards(p,p.shadows?2:1,random,id);return true;}
     },

@@ -65,7 +65,7 @@ const doctorStrange=(()=>{
    if(t.kind==='gain')grantStatus(p,t.status,t.amount);
    if(t.kind==='bands')grantStatus(s.players[1-st.seat],'crimsonBands');
    if(t.kind==='loseCP')s.players[1-st.seat].cp=Math.max(0,s.players[1-st.seat].cp-1);
-   if(t.kind==='cp')p.cp=bounded(p.cp+t.amount,15);
+   if(t.kind==='cp')gainCP(p,t.amount);
    if(t.kind==='bonus')bonus(s,t.amount);
    if(t.kind==='undefendable'){
     const h=s.pending;
@@ -157,11 +157,11 @@ const doctorStrange=(()=>{
    }
    if(type==='choosePremonition'){
     const amount=action.amount;if(![0,1,3].includes(amount)||p.premonition<amount)return previous;
-    const task=s.premonitionTask,priorCP=p.cp,priorHand=p.hand.length;
-    p.premonition-=amount;if(!p.resurrected)p.cp=bounded(p.cp+1,15);
+    const task=s.premonitionTask,priorCP=p.cp,priorHand=p.hand.length,coalBlocked=p.coal===4&&p.cp<15&&!p.resurrected;
+    p.premonition-=amount;if(!p.resurrected)gainCP(p,1);
     drawCards(p,amount===3?3:amount===1?2:1,random);
     task.drawn=p.hand.slice(priorHand);task.kind=amount&&task.drawn.length?'return':'done';
-    s.income={cp:p.cp-priorCP,drawn:task.drawn.length,premonition:amount};
+    s.income={cp:p.cp-priorCP,drawn:task.drawn.length,premonition:amount,...(coalBlocked?{coal:true}:{})};
    }
    if(type==='returnPremonition'){
     const task=s.premonitionTask;

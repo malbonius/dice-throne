@@ -64,7 +64,7 @@ const blackPanther=(()=>{
     },
     applyCard({id:card,s,p,seat,grantStatus,bounded}){
       switch(card){
-        case 27:p.kineticEnergy-=2;p.cp=bounded(p.cp+3,15);break;
+        case 27:p.kineticEnergy-=2;gainCP(p,3);break;
         case 29:
           s.pending.undefendable=true;
           if(s.stage==='defence')s.stage='damage';

@@ -55,7 +55,7 @@ const iceman=(()=>{
     const n=Math.min(h.left,5-p.freezer.shards);p.freezer.shards+=n;h.left-=n;if(h.left){h.overflow=true;return;}
    }
    if(h.kind==='glide')grantStatus(p,'glide');
-   if(h.kind==='cp')p.cp=bounded(p.cp+h.amount,15);
+   if(h.kind==='cp')gainCP(p,h.amount);
    if(h.kind==='draw')drawCards(p,h.amount,random,t.exclude);
    t.queue.shift();
   }
@@ -106,7 +106,7 @@ const iceman=(()=>{
   cardRollSize:card=>[25,26,29,33].includes(card)?1:0,
   resolveCardRoll({id:card,s,seat,p,dice,counts,drawCards,random}){
    if(card===25){gain(s,seat,Math.ceil(dice[0]/2),card);return true;}
-   if(card===26){if(counts.Ice)grantStatus(s.players[1-seat],'diceCube',2);if(counts.Slide)p.cp=bounded(p.cp+3,15);if(counts.Frost)drawCards(p,2,random,card);return true;}
+   if(card===26){if(counts.Ice)grantStatus(s.players[1-seat],'diceCube',2);if(counts.Slide)gainCP(p,3);if(counts.Frost)drawCards(p,2,random,card);return true;}
    if(card===29){const n=counts.Ice?3:counts.Slide?4:counts.Frost?5:0;if(n)begin(s,seat,[{kind:'store',left:n}],s.stage,{exclude:card});return true;}
    if(card===33){if(counts.Frost)grantStatus(p,'glide');else drawCards(p,1,random,card);return true;}
    return false;

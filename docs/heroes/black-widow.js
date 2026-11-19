@@ -103,7 +103,7 @@ const blackWidow=(()=>{
     },
     cardRollSize(card){return card===31?2:card===33?1:0;},
     resolveCardRoll({id:card,s,seat,p,counts,drawCards,random}){
-      if(card===31){p.cp=bounded(p.cp+(counts.Espionage??0),15);for(let i=0;i<(counts.Widow??0);i++)half(s,'attack');}
+      if(card===31){gainCP(p,(counts.Espionage??0));for(let i=0;i<(counts.Widow??0);i++)half(s,'attack');}
       if(card===33){if(counts.Widow){grantStatus(p,'covertOps');inflict(s,1-seat,seat);}else drawCards(p,1,random,card);}
     },
     task,

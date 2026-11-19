@@ -63,7 +63,7 @@ const treant = (() => {
     applyCard({id, s, seat, p, c, choice, bounded, grantStatus, discardSpirits, spiritTypes, spiritTotal, queueGrowth}) {
       if(id===27){
        const discarded=discardSpirits(p,choice.spirits);
-       p.cp=bounded(p.cp+discarded,15);
+       gainCP(p,discarded);
        if(discarded>=2){
         s.harvestResume=s.stage;
         s.stage='harvestWells';

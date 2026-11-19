@@ -75,7 +75,7 @@ const forgemaster=(()=>{
     cardRollSize(card){return card===35?1:0;},
     resolveCardRoll({id:card,seat,p,s,counts,bounded,drawCards,random}){
       if(card!==35)return;
-      if(counts.Anvil){beginMine(s,seat);p.cp=bounded(p.cp+3,15);}
+      if(counts.Anvil){beginMine(s,seat);gainCP(p,3);}
       else drawCards(p,1,random,card);
     }
   };

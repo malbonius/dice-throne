@@ -31,7 +31,7 @@ const alchemist=(()=>{
  function start(s){const p=s.players[s.active];if(p.hero===id)s.alchemistStart={seat:s.active,occupied:tokens(s,s.active).map(t=>({...t}))};else delete s.alchemistStart;}
  function spendable(s,t){const start=s.alchemistStart;if(!start||start.seat!==s.active)return true;return !start.occupied.some(old=>old.slot===t.slot&&old.index===t.index&&old.id!==t.id);}
  function ability(s){const h=s.pending;if(!h.alchemist||h.alchemist.ready)return false;h.alchemist.ready=true;s.stage='alchemistAbility';return true;}
- function prepare(s,random){const h=s.pending,r=h.alchemist,p=s.players[s.active];if(!r.printed){r.printed=true;p.cp=bounded(p.cp+(r.cp??0),15);const queue=r.each?each():[{kind:'attach',left:r.attach??0}];queue.push({kind:'printed',heal:r.heal??0,draw:r.draw??0});begin(s,s.active,queue,'alchemistPotions',random);}else s.stage='alchemistPotions';}
+ function prepare(s,random){const h=s.pending,r=h.alchemist,p=s.players[s.active];if(!r.printed){r.printed=true;gainCP(p,(r.cp??0));const queue=r.each?each():[{kind:'attach',left:r.attach??0}];queue.push({kind:'printed',heal:r.heal??0,draw:r.draw??0});begin(s,s.active,queue,'alchemistPotions',random);}else s.stage='alchemistPotions';}
  function beginSpend(s,seat,defensive=false){const h=s.pending,r=h.alchemist;s.alchemistSpend={seat,defensive,slot:defensive?'defence':r.slot,extra:defensive?0:r.extra??0};s.stage=defensive?'alchemistDefence':'alchemistPotions';if(defensive&&hasResponse(s,s.active))s.response={seat:s.active,action:{type:'alchemistDefenceReady'}};else s.stage='alchemistPotions';}
  function spendChoices(s,seat){const r=s.alchemistSpend,h=s.pending;if(!r||r.seat!==seat||s.stage!=='alchemistPotions'||s.response||s.alchemistTask||s.cardRoll||s.retry||s.sideDamage)return [];
   return tokens(s,seat).filter(t=>r.defensive?t.slot==='defence':t.slot!=='defence'&&spendable(s,t)&&(t.slot===r.slot||r.extra>0)).flatMap(t=>{
@@ -55,7 +55,7 @@ const alchemist=(()=>{
    if(['status','target'].includes(h.kind)){if(h.kind==='status'&&!s.players.some((_,i)=>statusOptions(s,i).length)){t.queue.shift();continue;}return;}
    t.queue.shift();
    if(h.kind==='printed'){p.hp=bounded(p.hp+h.heal,60);drawCards(p,h.draw,random);}
-   if(h.kind==='mutation')p.cp=bounded(p.cp+2*t.removed.length,15);
+   if(h.kind==='mutation')gainCP(p,2*t.removed.length);
    if(h.kind==='chemistry')t.queue.unshift({kind:'attach',left:3,exclude:t.removed[0]?.key});
    if(h.kind==='explosion'&&t.removed.length){startSideDamage(s,1-t.seat,2*t.removed.length,'Potion Explosion!',false,{keepPending:true});return;}
   }

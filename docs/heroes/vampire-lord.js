@@ -59,9 +59,9 @@ const vampireLord = (() => {
         grantStatus(opponent,'bleed');
       } else if(card===29){
         if(choice.amount)p.bloodPower-=choice.amount;
-        p.cp=bounded(p.cp+2*choice.amount,15);
+        gainCP(p,2*choice.amount);
       } else if(card===30){
-        p.cp=bounded(p.cp+1,15);
+        gainCP(p,1);
         gainBloodPower(s,seat,1);
       } else if(card===32){
         s.pending.grossDamage+=1+(opponent.bleed??0);

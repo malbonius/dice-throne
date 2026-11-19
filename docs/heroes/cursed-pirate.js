@@ -52,7 +52,7 @@ const cursedPirate = (() => {
   function steal(p, opponent, bounded) {
     if (!opponent.cp) return;
     opponent.cp--;
-    p.cp = bounded(p.cp+1,15);
+    gainCP(p,1);
   }
 
   return {
@@ -119,7 +119,7 @@ const cursedPirate = (() => {
         case 'ransom':
           if (p.cp>=2 && selection===0) {
             p.cp-=2;
-            opponent.cp=bounded(opponent.cp+2,15);
+            gainCP(opponent,2);
           } else {
             const ctx=rollContext(state), before=ctx.dice.slice();
             ctx.dice[index]=roll();
@@ -206,7 +206,7 @@ const cursedPirate = (() => {
       }
     },
     resolveCardRoll({id:card,p,opponent,counts,hit,s,seat,bounded,updateDamage,grantPirateStatus,drawCards,discardRandom,random,startSideDamage}) {
-      if (card===23 && counts.Booty) { drawCards(p,2,random,card); p.cp=bounded(p.cp+2,15); }
+      if (card===23 && counts.Booty) { drawCards(p,2,random,card); gainCP(p,2); }
       if (card===24) {
         if (counts.Cutlass) choose(s,seat,'inspect');
         else if (counts.Booty && opponent.hand.length) choose(s,1-seat,'discard');
@@ -231,7 +231,7 @@ const cursedPirate = (() => {
     resolveDefence({state,seat,defender,counts,bounded,updateDamage}) {
       const hit = state.pending;
       hit.returnDamage = counts.Cutlass??0;
-      defender.cp = bounded(defender.cp+(counts.Booty??0),15);
+      gainCP(defender,(counts.Booty??0));
       hit.prevention = (hit.prevention??0)+2*(counts.Skull??0);
       updateDamage(hit);
       if ((counts.Cutlass??0)>=2 && counts.Skull) {

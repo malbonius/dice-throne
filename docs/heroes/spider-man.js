@@ -58,7 +58,7 @@ const spiderMan=(()=>{
   },
   applyCard({id:card,s,seat,p}){
    if(card===23){p.hp=bounded(p.hp+3,60);return true;}
-   if(card===24){p.cp=bounded(p.cp+2,15);return true;}
+   if(card===24){gainCP(p,2);return true;}
    if(card===25){inflict(s,1-seat,seat);return true;}
    if(card===26){grantStatus(p,'combo');return true;}
    if(card===27){s.pending.spiderSwing=true;return true;}

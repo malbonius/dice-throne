@@ -67,7 +67,7 @@ const thor=(()=>{
    if(step.kind==='move')move(s,t.seat,step.mode,t.exclude);
    if(step.kind==='electro')gain(s,t.seat,step.amount,t.exclude);
    if(step.kind==='guard')grantStatus(p,'guardBreak',step.amount);
-   if(step.kind==='cp')p.cp=bounded(p.cp+step.amount,15);
+   if(step.kind==='cp')gainCP(p,step.amount);
    if(step.kind==='bonus')s.pending.damage+=p.electrokinesis??0;
    if(step.kind==='collateral')s.pending.collateral=step.amount;
    if(step.kind==='isolated')startSideDamage(s,1-t.seat,step.amount,'Chain Lightning',false,{keepPending:true,thorAbilityDamage:true,thorOwner:t.seat});
@@ -119,7 +119,7 @@ const thor=(()=>{
    if(card===29){p.electrokinesis-=2;const kind=incoming(s,seat);if(kind==='side')s.sideDamage.invulnerabilityAll=true;else if(kind==='upkeep')s.upkeepInvulnerability=true;else if(kind==='return')s.pending.returnInvulnerable=true;else {s.pending.invulnerabilityAll=true;updateDamage(s.pending);}return true;}
    if(card===30){begin(s,seat,[{kind:'move',mode:'retrieve'},{kind:'cp',amount:1},{kind:'electro',amount:1}],s.stage,{exclude:card,locked:!!attackLocked(s)});return true;}
    if(card===31){drawCards(p,1,random,card);begin(s,seat,[{kind:'electro',amount:2}],s.stage,{exclude:card,locked:!!attackLocked(s)});return true;}
-   if(card===33){drawCards(p,1,random,card);p.cp=bounded(p.cp+1,15);grantStatus(p,'guardBreak');begin(s,seat,[{kind:'electro',amount:1}],s.stage,{exclude:card,locked:!!attackLocked(s)});return true;}
+   if(card===33){drawCards(p,1,random,card);gainCP(p,1);grantStatus(p,'guardBreak');begin(s,seat,[{kind:'electro',amount:1}],s.stage,{exclude:card,locked:!!attackLocked(s)});return true;}
    return false;
   },
   cardRollSize:card=>[32,34].includes(card)?1:0,

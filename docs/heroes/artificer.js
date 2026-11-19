@@ -110,7 +110,7 @@ const artificer = (() => {
     },
     resolveCardRoll({id:card,dice,p,opponent,counts,bounded,grantStatus,drawCards,random}) {
       if(card===30){
-        if(counts.Wrench)p.cp=bounded(p.cp+2,15);
+        if(counts.Wrench)gainCP(p,2);
         if(counts.Gear)grantStatus(p,'synth');
         if(counts.Bolt)grantStatus(opponent,'nanite');
       }

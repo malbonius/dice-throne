@@ -29,7 +29,7 @@ const psylocke=(()=>{
  function withAbility(s,fn){const old=runtime;runtime={state:s,ability:true,exempt:false,events:old?.events??[]};try{return fn();}finally{runtime=old;}}
  function withoutAbility(s,fn){const old=runtime;runtime={state:s,ability:false,exempt:true,events:old?.events??[]};try{return fn();}finally{runtime=old;}}
  function useAbility(s){if(runtime){runtime.state=s;runtime.ability=true;runtime.exempt=false;}}
- function task(s){return s.stage==='iceChoices'?s.iceTask:s.stage==='jeanChoices'?s.jeanTask:s.stage==='gambitSequence'?s.gambitTask:s.stage==='cyclopsSequence'?s.cyclopsTask:s.stage==='thorSequence'?s.thorTask:s.stage==='lokiChoices'?s.lokiTask:s.stage==='strangeSpells'?s.strangeTask:null;}
+ function task(s){return s.stage==='krampusChoices'?s.krampusTask:s.stage==='iceChoices'?s.iceTask:s.stage==='jeanChoices'?s.jeanTask:s.stage==='gambitSequence'?s.gambitTask:s.stage==='cyclopsSequence'?s.cyclopsTask:s.stage==='thorSequence'?s.thorTask:s.stage==='lokiChoices'?s.lokiTask:s.stage==='strangeSpells'?s.strangeTask:null;}
  function source(s){if(!runtime||runtime.exempt)return undefined;return runtime.ability?s.active:task(s)?.offensiveSource;}
  function suppressed(s){const seat=source(s);return seat!==undefined&&!!s.players[seat].paralyze&&!s.pending?.ultimate;}
  function tag(s,t){if(t&&suppressed(s))t.offensiveSource=source(s);}
@@ -55,7 +55,7 @@ const psylocke=(()=>{
  }
  function forcedChoices(s,seat){return seat!==s.active&&!s.pending?.forcedUsed?(s.pending?.paralyzePrevented??[]).map(key=>({key,label:`Gain 1 ${statusLabel(key)} prevented by Paralyze`})):[];}
  function damage(s,n){const h=s.pending;if(h.grossDamage===undefined){h.damage+=n;h.psyModifiers=(h.psyModifiers??0)+n;}else {h.grossDamage+=n;updateDamage(h);}}
- function ability(s){const h=s.pending;if(!h.psy||h.psyPrepared)return false;h.psyPrepared=true;const p=s.players[s.active],i=h.psy;if(i.devise&&!i.swapped)p.cp=bounded(p.cp+1,15);if(i.agility)grantStatus(p,'agility',i.agility);if(i.infiltration)grantStatus(p,'infiltration',i.infiltration);if(!i.agility&&!i.infiltration&&!i.devise)return false;s.stage='psyAbility';return true;}
+ function ability(s){const h=s.pending;if(!h.psy||h.psyPrepared)return false;h.psyPrepared=true;const p=s.players[s.active],i=h.psy;if(i.devise&&!i.swapped)gainCP(p,1);if(i.agility)grantStatus(p,'agility',i.agility);if(i.infiltration)grantStatus(p,'infiltration',i.infiltration);if(!i.agility&&!i.infiltration&&!i.devise)return false;s.stage='psyAbility';return true;}
  return {id,board,upgrades,cards,promoId:33,enter,leave,setState,withAbility,withoutAbility,useAbility,suppressed,tag,block,blockDirect,flush,pendingPositives,pauseEnd,initialRoll,start,swaps,canBoost,infiltrationChoices,forcedChoices,ability,
   initialize(s,seat){Object.assign(s.players[seat],{agility:0,infiltration:0,manifestDie:0,manifestReady:false,manifestSwapped:false});},
   defenceDiceCount:()=>3,
@@ -81,7 +81,7 @@ const psylocke=(()=>{
   cardRollSize:card=>({28:3,32:1,33:1})[card]??0,
   resolveCardRoll({id:card,s,seat,p,counts,drawCards,random}){
    if(card===28){damage(s,2*(counts.Blade??0));return true;}
-   if(card===32){if(counts.Psi)p.cp=bounded(p.cp+1,15);if(counts.Mind)drawCards(p,1,random,card);if(counts.Starlight)grantStatus(p,'agility');return true;}
+   if(card===32){if(counts.Psi)gainCP(p,1);if(counts.Mind)drawCards(p,1,random,card);if(counts.Starlight)grantStatus(p,'agility');return true;}
    if(card===33){if(counts.Starlight){grantStatus(p,'infiltration',2);grantStatus(p,'agility',2);}else drawCards(p,1,random,card);return true;}return false;
   },
   handle(previous,a,roll){

@@ -141,7 +141,7 @@ const cyclops=(()=>{
    const s=structuredClone(previous),p=s.players[seat];s.response=null;
    if(a.type==='spendSupport'){
     p.support-=option.kind==='draw'?3:1;
-    if(option.kind==='cp')s.players[option.target].cp=bounded(s.players[option.target].cp+1,15);
+    if(option.kind==='cp')gainCP(s.players[option.target],1);
     if(option.kind==='draw')drawCards(s.players[option.target],1,random,s.cyclopsTask?.exclude??s.cardRoll?.id);
     if(option.kind==='reroll'){const ctx=rollContext(s),before=ctx.dice.slice();ctx.dice[option.index]=roll();if(ctx.scalar)s.effectDie=ctx.dice[0];releaseChangedAnnouncement(s,ctx,before);}
     s.log.unshift(`${heroNames(s)[seat]} spends Support: ${option.label}.`);

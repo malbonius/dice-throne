@@ -35,7 +35,7 @@ const paleLady = (() => {
   ];
   const gain = (p,n=1)=>{if(psylocke.blockDirect(p,'moonShard',n))return;p.moonShard=Math.min(3,p.moonShard+n);};
   const heal = (p,n)=>{p.hp=Math.min(60,p.hp+n);};
-  const cp = (p,n)=>{p.cp=Math.min(15,p.cp+n);};
+  const cp = (p,n)=>{gainCP(p,n);};
   return {id,board,werewolfBoard,cards,upgrades:[],promoId:33,gain,heal,
     initialize(s,seat){Object.assign(s.players[seat],{moonShard:0,werewolf:false});},
     defenceDiceCount(){return 4;},

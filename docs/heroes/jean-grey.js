@@ -90,7 +90,7 @@ const jeanGrey=(()=>{
    if(card===27){grantStatus(s.players[1-seat],'phoenixBurn');return true;}
    if(card===28){p.flameTurn=s.turn;if(!p.darkPhoenix)gain(s,seat,'flameBlast',1,card);return true;}
    if(card===31){const ctx=rollContext(s),before=ctx.dice.slice();ctx.dice[choice.i]=choice.v;if(ctx.scalar)s.effectDie=choice.v;releaseChangedAnnouncement(s,ctx,before);return true;}
-   if(card===32){p.acuity-=2;p.cp=bounded(p.cp+3,15);return true;}return false;
+   if(card===32){p.acuity-=2;gainCP(p,3);return true;}return false;
   },
   cardRollSize:card=>({25:1,29:4,30:5,33:1})[card]??0,
   resolveCardRoll({id:card,s,seat,p,counts,dice,drawCards,random}){
@@ -109,7 +109,7 @@ const jeanGrey=(()=>{
    const s=structuredClone(previous),p=s.players[seat];s.response=null;
    if(a.type==='spendAcuity'){
     if(option.kind==='reroll'){p.acuity--;const ctx=rollContext(s),before=ctx.dice.slice();ctx.dice[option.index]=roll();if(ctx.scalar)s.effectDie=ctx.dice[option.index];releaseChangedAnnouncement(s,ctx,before);}
-    if(option.kind==='cp'){p.acuity-=2;p.cp=bounded(p.cp+1,15);}
+    if(option.kind==='cp'){p.acuity-=2;gainCP(p,1);}
     if(option.kind==='burn'){p.acuity-=4;grantStatus(s.players[1-seat],'phoenixBurn');}
    }
    if(a.type==='spendFlameBlast'){p.flameBlast-=option.cost;changeDamage(s,option.damage);}

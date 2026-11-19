@@ -76,7 +76,7 @@ const gambit=(()=>{
     if(!h.collect&&canSpend&&(h.overflow||(p.dissolution??0)+h.amount>2)){h.overflow=true;return;}
     grantStatus(p,'dissolution',h.amount);
    }
-   if(h.kind==='cp')p.cp=bounded(p.cp+h.amount,15);
+   if(h.kind==='cp')gainCP(p,h.amount);
    if(h.kind==='draw')drawCards(p,h.amount,random,t.exclude);
    if(h.kind==='extra')bump(s,t.seat,h.amount);
    if(h.kind==='damage')changeDamage(s,h.amount);

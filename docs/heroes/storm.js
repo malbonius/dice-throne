@@ -35,7 +35,7 @@ const storm=(()=>{
   if(r.charge==='thunder')grantStatus(p,'tornado',2);if(r.charge==='thunderUp')grantStatus(p,'tornado',3);
   if(r.charge==='gust')grantStatus(p,'tornado');if(r.charge==='gustLarge')grantStatus(p,'tornado',2);
   if(r.charge==='blizzard')h.undefendable=true;
-  if(r.charge==='maelstrom'){p.cp=bounded(p.cp+1,15);drawCards(p,1,random);}
+  if(r.charge==='maelstrom'){gainCP(p,1);drawCards(p,1,random);}
   if(r.charge==='tempest'){grantStatus(p,'tornado',2);h.damage+=2;}
  }
  function ability(s){const h=s.pending;if(!h.storm||h.stormReady)return false;h.stormReady=true;s.stage=h.storm.eligible?'stormCharge':'stormAbility';return true;}
@@ -70,7 +70,7 @@ const storm=(()=>{
   },
   cardRollSize:card=>({25:3,27:4,33:1})[card]??0,
   resolveCardRoll({id:card,s,seat,p,counts:c,hit,random}){
-   if(card===25){p.cp=bounded(p.cp+(c.Wind??0),15);if(c.Rain)drawCards(p,1,random,card);if(c.Cyclone)grantStatus(p,'windShear');return true;}
+   if(card===25){gainCP(p,(c.Wind??0));if(c.Rain)drawCards(p,1,random,card);if(c.Cyclone)grantStatus(p,'windShear');return true;}
    if(card===27){const n=c.Wind??0;if(hit.grossDamage===undefined){hit.damage+=n;hit.stormModifiers=(hit.stormModifiers??0)+n;}else{hit.grossDamage+=n;updateDamage(hit);}if(c.Cyclone)grantStatus(p,'tornado');return true;}
    if(card===33){if(c.Cyclone){grantStatus(p,'tornado');begin(s,seat,[{kind:'place',left:3}]);}else drawCards(p,1,random,card);return true;}return false;
   },
