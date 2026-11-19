@@ -1,10 +1,7 @@
-# Dice Throne Playtest 0.31.0
+# Dice Throne Playtest 0.31.1
 
-Black Panther joins **Marvel** with Kinetic Energy, Vibranium Suit, a 32-card deck and the optional **Bast’s Blessing!** promo.
+Extract this patch over 0.31.0 and upload the changed docs files.
 
-1. Extract this ZIP over your 0.30.0 build.
-2. Upload the changed files to GitHub Pages, keeping the existing `docs` folder.
-3. Open the app online until it shows **Playtest 0.31.0** and **Ready for offline play**.
-4. Select **Marvel → Black Panther** for either seat.
+Corrects the artwork assignments for Stop at Nothing!, Energize!, Warrior of Wakanda!, Strength of Will!, Yibambe! and Vibin’!. All 15 Black Panther unique card images have been checked against their names and effects.
 
-Kinetic Energy automatically boosts attacks and bursts at its stack limit. Energy Absorption grants one token after surviving damage, except damage from an Ultimate. Isolated burst damage resolves separately before the interrupted ability continues.
+Marvel and X-Men shared-card artwork routing is prepared. The replacement shared sheet is pending.
