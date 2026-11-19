@@ -1,7 +1,7 @@
-# Dice Throne Playtest 0.31.1
+# Dice Throne Playtest 0.31.2
 
-Extract this patch over 0.31.0 and upload the changed docs files.
+Extract this update over 0.31.0 or 0.31.1 and upload the changed docs files.
 
-Corrects the artwork assignments for Stop at Nothing!, Energize!, Warrior of Wakanda!, Strength of Will!, Yibambe! and Vibin’!. All 15 Black Panther unique card images have been checked against their names and effects.
+Black Panther now uses the supplied Marvel shared artwork. All 18 images match their card names and effects. The same artwork is selected automatically for future heroes in the Marvel and X-Men sets and is included in the offline cache.
 
-Marvel and X-Men shared-card artwork routing is prepared. The replacement shared sheet is pending.
+This patch also includes the six Black Panther action-card image corrections from 0.31.1.
