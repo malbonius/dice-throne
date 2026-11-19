@@ -29,7 +29,7 @@ const psylocke=(()=>{
  function withAbility(s,fn){const old=runtime;runtime={state:s,ability:true,exempt:false,events:old?.events??[]};try{return fn();}finally{runtime=old;}}
  function withoutAbility(s,fn){const old=runtime;runtime={state:s,ability:false,exempt:true,events:old?.events??[]};try{return fn();}finally{runtime=old;}}
  function useAbility(s){if(runtime){runtime.state=s;runtime.ability=true;runtime.exempt=false;}}
- function task(s){return s.stage==='krampusChoices'?s.krampusTask:s.stage==='iceChoices'?s.iceTask:s.stage==='jeanChoices'?s.jeanTask:s.stage==='gambitSequence'?s.gambitTask:s.stage==='cyclopsSequence'?s.cyclopsTask:s.stage==='thorSequence'?s.thorTask:s.stage==='lokiChoices'?s.lokiTask:s.stage==='strangeSpells'?s.strangeTask:null;}
+ function task(s){return s.stage==='mysticChoices'?s.mysticTask:s.stage==='krampusChoices'?s.krampusTask:s.stage==='iceChoices'?s.iceTask:s.stage==='jeanChoices'?s.jeanTask:s.stage==='gambitSequence'?s.gambitTask:s.stage==='cyclopsSequence'?s.cyclopsTask:s.stage==='thorSequence'?s.thorTask:s.stage==='lokiChoices'?s.lokiTask:s.stage==='strangeSpells'?s.strangeTask:null;}
  function source(s){if(!runtime||runtime.exempt)return undefined;return runtime.ability?s.active:task(s)?.offensiveSource;}
  function suppressed(s){const seat=source(s);return seat!==undefined&&!!s.players[seat].paralyze&&!s.pending?.ultimate;}
  function tag(s,t){if(t&&suppressed(s))t.offensiveSource=source(s);}
