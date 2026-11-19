@@ -39,6 +39,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  combo:'Unique, stack limit 1. After your attack and its Defensive Roll Phase conclude, spend once per turn to start another Offensive Roll Phase against the same opponent. No Income or Main Phase between them. Cannot be transferred; can be removed.',
+  invisibility:'Unique, stack limit 1. Spend when attacked with undefendable or pure damage to activate a Defensive Ability. Cannot defend twice against one attack, or against Ultimate or isolated damage. Spider-Sense may instead discard this token for an additional Roll Attempt. Cannot be transferred; can be removed.',
+  webbed:'Negative, stack limit 1. A newly inflicted token deals 2 isolated undefendable damage. The next normal attack becomes undefendable and consumes it. Ensnare inflicts its new token after damage, so it affects a later attack. Existing Webbed is not consumed by pure, undefendable or Ultimate attacks.',
   probabilityManipulation:'Stack limit 2. Spend as an instant action to change one of your dice showing 2, 4 or 6 by one. Cannot increase a 6 or wrap it to 1. A borrowed Reality Warp die belongs to its current roller.',
   realityWarp:'At the beginning of your next Offensive Roll Phase, remove this token and replace die 5 with a Scarlet Witch die. Its number still counts; its symbol does not count for another hero. Scarlet Witch mirror matches keep its symbols. Lasts for that Offensive Roll Phase.',
   conjure:'Once per turn in your own Main Phase, spend to inflict Reality Warp or gain one Positive Status Effect from a chosen player’s leaflet. The opponent may block the gain by discarding a card. Unique effects and companions are ineligible.',
@@ -156,6 +159,9 @@ function hero(seat) {
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
       return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
     }),
+    p.combo&&token(seat,'combo','Combo'),
+    p.invisibility&&token(seat,'invisibility','Invisibility'),
+    p.webbed&&token(seat,'webbed','Webbed'),
     p.probabilityManipulation>0&&token(seat,'probabilityManipulation',`Probability Manipulation ×${p.probabilityManipulation}`),
     p.realityWarp&&token(seat,'realityWarp','Reality Warp'),
     state.realityDie?.seat===seat&&token(seat,'realityWarp','Reality Warp · Scarlet Witch die 5','active'),
@@ -895,7 +901,7 @@ function arena() {
       phase='Defensive Roll'; heading=`${actingName} can defend`;
       detail=`${p.name} brings ${p.damage} incoming damage.`;
       {
-        const defences=heroId(state,seat)===3?['shadowDefence','counterStrike']:['defence'];
+        const defences=heroId(state,seat)===spiderMan.id?['counterpunch','spiderSense']:heroId(state,seat)===3?['shadowDefence','counterStrike']:['defence'];
         const options=allowed.defend?defences.map(kind=>button('defend',`Roll ${defenceName(state,seat,kind)}`,`class="primary" data-defence="${kind}"`)).join(''):'';
         content=effectRoll+`<div class="controls">${options}${button('skipDefence',allowed.defend?'Decline defence':'Continue with Shadows')}</div>`;
       } break;
@@ -919,6 +925,10 @@ function arena() {
       phase='Avoid damage'; heading=`${actingName} checks ${statusLabel(state.evasionToken??'evasive')}`;
       detail=state.evasionToken==='smoke'?'A 1–3 avoids the incoming damage.':'A 1 or 2 avoids the incoming damage.';
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
+    case 'spiderAfter':
+      phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'spiderCombo':
+      phase='Combo';heading=`${activeName} may attack again`;detail='Spend Combo for another Offensive Roll Phase against the same opponent. No Income or Main Phase occurs between these rolls. Combo can only be spent once per turn.';content=(allowed.spendCombo?button('spendCombo','Spend Combo · start another Offensive Roll Phase','class="primary"'):'')+button('skipCombo','Continue to Main Phase 2');break;
     case 'scarletAbility':
       phase='Scarlet Witch';heading=p.name;content=button('finishScarletAbility','Continue ability','class="primary"');break;
     case 'lokiAbility':
@@ -959,6 +969,8 @@ function arena() {
     const player=state.players[state.active];
     if(sunElf.canDawn(state,state.active))content+=button('spendSunDawn',`Use Dawn · +${player.sunDial} damage`);
   }
+  if(spiderMan.canInvisibility(state,responding))content+=button('spendInvisibility','Spend Invisibility · activate a Defensive Ability');
+  if(spiderMan.canSenseReroll(state,responding))content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="spider-sense-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+button('spiderSenseReroll','Discard Invisibility · Spider-Sense additional Roll Attempt');
   if(loki.canIllusion(state,responding))content+=button('spendIllusion',`${names[responding]} · spend Illusion`);
   if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>button('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`)).join('')}</div></div>`;
   if(doctorStrange.canDeja(state,state.active))content+=button('spendDejaVu',`${activeName} · spend Déjà Vu and restart the roll`);
@@ -1110,6 +1122,7 @@ function handleAction(event) {
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
+  if(type==='spiderSenseReroll')action.indices=[...match.querySelectorAll('input[name="spider-sense-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='widowDefenceReroll')action.indices=[...match.querySelectorAll('input[name="widow-defence-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='abilityReroll')action.indices=[...match.querySelectorAll('input[name="ability-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='extraDefence')action.indices=[...match.querySelectorAll('input[name="defence-reroll"]:checked')].map(input=>Number(input.value));
