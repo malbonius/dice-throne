@@ -17,7 +17,7 @@ const doctorStrange=(()=>{
  function busy(s){return !!(s.strangeTask||s.premonitionTask||s.cardRoll||s.retry||s.widowTask||s.widowReveal||s.widowAgility||s.widowBombRoll||s.cosmicRayRoll||s.cosmicRayOverflow||s.growth||s.mainChoice||s.mainAction||s.sideDamage);}
  function bandsBlocks(s,seat){return !!(s.players[seat].crimsonBands&&seat===s.active&&s.bandsTurn===s.turn&&!['main','main1','upkeep','incomePremonition','discard','finished'].includes(s.stage)&&!(s.pending?.ultimate&&attackLocked(s)));}
  function canPrepare(s,seat){return !!(s.cards&&heroId(s,seat)===id&&seat===s.active&&isMain(s)&&!busy(s)&&!s.response&&s.players[seat].strangePrepareTurn!==s.turn&&s.players[seat].hand.some(isSpell));}
- function canDeja(s,seat){return !!(s.cards&&seat===s.active&&s.players[seat].dejaVu&&['offence','announce'].includes(s.stage)&&!busy(s));}
+ function canDeja(s,seat){return !!(s.cards&&seat===s.active&&s.players[seat].dejaVu&&['offence','announce','rogueInfluence'].includes(s.stage)&&!busy(s));}
  function begin(s,seat,queue,resume=s.stage){s.strangeTask={seat,queue,resume,active:[]};s.stage='strangeSpells';}
  function options(s){
   const st=s.strangeTask;if(!st)return [];

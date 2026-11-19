@@ -42,7 +42,7 @@ const psylocke=(()=>{
  function blockDirect(p,key,amount=1){return !!(runtime&&block(runtime.state,p,key,amount));}
  function flush(s){if(!runtime||!s.pending||!runtime.events.length)return;const keys=s.pending.paralyzePrevented??=[];for(const {key} of runtime.events)if(!keys.includes(key))keys.push(key);runtime.events.length=0;}
  function pendingPositives(){return runtime?.events.length>0;}
- function pauseEnd(s){if(!s.pending||s.pending.paralyzeOfferDone||!pendingPositives())return false;s.pending.paralyzeOfferDone=true;s.stage='paralyzeAfter';return true;}
+ function pauseEnd(s){if(!s.pending||s.pending.paralyzeOfferDone||s.pending.forcedUsed||!(pendingPositives()||s.pending.paralyzePrevented?.length))return false;s.pending.paralyzeOfferDone=true;s.stage='paralyzeAfter';return true;}
  function initialRoll(s,roll){const p=s.players[s.active];if(p.hero!==id)return;p.manifestDie=roll();p.manifestReady=true;}
  function start(s){const p=s.players[s.active];if(p.hero===id){p.manifestReady=false;p.manifestSwapped=false;}}
  function available(s,seat){const p=s.players[seat];return !!(s.cards&&p.hero===id&&seat===s.active&&p.manifestReady&&p.manifestDie>0&&p.manifestUsedTurn!==s.turn&&!s.cardRoll&&!s.retry&&!s.sideDamage&&!s.iceFreezeChoice&&!s.psyReveal);}
