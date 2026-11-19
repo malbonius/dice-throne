@@ -1,24 +1,29 @@
-# Dice Throne Playtest 0.43.0 — Psylocke
+# Dice Throne Playtest 0.44.0 — Rogue
 
-Psylocke joins X-Men with her board abilities, six upgrades, eight standard action cards, optional Depths of the Mind! promo, leaflets, dice, tokens and separate Manifest Die. She uses the supplied Marvel/X-Men shared card artwork. Her normal deck has 32 cards, or 33 with the promo.
+Rogue joins X-Men with her board abilities, six upgrades, eight standard action cards, optional Wind Up! promo, leaflets, dice and four supplied token images. She uses the Marvel/X-Men shared card artwork. Her normal deck has 32 cards, or 33 with the promo.
 
-To update from 0.42.0, extract this Psylocke update and merge its `dice-throne-offline` folder into your existing project, replacing matching files and keeping the other files. Upload the updated `docs` contents to your existing hosting location. This archive includes changed and new files only. Existing hero IDs, card IDs, schema-2 saves and local storage remain compatible.
+To update from 0.43.0, extract this Rogue update and merge its `dice-throne-offline` folder into your existing project, replacing matching files and keeping the other files. Upload the updated `docs` contents to your existing hosting location. This archive includes changed and new files only. Existing hero IDs, card IDs, schema-2 saves and local storage remain compatible.
 
-Manifest rolls separately with the first Offensive Roll Attempt. Once per global turn, either swap its value with one offensive die before activation, or use half its value, rounded up, as an Attack Modifier. The separate die is protected from ordinary dice manipulation; Construct! can reroll it. After a swap, the inserted die behaves as an ordinary offensive die. Dice Cube follows the supplied Manifest clarification, including recalculating the frozen dice from first-roll values.
+Ionic Energy (1) and (2) share one stack limit of four, increased permanently by Ionic Intensity! Each token adds its indicated Attack damage. Spend up to two tokens per global turn, or pay 1 CP to allow four; Sweet Tea! also permits four. Incoming mixed batches let you choose which values fit. A full stack cannot replace an old token with a stronger new one. Eligible existing tokens can be spent before collecting an overflowing batch.
 
-Infiltration can force a reroll of a real Defensive Roll Attempt die belonging to either player. It cannot affect subsidiary rolls such as Agility. Psylocke's Agility uses the existing half-prevention rules and has its own supplied artwork.
+Ionic Drive grants one token after successful non-Ultimate Attack damage: value 1 for damage 1–6, or value 2 for damage 7 or more. It uses damage after prevention, including Iceman's combined Attack and collateral damage, and does not trigger from return damage, isolated damage, health stealing or fully prevented damage.
 
-Paralyze blocks status gains and inflictions associated with the holder's ordinary Offensive Ability, including delayed and after-damage gains. Damage, healing, CP, drawing, Companions and resources still work. Ultimates, passives, cards, Attack Modifiers and token actions remain available. Gambit's Molecular Acceleration and Iceman's Freezer retain their documented exceptions. Paralyze expires when an actual Offensive Roll Phase concludes; skipping that phase with Knockdown preserves it.
+Influence rolls once per token at the start of an actual Offensive Roll Phase. Each 1–3 removes one Roll Attempt, then all Influence is removed. Entangle can reduce the remaining allowance further. Losing all attempts leaves no ordinary dice to alter, but One More Time! can restore an attempt and Déjà Vu can start a fresh Roll Phase without the old penalty. A Knockdown skip preserves Influence.
 
-Forced! offers a choice of one Positive Status type whose gain Paralyze prevented. Strong Will! spends Agility for guaranteed half prevention without rolling. Mind Altering! heals for the Manifest damage bonus. Deft Maneuver! reveals the opposing hand in a dismissible view.
+Skyward uses two separate dice, one per player. Its holder can pay 1 CP repeatedly to reroll their own die. Resolve once after the final roll: greater returns 3 damage, equal prevents 4, lower does nothing. Cloudy! doubles that resolved effect. Normal dice manipulation and Sugah! can affect these dice; Infiltration and Radiance cannot.
 
-Existing Upkeep fixes remain in place. Legacy timing, Income rules and deck reshuffling remain in use. January 2027 global rules changes have not been enabled.
+Leach steals Health without dealing Attack damage and permits repeated 1 CP increases to its effect die. Southern Belle! resolves each listed On-symbol result once; Ionic Intensity! counts every matching die. Back Off! uses the opponent's dice and retains their Influence tokens.
 
-Validation: 97 Psylocke and 642 existing Marvel/X-Men rules groups passed (739 total), plus 280 simulated interface states, 37 artwork bundle lengths, offline script references, saved-state JSON and syntax checks. Differential checks against 0.42.0 passed 5,156 comparisons across all 36 previous heroes (2,415 transitions). All fifteen card crops and dice faces were inspected; all four supplied token/component assets are preserved byte-for-byte. Real-browser layout, touch controls and installed-PWA update/offline launch still require manual playtesting.
+Paralyze blocks Rogue's ordinary board status gains and inflictions while retaining damage, CP and health stealing. Ionic Drive, cards, token actions and Ultimates remain valid. The Psylocke response window now also preserves Forced! choices when a blocked gain happened during an earlier step of an ability.
+
+Existing Upkeep fixes, legacy timing, Income rules and deck reshuffling remain in use. January 2027 global rules changes have not been enabled.
+
+Validation: 72 Rogue and 739 existing rules test groups passed (811 total), plus 298 simulated interface states, 38 artwork bundle lengths, offline script references, saved-state JSON and 82 JavaScript syntax checks. Differential checks against 0.43.0 passed 5,338 comparisons across all 37 previous heroes (2,500 transitions). All fifteen card crops and dice faces were inspected; all four supplied token assets are preserved byte-for-byte. Real-browser layout, touch controls and installed-PWA update/offline launch still require manual playtesting.
 
 Run checks with Node.js:
 
 ```sh
+node tests/rogue.test.cjs
 node tests/psylocke.test.cjs
 node tests/jean-grey.test.cjs
 node tests/gambit.test.cjs
