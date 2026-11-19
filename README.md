@@ -1,40 +1,21 @@
-# Dice Throne Playtest 0.46.0 — Wolverine
+# Dice Throne Playtest 0.47.0 — Alchemist
 
-Wolverine joins X-Men with his board abilities, five upgrades, three standard action cards, six Recovery/Frenzy discard cards, optional Feral! promo, leaflets, dice and two supplied token images. He uses the Marvel/X-Men shared card artwork. His normal deck has 32 cards, or 33 with the promo.
+Alchemist joins the Singles group with her board abilities, five upgrades, ten standard action cards, optional Refill! promo, leaflets, dice and five supplied token images. Singles use the normal shared card artwork. Her standard deck has 33 cards, or 34 with the promo.
 
-To update from 0.45.0, extract this Wolverine update and merge its `dice-throne-offline` folder into your existing project, replacing matching files and keeping the other files. Upload the updated `docs` contents to your existing hosting location. This archive includes changed and new files only. Existing hero IDs, card IDs, schema-2 saves and local storage remain compatible.
+To update from 0.46.0, extract this update and merge its `dice-throne-offline` folder into your existing project, replacing matching files and keeping the other files. Upload the updated `docs` contents to your existing hosting location. This archive includes changed and new files only. Existing hero/card IDs, schema-2 saves and local storage remain compatible.
 
-Rage can be spent immediately: one token and a selected hand card add 3 Attack damage, or three tokens draw one card. Incoming gains pause when necessary so existing Rage can be spent before collecting the whole batch. Excess is lost. Any holder can use Rage, and ordinary card-play restrictions such as Crimson Bands do not prevent spending it.
+Potions attach to individual ability slots. Their limits apply across the whole board: six Punchify, two Bolsterate, three Cleansitude and one Toxification. Attachments resolve before spending. Punchify adds Attack damage; Bolsterate prevents damage; Cleansitude heals or removes an own status; Toxification inflicts Poison on a chosen player. Potions are Unique, removable and non-transferable. Paralyze does not stop attachments or independent spends.
 
-Wolverine's Recovery/Frenzy cards cannot be played normally. They count towards the hand limit and can be sold for 1 CP. Discarding one through Rage triggers its effect without gaining CP: Recovery may return to hand; Astonishing Recovery heals 2 if no Mask is rolled; Frenzy regains Rage; Astonishing Frenzy makes that token add 4 damage and regains Rage. Other discards and sales do not trigger these effects.
+The Lab attaches a Potion during each own Upkeep, including the first player's first turn. Its upgrade rolls to determine the number. At any time an own die can legally be altered, The Lab may remove an attached Potion to reroll it. Removing a Potion does not activate its spend effect. Frozen dice and accepted Ultimate dice remain protected.
 
-Alpha is Unique, removable and non-transferable. When inflicted by an Attack, both players immediately roll a separate die. If the attacker's result is lower, remove Alpha; ties retain it. The holder skips their next Income and removes Alpha, without an additional delayed skip when other Income restrictions coincide.
+Offensive Potions are spent after the ability's printed effects and before targeting. Chain Reaction can additionally spend one Potion from another Offensive Ability; Chemical Trip! can spend up to three Offensive Potions. Passivation rolls five, attaches per Crucible, then permits spending defensive Potions. Its attacker receives the documented priority opportunity before those spends. Newly attached Potions can be used in the proper window, subject to the leaflet's rule about slots occupied at the start of the Offensive Roll Phase.
 
-Healing, Rage gains and Alpha choices resolve before the affected Attack continues. Regenerate offers optional removal of a selected own status. Severe Threat II offers its Mask choice, and Barrage's large straight offers Rage or Alpha. Fastball Special! resolves its Rage gain, separate preventable self-damage, and Attack bonus in order. The Ultimate targets the sole opponent in this two-seat engine.
+The interface shows the attached Potion inventory by ability and provides choices for placement, spending, removal and targets. All new state is serialisable. The update also preserves the existing Upkeep fixes and makes selected Time Bomb removal honour the chosen countdown.
 
-Paralyze blocks ordinary Offensive Ability Rage and Alpha, including subsidiary-roll gains, while retaining healing, drawing and damage. Cards, independent Rage spending and Ultimate effects remain available. Existing Upkeep fixes, legacy timing, Income rules and deck reshuffling remain in use. January 2027 global rules changes have not been enabled.
+Validation: 83 Alchemist and 966 existing rules test groups (1,049 total), 357 simulated interface states, 41 artwork bundle lengths, offline script references, saved-state JSON and 88 JavaScript syntax checks passed. Differential checks against 0.46.0 passed 5,590 comparisons across all 40 previous heroes (2,613 transitions). All sixteen card crops and six dice faces were inspected; 31 new WebP payloads validate and all five supplied token images are preserved byte-for-byte. Real-browser layout, touch controls and installed-PWA update/offline launch remain manual playtesting checks.
 
-Validation: 71 Wolverine and 895 existing rules test groups passed (966 total), plus 334 simulated interface states, 40 artwork bundle lengths, offline script references, saved-state JSON and 86 JavaScript syntax checks. Differential checks against 0.45.0 passed 5,371 comparisons across all 39 previous heroes (2,504 transitions). All fifteen card crops and dice faces were inspected; 27 new WebP payloads validate and both supplied token images are preserved byte-for-byte. Real-browser layout, touch controls and installed-PWA update/offline launch still require manual playtesting.
+Legacy timing, Income and reshuffling remain in use. January 2027 global rules changes remain disabled. Four Singles characters remain before the agreed dedicated architecture pass.
 
-Run checks with Node.js:
+Run the new rules checks with `node tests/alchemist.test.cjs`, the interface/offline checks with `node tests/ui-and-offline.test.cjs`, and the other hero test files under `tests` for the full regression suite.
 
-```sh
-node tests/wolverine.test.cjs
-node tests/storm.test.cjs
-node tests/rogue.test.cjs
-node tests/psylocke.test.cjs
-node tests/jean-grey.test.cjs
-node tests/gambit.test.cjs
-node tests/iceman.test.cjs
-node tests/cyclops.test.cjs
-node tests/thor.test.cjs
-node tests/spider-man.test.cjs
-node tests/scarlet-witch.test.cjs
-node tests/loki.test.cjs
-node tests/doctor-strange.test.cjs
-node tests/black-widow.test.cjs
-node tests/captain-marvel.test.cjs
-node tests/ui-and-offline.test.cjs
-```
-
-See `SYSTEM.md` for the development handover and timing decisions.
+See `SYSTEM.md` for the current development handover and timing decisions.
