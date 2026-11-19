@@ -40,6 +40,8 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  rage:'Positive, stack limit 3. Spend one and discard a card to add 3 Attack damage, or spend three to draw one. Wolverine’s Recovery/Frenzy cards trigger only when discarded by Rage, without being played or gaining CP. Existing Rage can be spent before collecting an overflowing gain.',
+  alpha:'Unique, stack limit 1; removable but never transferable. When inflicted by an Attack, attacker and receiver immediately roll one die each. Remove Alpha if the attacker’s result is lower; ties retain it. At the holder’s next Income, skip that phase and remove Alpha.',
   tornado:'Positive, stack limit 4. Spend before the first Offensive Roll Attempt to borrow one opposing die per token, up to five. The holder controls these dice; foreign symbols cannot activate abilities, but numbers can form straights and matching-number bonuses. Same-hero dice retain usable symbols.',
   windShear:'Positive, stack limit 1. When Attacked, spend to prevent 2 damage, then deal 2 isolated undefendable damage to the opponent. Works even if the incoming damage is avoided or blocked by Parlay. Raging Winds! doubles the next spend this turn.',
   lightning:'Companion. Place on a chargeable ability. On activating a previously Charged ability, optionally remove it for that ability’s Charged Effect, once per ability per turn. Placing a second Lightning immediately removes both and deals 2 isolated undefendable damage.',
@@ -238,6 +240,8 @@ function hero(seat) {
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
     heroId(state,seat)===jeanGrey.id&&`<span class="token">${p.darkPhoenix?'Dark Phoenix':'Jean Grey'} active</span>`,
+    p.rage&&token(seat,'rage',`Rage ${p.rage}/3`),
+    p.alpha&&token(seat,'alpha','Alpha'),
     p.tornado&&token(seat,'tornado',`Tornado ${p.tornado}/4`),
     p.windShear&&token(seat,'windShear','Wind Shear'),
     p.lightningCharges&&`<details class="token-actions"><summary>Lightning · ${Object.values(p.lightningCharges).filter(Boolean).length} charged abilities</summary>${storm.slots.map(key=>`<span class="token">${token(seat,'lightning',key+': '+(p.lightningCharges[key]?'Charged':'empty'))}</span>`).join('')}</details>`,
@@ -335,6 +339,7 @@ function incomeSummary(income) {
   if(income.skipped==='first-turn')message='Skipped on the starting hero’s first turn.';
   else if(income.skipped==='dark-phoenix')message='Skipped while Dark Phoenix is Active.';
   else if(income.skipped==='disarm')message='Skipped due to Disarm.';
+  else if(income.skipped==='alpha')message='Skipped due to Alpha.';
   else if(income.skipped==='concussion')message='Skipped due to Concussion.';
   else {
     const cp=income.cp ? '+1 CP' : 'CP already at the cap';
@@ -362,6 +367,14 @@ function arena() {
   if(state.iceFreezeChoice){
     const f=state.iceFreezeChoice;phase='Dice Cube';heading=`${names[f.seat]} chooses a tied lowest die`;detail='The chosen original die will remain frozen for this Roll Phase, unless its Dice Cube is removed.';
     content=tray(state.dice,f.seat,false)+f.candidates.map(i=>button('iceChooseFrozen',`Freeze die ${i+1} (${state.dice[i]})`,`data-index="${i}"`)).join('');
+  } else if(!state.response&&state.wolverineRageRoll&&!state.cardRoll&&!state.retry){
+    const t=state.wolverineRageRoll;phase='Rage discard · Recovery';heading=seatCard(state,t.seat,t.id).name;detail='Any Mask returns this discarded card to hand. Astonishing Recovery heals 2 instead if no Mask is rolled.';content=tray(t.dice,t.seat,false)+button('resolveRageRecovery','Resolve Recovery roll','class="primary"');
+  } else if(!state.response&&state.alphaRoll&&!state.cardRoll&&!state.retry){
+    const t=state.alphaRoll;phase='Alpha';heading=`${names[t.seat]} challenges ${names[t.target]}`;detail='If the attacker’s result is lower, remove Alpha. A tie retains it. Each die uses its owner’s Hex and manipulation rules.';content=rollDisplay(rollContext(state))+button('resolveAlpha','Resolve Alpha','class="primary"');
+  } else if(state.wolverineIntimidate){
+    const t=state.wolverineIntimidate;phase='Intimidate!';heading=`${names[t.target]} chooses`;detail='Discard one card, or receive 4 isolated damage. This discard does not trigger Recovery or Frenzy.';content=state.players[t.target].hand.map(id=>button('wolverineIntimidate',`Discard ${seatCard(state,t.target,id).name}`,`data-status="discard" data-index="${id}"`)).join('')+button('wolverineIntimidate','Receive 4 isolated damage','data-status="damage"');
+  } else if(!state.response&&state.wolverineGain){
+    const t=state.wolverineGain;phase='Gain Rage';heading=`${names[t.seat]} gains ${t.amount} Rage`;detail='Spend existing Rage first if desired, then collect the whole batch. Tokens beyond the stack limit are lost.';content=button('collectRage','Collect incoming Rage','class="primary"');
   } else if(!state.response&&state.stormTask&&state.stage==='stormChoices'){
     const t=state.stormTask,h=t.queue[0];phase='Lightning';heading=`${names[t.seat]} places Lightning`;detail=`${h.left} remaining. A second Lightning on an ability removes both and immediately deals 2 isolated damage.`;content=storm.places(state).map(key=>button('stormPlace',`${key}${state.players[t.seat].lightningCharges?.[key]?' · overload for 2 damage':' · Charge'}`,`data-status="${key}"`)).join('')+(allowed.stormPlaceDone?button('stormPlaceDone','Finish placing Lightning','class="primary"'):'');
   } else if(!state.response&&state.rogueGain){
@@ -1090,6 +1103,16 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'wolverineAbility':
+      phase='Wolverine';heading=p.name;detail='Resolve healing, card draws and Rage before the Attack continues.';content=button('finishWolverineAbility','Continue ability','class="primary"');break;
+    case 'wolverineResolved':
+      phase='Wolverine';heading=p.name;content=button('finishWolverineResolved','Continue after the effect roll','class="primary"');break;
+    case 'wolverineBarrage':
+      phase='Barrage';heading='Choose the benefit';content=button('wolverineBarrage','Gain Rage','data-status="rage"')+button('wolverineBarrage','Inflict Alpha','data-status="alpha"');break;
+    case 'wolverineSevere':
+      phase='Severe Threat II';heading='Mask result';content=button('wolverineSevere','Gain Rage','data-status="rage"')+button('wolverineSevere','Add 3 damage','data-status="damage"');break;
+    case 'wolverineRemove':
+      phase='Regenerate';heading='Optional status removal';content=wolverine.removalChoices(state).map((c,i)=>button('wolverineRemove',`Remove ${c.label}`,`data-choice="${i}"`)).join('')+button('wolverineRemove','Keep current status effects','data-choice="-1"');break;
     case 'stormCharge':
       phase='Charged Effect';heading=p.name;detail='The ability was Charged before activation. Remove its Lightning for the Charged Effect, or keep it.';content=button('stormUseCharge','Remove Lightning · use Charged Effect','class="primary"')+button('stormKeepCharge','Keep the Lightning');break;
     case 'stormAbility':
@@ -1157,7 +1180,10 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
-  if(!state.psyReveal&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!state.psyReveal){
+  for(const [i,c] of wolverine.rageChoices(state,responding).entries())content+=button('spendRage',c.label,`data-choice="${i}"`);
+  }
+  if(!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
   if(storm.canTornado(state,responding))content+=button('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
   if(storm.canWind(state,responding))content+=button('spendWindShear',state.players[responding].ragingWindsTurn===state.turn?'Spend Wind Shear · prevent 4 and deal 4 isolated damage':'Spend Wind Shear · prevent 2 and deal 2 isolated damage');
   if(storm.oppReroll(state,responding))content+=`<div class="controls">${button('stormOppReroll','Reroll effect die 1','data-status="first"')}${button('stormOppReroll','Reroll effect die 2','data-status="second"')}${button('stormOppReroll','Reroll both effect dice','data-status="both"')}</div>`;
@@ -1166,7 +1192,7 @@ function arena() {
   if(rogue.canSkyward(state,responding))content+=button('spendSkyward','Spend Skyward · both players roll');
   if(rogue.boostLeach(state,responding))content+=button('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
   }
-  if(!state.psyReveal&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
   for(const c of psylocke.swaps(state,responding))content+=button('manifestSwap',c.label,`data-index="${c.index}"`);
   if(psylocke.canBoost(state,responding))content+=button('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
   for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=button('spendInfiltration',c.label,`data-choice="${i}"`);
