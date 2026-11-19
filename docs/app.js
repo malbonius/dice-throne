@@ -36,10 +36,15 @@ function board(seat) {
   const upgrades=Object.values(state.players[seat].upgrades??{});
   return `<figure class="board-panel">${button('inspect-board',
     `<img src="${boardImage(state,seat)}" alt="">`,`class="board-open" data-index="${seat}" aria-label="Zoom ${names[seat]} board"`)}
+    ${heroId(state,seat)===alchemist.id?`<details class="board-upgrades"><summary>Attached Potions (${alchemist.tokens(state,seat).length})</summary>${Object.entries(alchemist.slots(state.players[seat])).map(([slot,cap])=>`<p><strong>${slot==='defence'?'Passivation':slot}</strong> · ${alchemist.tokens(state,seat).filter(t=>t.slot===slot).length}/${cap} slots<br>${alchemist.tokens(state,seat).filter(t=>t.slot===slot).map(t=>alchemist.tokenLabel(t)).join('<br>')||'Empty'}</p>`).join('')}</details>`:''}
     ${upgrades.length?`<details class="board-upgrades" data-seat="${seat}"><summary>Equipped upgrades (${upgrades.length})</summary>
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  punchify:'Unique Potion, limit 6 across the whole board. Offensive slots only. Spend at the end of its ability’s Offensive Roll Phase for +2 Attack damage. Cannot be transferred.',
+  bolsterate:'Unique Potion, limit 2 across the whole board. Defensive slots only. After resolving Passivation’s attachments, spend to prevent 2 damage. You must have activated the defence. Cannot be transferred.',
+  cleansitude:'Unique Potion, limit 3 across the whole board. Attach to any printed Potion slot. Spend with the activated ability to heal 1 or remove one status from yourself, including an incoming status during defence. Cannot be transferred.',
+  toxification:'Unique Potion, limit 1 across the whole board. Attach to any printed Potion slot. Spend with the activated ability to inflict Poison on a chosen player. Cannot be transferred.',
   rage:'Positive, stack limit 3. Spend one and discard a card to add 3 Attack damage, or spend three to draw one. Wolverine’s Recovery/Frenzy cards trigger only when discarded by Rage, without being played or gaining CP. Existing Rage can be spent before collecting an overflowing gain.',
   alpha:'Unique, stack limit 1; removable but never transferable. When inflicted by an Attack, attacker and receiver immediately roll one die each. Remove Alpha if the attacker’s result is lower; ties retain it. At the holder’s next Income, skip that phase and remove Alpha.',
   tornado:'Positive, stack limit 4. Spend before the first Offensive Roll Attempt to borrow one opposing die per token, up to five. The holder controls these dice; foreign symbols cannot activate abilities, but numbers can form straights and matching-number bonuses. Same-hero dice retain usable symbols.',
@@ -159,7 +164,7 @@ const statusNotes = {
 const token = (seat,key,label,suffix=key) => {
   const id = `status-${seat}-${suffix}`;
   const hero=heroId(state,seat);
-  const tokenArt=hero===psylocke.id&&key==='agility'?'psylockeAgility':hero===thor.id&&key==='guardBreak'?'thorGuardBreak':hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
+  const tokenArt=hero===alchemist.id&&key==='poison'?'alchemistPoison':hero===psylocke.id&&key==='agility'?'psylockeAgility':hero===thor.id&&key==='guardBreak'?'thorGuardBreak':hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
     hero===gunslinger.id&&key==='knockdown'?'gunslingerKnockdown':
     hero===tactician.id&&key==='targeted'?'tacticianTargeted':
     hero===tactician.id&&key==='protect'?'tacticianProtect':
@@ -240,6 +245,7 @@ function hero(seat) {
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
     heroId(state,seat)===jeanGrey.id&&`<span class="token">${p.darkPhoenix?'Dark Phoenix':'Jean Grey'} active</span>`,
+    ...alchemist.types.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
     p.rage&&token(seat,'rage',`Rage ${p.rage}/3`),
     p.alpha&&token(seat,'alpha','Alpha'),
     p.tornado&&token(seat,'tornado',`Tornado ${p.tornado}/4`),
@@ -364,7 +370,13 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(state.iceFreezeChoice){
+  if(!state.response&&state.alchemistTask&&state.stage==='alchemistChoices'){
+    const h=state.alchemistTask.queue[0];phase='Alchemist';heading=h.kind==='attach'?`Attach Potions · ${h.left} remaining`:h.kind==='remove'?`Remove Potions · up to ${h.left}`:h.kind==='target'?'Tonic! · choose a player':'Transmogrify! · choose a status';
+    detail=h.kind==='attach'?'Choose an open slot and an available potion. All attachments resolve before potions can be spent.':h.kind==='remove'?'Removing a potion does not activate its potion effect.':'';
+    content=`<label>Choose <select id="alchemist-choice">${alchemist.taskChoices(state).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('alchemistChoice','Confirm choice','class="primary"')+(allowed.alchemistDone?button('alchemistDone','Finish removing Potions'):'');
+  } else if(!state.response&&state.alchemistRoll&&!state.cardRoll&&!state.retry){
+    phase='Upkeep · The Lab II';heading=names[state.alchemistRoll.seat];detail='Solution attaches 1 Potion. Composition or Crucible attaches 2. A blank attaches none.';content=tray(state.alchemistRoll.dice,state.alchemistRoll.seat,false)+button('resolveAlchemistLab','Resolve The Lab roll','class="primary"');
+  } else if(state.iceFreezeChoice){
     const f=state.iceFreezeChoice;phase='Dice Cube';heading=`${names[f.seat]} chooses a tied lowest die`;detail='The chosen original die will remain frozen for this Roll Phase, unless its Dice Cube is removed.';
     content=tray(state.dice,f.seat,false)+f.candidates.map(i=>button('iceChooseFrozen',`Freeze die ${i+1} (${state.dice[i]})`,`data-index="${i}"`)).join('');
   } else if(!state.response&&state.wolverineRageRoll&&!state.cardRoll&&!state.retry){
@@ -909,6 +921,7 @@ function arena() {
         content=duelist.steps(hero,2,1).map(({label},i)=>button('reposition',label,`data-choice="${i}"`)).join('');
         break;
       }
+      if(allowed.alchemistUpkeep){heading=state.players[state.active].upgrades['The Lab']?'The Lab II':'The Lab';detail='Resolve the mandatory Upkeep attachment before continuing.';content=button('alchemistUpkeep',state.players[state.active].upgrades['The Lab']?'Roll for The Lab II':'Attach 1 Potion','class="primary"');break;}
       if(allowed.rollNevermore){
         heading='Nevermore';detail=`${activeName} starts their upkeep with Nevermore.`;
         content=button('rollNevermore','Roll the Nevermore die','class="primary"');
@@ -1103,6 +1116,12 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'alchemistDefence':
+      phase='Defensive Potions · attacker priority';heading=`${activeName} may respond`;detail='The defence attachments have resolved. The attacker may use legal effects before Alchemist spends these Potions.';content=button('alchemistDefenceReady','Continue to defensive Potions','class="primary"');break;
+    case 'alchemistAbility':
+      phase='Alchemist';heading=p.name;detail='Resolve the printed attachments and other effects before spending Potions.';content=button('finishAlchemistAbility','Resolve ability effects','class="primary"');break;
+    case 'alchemistPotions':
+      phase=state.alchemistSpend.defensive?'Defensive Potions':'End of Offensive Roll Phase';heading='Spend attached Potions';detail='Spend eligible Potions, or keep them for later. Potions removed for The Lab or a card do not activate their effects.';content=alchemist.spendChoices(state,responding).map((c,i)=>button('spendPotion',c.label,`data-choice="${i}"`)).join('')+button('finishAlchemistPotions','Finish spending Potions','class="primary"');break;
     case 'wolverineAbility':
       phase='Wolverine';heading=p.name;detail='Resolve healing, card draws and Rage before the Attack continues.';content=button('finishWolverineAbility','Continue ability','class="primary"');break;
     case 'wolverineResolved':
@@ -1181,9 +1200,11 @@ function arena() {
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
   if(!state.psyReveal){
+  const lab=alchemist.labChoices(state,responding);
+  if(lab.length)content+=`<div class="token-actions"><label>The Lab <select id="alchemist-lab">${lab.map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>${button('alchemistLab','Remove Potion and reroll')}</div>`;
   for(const [i,c] of wolverine.rageChoices(state,responding).entries())content+=button('spendRage',c.label,`data-choice="${i}"`);
   }
-  if(!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
   if(storm.canTornado(state,responding))content+=button('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
   if(storm.canWind(state,responding))content+=button('spendWindShear',state.players[responding].ragingWindsTurn===state.turn?'Spend Wind Shear · prevent 4 and deal 4 isolated damage':'Spend Wind Shear · prevent 2 and deal 2 isolated damage');
   if(storm.oppReroll(state,responding))content+=`<div class="controls">${button('stormOppReroll','Reroll effect die 1','data-status="first"')}${button('stormOppReroll','Reroll effect die 2','data-status="second"')}${button('stormOppReroll','Reroll both effect dice','data-status="both"')}</div>`;
@@ -1192,7 +1213,7 @@ function arena() {
   if(rogue.canSkyward(state,responding))content+=button('spendSkyward','Spend Skyward · both players roll');
   if(rogue.boostLeach(state,responding))content+=button('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
   }
-  if(!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
   for(const c of psylocke.swaps(state,responding))content+=button('manifestSwap',c.label,`data-index="${c.index}"`);
   if(psylocke.canBoost(state,responding))content+=button('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
   for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=button('spendInfiltration',c.label,`data-choice="${i}"`);
@@ -1388,6 +1409,8 @@ function handleAction(event) {
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
+  if(type==='alchemistChoice')action.choice=Number(document.getElementById('alchemist-choice').value);
+  if(type==='alchemistLab')action.choice=Number(document.getElementById('alchemist-lab').value);
   if(type==='stormOppReroll')action.indices=action.status==='both'?[0,1]:action.status==='first'?[0]:[1];
   if(type==='spiderSenseReroll')action.indices=[...match.querySelectorAll('input[name="spider-sense-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='widowDefenceReroll')action.indices=[...match.querySelectorAll('input[name="widow-defence-reroll"]:checked')].map(input=>Number(input.value));
