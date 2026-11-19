@@ -39,6 +39,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  premonition:'Stack limit 3. Once in your Income Phase, spend 1 to draw 2 cards or 3 to draw 3, instead of the usual 1. Return one of those drawn cards to the top or bottom of your deck. Cannot be used when Income is skipped.',
+  dejaVu:'Spend before activating an ability to conclude your Offensive Roll Phase and start a new one. No new Income Phase. Statuses that expire at the end of the old Roll Phase are removed.',
+  crimsonBands:'Cannot play cards during your next own Roll Phase, until its Defensive Roll Phase concludes. Passives, statuses and casting spells still work. Removed when that Roll Phase ends.',
   cosmicRay:'Stack limit 2. After choosing an attack, spend once per turn to roll 2 dice and add one chosen value. Cannot boost pure damage. Newly gained tokens normally cannot be spent until a later turn. Cosmic Ray cannot be removed or transferred.',
   cosmicFlare:'Stack limit 3. During your Upkeep, deal 1 damage per token to the opponent, then remove 1 token. Compulsory. Damage applies with the other Upkeep damage.',
   radiance:'Stack limit 2. Spend one token to change one of your Defensive Roll Attempt dice to 6. You can spend more than one token on different dice. Cannot change subsidiary card or status rolls.',
@@ -146,6 +149,9 @@ function hero(seat) {
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
       return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
     }),
+    p.premonition>0&&token(seat,'premonition',`Premonition ×${p.premonition}`),
+    p.dejaVu&&token(seat,'dejaVu','Déjà Vu'),
+    p.crimsonBands&&token(seat,'crimsonBands','Crimson Bands'),
     p.cosmicRay>0&&token(seat,'cosmicRay',`Cosmic Ray ×${p.cosmicRay} · ${(p.cosmicRays??[]).filter(ray=>captainMarvel.readyRay(ray,state.turn)).length} ready`),
     p.cosmicFlare>0&&token(seat,'cosmicFlare',`Cosmic Flare ×${p.cosmicFlare}`),
     p.radiance>0&&token(seat,'radiance',`Radiance ×${p.radiance}`),
@@ -204,6 +210,7 @@ function hero(seat) {
     p.concussion && token(seat,'concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && token(seat,'stun','Stun')].filter(Boolean).join('') || 'No status effects'}</div></div>
     ${board(seat)}<div class="inventory"><span class="deck">${(p.deck.length??p.deck) ? `<img src="${art.back}" alt="">` : ''} Draw ${p.deck.length??p.deck} · Discard ${p.discard?.length??0}</span><span class="hand-tools"><span class="hand-count">${p.hand.length??p.hand} in hand</span>
       ${button('open-hand','Hand',`data-index="${seat}" aria-label="Open ${names[seat]}’s hand" aria-haspopup="dialog" ${seat===cardActor(state)&&!['finished','nyraDamage'].includes(state.stage)?'':'disabled'}`)}</span>${button('inspect-leaflet','Leaflet',`class="leaflet" data-index="${seat}" aria-label="${names[seat]} leaflet"`)}${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}</div>
+    ${p.spellBook?`<div class="forge-inventory"><strong>Book of Vishanti · ${p.spellBook.length} prepared</strong><div class="controls">${p.spellBook.map(id=>button('inspect-card',doctorStrange.spells[id],`data-index="${id}" data-seat="${seat}"`)).join('')||'No prepared Spells'}</div></div>`:''}
     ${p.forgeOre?`<details class="forge-inventory" data-seat="${seat}"><summary>The Forge · ${p.forgeOre.length} Ore</summary>
       <div class="controls">${[19,28,34].map(id=>{
         const ore=forgemaster.oreType(id),cards=p.forgeOre.filter(card=>forgemaster.oreType(card)===ore);
@@ -274,7 +281,21 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(!state.response&&state.cosmicRayRoll&&!state.cardRoll&&!state.retry){
+  if(state.premonitionTask){
+    const t=state.premonitionTask,player=state.players[t.seat];phase='Income Phase';heading=`${actingName} uses Premonition`;
+    if(t.kind==='choose'){
+      detail='Choose the normal draw or spend Premonition. After spending tokens, return one of the drawn cards to your deck.';
+      content=button('choosePremonition','Normal Income · draw 1','data-amount="0"')+(player.premonition>=1?button('choosePremonition','Spend 1 Premonition · draw 2','data-amount="1"'):'')+(player.premonition>=3?button('choosePremonition','Spend 3 Premonition · draw 3','data-amount="3"'):'');
+    } else if(t.kind==='return'){
+      detail='Return one of these newly drawn cards. Other cards in your hand cannot be returned.';
+      content=t.drawn.map(id=>`<div class="controls"><strong>${seatCard(state,t.seat,id).name}</strong>${button('returnPremonition','Put on top',`data-index="${id}" data-status="top"`)}${button('returnPremonition','Put on bottom',`data-index="${id}" data-status="bottom"`)}</div>`).join('');
+    } else {detail='Income complete.';content=button('completePremonition','Continue to Main Phase','class="primary"');}
+  } else if(state.strangeTask&&state.stage!=='sideDamage'){
+    const task=state.strangeTask,t=task.queue[0];phase='Spells';heading=t.kind==='prepare'?'Prepare a Spell':t.kind==='cast'?'Cast a Spell':t.kind==='order'?'Order the remaining cards':t.kind==='heal'?'Choose a Hero to heal':t.kind==='dejaTarget'?'Give Déjà Vu to a player':'Remove a status effect';
+    if(t.kind==='prepare'||t.kind==='cast')detail=`${t.left} remaining · ${t.zone==='peek'?'among the top five cards':t.zone==='book'?'from the Book of Vishanti':'from your discard pile'}. Resolve this effect completely before choosing another Spell.`;
+    if(t.kind==='order')detail='Choose from top to bottom. The remaining cards stay in the order you choose.';
+    content=doctorStrange.options(state).map((choice,i)=>button('strangeChoose',choice.label,`data-choice="${i}"`)).join('')+(t.optional?button('strangeSkip','Continue without this effect','class="primary"'):'');
+  } else if(!state.response&&state.cosmicRayRoll&&!state.cardRoll&&!state.retry){
     phase='Cosmic Ray';heading=`${actingName} chooses the damage bonus`;
     detail=state.cosmicRayRoll.locked?'Ultimate: these dice cannot be altered. Choose one die.':'Choose one of the two dice to add to your attack. Dice may be altered before this choice is final.';
     content=tray(state.cosmicRayRoll.dice,seat,false)+state.cosmicRayRoll.dice.map((value,index)=>button('chooseCosmicRay',`Choose die ${index+1} · +${dieValue(value,state.players[seat])} damage`,`data-index="${index}"`)).join('');
@@ -765,7 +786,7 @@ function arena() {
       phase='Attack modifier'; heading='Choose a Ninjutsu effect';
       content=tray([state.effectDie],seat,false)+ninjutsuOutcomes(state).map(status=>button('chooseNinjutsu',ninjutsuLabel(status),`data-status="${status}"`)).join(''); break;
     case 'sideDamage':
-      phase=state.sideDamage.cosmicFlare?'Upkeep damage':state.sideDamage.endTurn?'End of turn':state.sideDamage.source==='Barbed Vine'?'End of Roll Phase':state.sideDamage.source==='Powder Keg'?'Powder Keg damage':'Main Phase damage';
+      phase=state.sideDamage.strangeSpell?'Spell damage':state.sideDamage.cosmicFlare?'Upkeep damage':state.sideDamage.endTurn?'End of turn':state.sideDamage.source==='Barbed Vine'?'End of Roll Phase':state.sideDamage.source==='Powder Keg'?'Powder Keg damage':'Main Phase damage';
       heading=state.sideDamage.source;
       detail=`${actingName} has ${sideIncoming(state.sideDamage)} incoming damage.${state.sideDamage.cosmicFlare?' This applies with the other damage at the end of Upkeep.':''}`;
       content=button('resolveSideDamage',state.sideDamage.cosmicFlare?'Confirm Cosmic Flare damage':'Resolve damage','class="primary"'); break;
@@ -844,6 +865,8 @@ function arena() {
       phase='Avoid damage'; heading=`${actingName} checks ${statusLabel(state.evasionToken??'evasive')}`;
       detail=state.evasionToken==='smoke'?'A 1–3 avoids the incoming damage.':'A 1 or 2 avoids the incoming damage.';
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
+    case 'strangeAbility':
+      phase='Ability';heading=p.name;content=button('finishStrangeAbility','Continue ability','class="primary"');break;
     case 'widowAbility':
       phase='Black Widow';heading='Finish resolving the ability';
       content=button('finishWidowAbility','Continue ability','class="primary"');break;
@@ -870,6 +893,8 @@ function arena() {
     const player=state.players[state.active];
     if(sunElf.canDawn(state,state.active))content+=button('spendSunDawn',`Use Dawn · +${player.sunDial} damage`);
   }
+  if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>button('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`)).join('')}</div></div>`;
+  if(doctorStrange.canDeja(state,state.active))content+=button('spendDejaVu',`${activeName} · spend Déjà Vu and restart the roll`);
   if(captainMarvel.canRay(state,responding))content+=button('spendCosmicRay','Spend Cosmic Ray · roll 2 dice');
   for(const die of captainMarvel.radianceDice(state,responding))content+=button('spendRadiance',`Spend Radiance · defence die ${die.index+1} (${die.value}) → 6`,`data-index="${die.index}"`);
   if(blackWidow.canCovert(state,responding))content+=button('spendCovertOps','Spend Covert Ops');

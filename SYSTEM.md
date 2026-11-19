@@ -1,6 +1,6 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.33.0, 19 November 2026. Base: the supplied 0.31.2 project archive.
+Version: Playtest 0.34.0, 19 November 2026. Base: the supplied 0.31.2 project archive.
 
 ## Project structure
 
@@ -10,8 +10,8 @@ Version: Playtest 0.33.0, 19 November 2026. Base: the supplied 0.31.2 project ar
 - `docs/app.js`: rendering, controls, hand viewer, board/leaflet zoom, local saves and hero picker.
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
-- `docs/art-hero-1.js` through `art-hero-27.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.33.0.
+- `docs/art-hero-1.js` through `art-hero-28.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.34.0.
 - `tests/`: Node-based rules tests and interface/asset checks.
 
 ## Compatibility
@@ -64,3 +64,35 @@ Captain Marvel is appended as hero ID 26, in the Marvel set. Module: `docs/heroe
 Validation added for this release: 34 Captain Marvel rules test groups, 49 UI render states, 27 artwork bundles, all cache references and save JSON round-trip. The existing 34 Black Widow groups pass. Comparison with 0.32.1 passed 4,003 checks across 26 existing heroes, including 1,881 state transitions. The three supplied token files are embedded without modification. Card crop ordering is explicit and all 15 titles/costs were inspected. A real browser/PWA lifecycle check remains a manual task.
 
 Retains the 0.32.1 Vibranium Suit asset. No previous hero IDs, save keys or gameplay rules were renumbered. Keep the legacy rules model and deck reshuffling unless explicitly asked to enable the future rules changes.
+
+## Doctor Strange 0.34.0
+
+Appended as hero ID 27 in the Marvel set. Module `docs/heroes/doctor-strange.js`; artwork `docs/art-hero-28.js`. No ability upgrades. The shared cards use the existing Marvel artwork automatically.
+
+Local card IDs 19–27 are Spells: Vapors of Valtorr, Winds of Watoomb, Images of Ikonn, Rings of Raggadorr, Chains of Krakkan, Fangs of Farallah, Bolts of Balthakk, Mists of Morpheus, Flames of Faltine. IDs 28–32: Foresight!, Cast Away!, Icy Tendrils!, Shields of Seraphim!, Time After Time!. Optional promo 33: Hosts of Hoggoth!.
+
+Flames (27) begins in `spellBook` without its Prepare effect. A `startingSpell` hook excludes it from the shuffled initial deck before drawing the opening hand. The standard 32 physical cards therefore consist of 31 cards in the draw deck/hand plus the prepared starter. Promo adds one. Spells can be sold/discarded normally, but cannot be played through the ordinary action-card control. The Book's passive prepares one hand Spell per global turn, in either Main Phase, without CP cost. Preparing from an ability or spell does not consume that passive allowance.
+
+`strangeTask` is a serialisable queue of preparation, casting, target, removal, ordering and final-disposition steps. Each Spell resolves completely before the next is selected. Prepared Spells leave the Book when selected to Cast; final disposal happens after nested effects. Flames returns to hand; other Spells go to discard. Spells cast from discard remain there unless their effect moves them. The queue tracks active casts and used selections, so Rings cannot cast itself, and its two targets must be different. An active casting card is not available to prepare/cast again until its current effect is complete.
+
+Spell Prepare effects: Vapors heals a chosen Hero 1; Winds optionally removes a chosen removable status (including a particular Time Bomb); Images does nothing; Rings gains Premonition; Chains inflicts Crimson Bands; Fangs removes 1 opposing CP immediately; Bolts gains 1 CP; Mists grants Déjà Vu to a chosen player; Flames deals 1 isolated damage.
+
+Spell Cast effects: Vapors gains 3 Premonition; Winds prepares from discard; Images adds up to 4 attack damage from hand size; Rings casts up to two different discard Spells; Chains makes an attack undefendable; Fangs adds 3 attack damage; Bolts deals 3 isolated damage; Mists heals a chosen Hero 3; Flames adds 1 attack damage and returns to hand. Isolated Spell damage uses separate prevention/avoidance windows, preserves the parent attack, and is not an Attack Modifier. During an Ultimate, opponents cannot alter/prevent these subsidiary effects. Optional targets and healing are explicit UI choices.
+
+Mystic Bolts has separate small/large straight entries (6/9 before Spell effects). Universal Awareness draws before preparing from discard. Wand's prepare and cast effects resolve in that order before the attack's final damage calculation, following the supplied advanced clarification of its “Then”. Crimson Bands is made visible before these subsequent Spell effects; if Winds removes it, it is not reapplied later. Incoming-status prevention still distinguishes a newly applied token from a pre-existing one.
+
+The Ultimate takes only the top five currently available cards, without reshuffling to fill the five. Up to two Spells may be prepared from those cards; the remaining cards are ordered explicitly top-to-bottom before casting up to two prepared Spells. The Book's existing Spells can also be cast. The queue remains locked against opponent actions throughout the Ultimate.
+
+All Doctor Strange “On [symbol]” results occur once per listed outcome, even if the symbol appears twice. Astral Incursion: +3 for Mandala, Premonition for Tome, Crimson Bands for Mantle, one Cast for Amulet. Cloak rolls two dice: Mandala returns 1, Tome gains one Premonition, Mantle prevents 2, Amulet returns 3. Icy Tendrils and Shields of Seraphim likewise resolve each listed symbol once, with different symbols combining.
+
+Premonition works for any holder. A real, unskipped Income Phase offers normal draw, spend 1 for draw 2, or spend 3 for draw 3. Spending requires returning one of those newly drawn cards (not a pre-existing hand card) to the chosen top or bottom of the deck. CP is gained once. The draw/return choice is serialised in `premonitionTask`. First-turn skipped Income, Concussion and Disarm do not offer it. Completion resumes Main Phase 1 without a second Income.
+
+Déjà Vu works for any holder during their own Offensive Roll Phase before activation, including after an announcement or all attempts. It clears a deferred announcement response, concludes the old Roll Phase, removes appropriate expiring statuses (including Blind, Blinding Light and Crimson Bands), then begins a new Offensive Roll Phase with no Income. Barbed Vine damage, if due, resolves before the restart. The once-per-turn hand preparation allowance is retained.
+
+Crimson Bands is a negative token, cap 1. `bandsTurn` records the affected own Roll Phase. It blocks all card play throughout that phase, including subsidiary choices and its ensuing Defensive Roll Phase. It does not restrict the holder's Main Phase or card responses during the opponent's turn. It expires when the affected Roll Phase ends. Statuses/passives and casting spells remain usable. It blocks Black Widow's non-Ultimate free upgrade placement; Ultimate effects are not reduced by it. Existing save shape is preserved when these mechanics are absent.
+
+Validation: 34 Doctor Strange groups, 34 Black Widow groups, 35 Captain Marvel groups and 61 UI render states passed. All 28 art bundles and offline script entries validated; all 15 Strange card crops/titles/costs inspected. Token images preserve supplied bytes. 4,130 differential checks cover the previous 27 heroes and 1,944 state transitions. The comparison baseline explicitly includes the intentional Captain Marvel correction below; other compared behaviour matches 0.33.0.
+
+Additional correction: Captain Marvel's Barrel Roll On-Photon bonus now adds 2 once, even for two Photon results. Its Ascend bonus still uses the printed multiplication. A dedicated duplicate-Photon test covers the change.
+
+Browser layout, live service-worker update/install, offline launch and hands-on playtesting still need manual verification; automated UI checks simulate DOM elements. Keep the prior legacy rules model. Future January 2027 changes remain disabled.

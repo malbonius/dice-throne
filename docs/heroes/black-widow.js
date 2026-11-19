@@ -39,6 +39,7 @@ const blackWidow=(()=>{
   }
   function advanceAll(s){for(const [seat,p] of s.players.entries())for(const b of [...(p.timeBombTimers??[])])advance(s,seat,b.id);}
   function upgradeChoices(s,seat,zone='deck'){
+    if(doctorStrange.bandsBlocks(s,seat))return [];
     const p=s.players[seat];
     return p[zone].filter(card=>{const c=seatCard(s,seat,card);return c.phase==='upgrade'&&!p.upgrades[c.slot];});
   }
