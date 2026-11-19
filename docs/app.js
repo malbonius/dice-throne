@@ -39,6 +39,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  diceCube:'Negative, stack limit 2. Freeze the lowest die (two lowest at cap) from the first Offensive Roll Attempt. Ties let the roller choose. Those original dice cannot be changed by either player; separate subsidiary rolls are unaffected. Remove at the end of that Roll Phase.',
+  iceShard:'Positive, stack limit 5. Spend 5 at any time to gain Glide. Incoming gains arrive as one batch: spend existing shards before collecting, without using a partial incoming batch to make room.',
+  glide:'Unique, stack limit 1. Cannot be removed or transferred. At the end of a qualifying Roll Phase, spend once per turn to activate the ability at the end of the printed Glide Path, against the same opponent. No dice objective, Income or Main Phase between the abilities.', 
   dissolution:'Positive, stack limit 2. In your own Main Phase spend one to heal a chosen player 2, or remove one Negative Status Effect from that player.',
   disruption:'Negative, stack limit 1. During Upkeep choose to lose 1 CP or receive 2 damage. If you cannot pay CP, take the damage. Then remove the token. Damage joins the other Upkeep damage.', 
   battlePlan:'Positive, stack limit 4. Each option once per turn: spend 1 to examine an opponent’s hand; spend 3 to inspect your top 3, take up to 1 Leadership card and discard/order the rest; spend 3 to inflict Focus Fire. Incoming gains arrive as one batch; spend existing tokens before collecting excess.',
@@ -219,6 +222,9 @@ function hero(seat) {
     p.grim&&token(seat,'grim',`Grim Pursuit ×${p.grim}`),
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
+    p.iceShard&&token(seat,'iceShard',`Ice Shards ${p.iceShard}/5`),
+    p.diceCube&&token(seat,'diceCube',`Dice Cube ×${p.diceCube}`),
+    p.glide&&token(seat,'glide','Glide'),
     p.dissolution&&token(seat,'dissolution',`Dissolution ×${p.dissolution}`),
     p.disruption&&token(seat,'disruption','Disruption'),
     p.battlePlan&&token(seat,'battlePlan',`Battle Plan ${p.battlePlan}/4`),
@@ -252,6 +258,7 @@ function hero(seat) {
         return cards.length?button('inspect-card',`${seatCard(state,seat,id).name} ×${cards.length}`,`data-index="${id}" data-seat="${seat}"`):'';
       }).join('')}${['mining','crafting'].map(key=>button('inspect-forging',key==='mining'?'Mining rules':'Crafting rules',`data-status="${key}"`)).join('')}</div>
     </details>`:''}
+    ${p.freezer?`<details class="token-actions"><summary>The Freezer · ${p.freezer.shards}/5 Ice Shards · ${p.freezer.glide?'Glide stored':'No Glide stored'}</summary><div class="controls">${button('inspect-freezer','View The Freezer',`data-index="${seat}"`)}</div><p>Stored tokens are out of play. They cannot be removed, transferred by ordinary status cards or counted for damage. Only an authorised ability or card can transfer them to your board. Five stored shards can be converted into stored Glide.</p></details>`:''}
     ${p.aces?`<details class="token-actions"><summary>Ace cards · ${p.aceTurn===state.turn?p.aceExploded??0:0}/${1+(p.aceTurn===state.turn?p.aceExtra??0:0)} exploded this turn</summary><div class="controls">${gambit.suits.map((suit,i)=>`<figure style="max-width:150px;margin:6px">${button('inspect-ace',`<img src="${p.aces[suit].up?art.gambitAces[i]:art.back}" alt="${suit} Ace" style="width:100%">`,`data-index="${i}" data-seat="${seat}"`)}<figcaption>${statusLabel(suit)} · ${p.aces[suit].up?`${p.aces[suit].charge}/${gambit.caps[suit]} charged`:'Face down'}</figcaption></figure>`).join('')}</div><p>One Ace explosion per turn in total, plus any additional allowance. Acceleration tokens remain on their own Aces and cannot be transferred or removed.</p></details>`:''}
   </section>`;
 }
@@ -264,6 +271,7 @@ function tray(values,seat,editable,held=[]) {
     const label = blank?'Blank · Hex':foreign&&heroId(state,seat)!==scarletWitch.id?`${value} · Scarlet Witch die, symbol unavailable`:`${value} ${HEROES[dieHero].symbols[value-1]}`;
     const picture = blank?'<span aria-label="Blank due to Hex">—</span>':
       `<img src="${art.dice[dieHero][value-1]}" alt="${label}">`;
+    if(values===state.dice&&iceman.locked(state,seat,i))return `<span class="die frozen" style="outline:2px solid #b8f5ff" aria-label="Die ${i+1}, ${label}, frozen by Dice Cube">${picture}<small>Frozen</small></span>`;
     return editable ? button('hold',picture,`class="die" data-index="${i}" aria-pressed="${!!held[i]}" aria-label="Die ${i+1}, ${label}, ${held[i]?'held':'available to reroll'}"`)
       : `<span class="die">${picture}</span>`;
   }).join('')}</div>`;
@@ -319,7 +327,28 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(!state.response&&state.gambitRoll&&!state.cardRoll&&!state.retry){
+  if(state.iceFreezeChoice){
+    const f=state.iceFreezeChoice;phase='Dice Cube';heading=`${names[f.seat]} chooses a tied lowest die`;detail='The chosen original die will remain frozen for this Roll Phase, unless its Dice Cube is removed.';
+    content=tray(state.dice,f.seat,false)+f.candidates.map(i=>button('iceChooseFrozen',`Freeze die ${i+1} (${state.dice[i]})`,`data-index="${i}"`)).join('');
+  } else if(!state.response&&state.iceTask&&state.stage==='iceChoices'&&!state.cardRoll&&!state.retry){
+    const t=state.iceTask,h=t.queue[0],player=state.players[t.seat];phase='Iceman';heading=names[t.seat];
+    if(h.kind==='gain'){
+      heading=`Gain ${h.amount} Ice Shard${h.amount===1?'':'s'}`;detail=`You currently hold ${player.iceShard??0}/5 on your board. Spend existing shards now if desired, then collect the whole batch. Incoming shards cannot be collected in parts.`;
+      content=button('iceCollect','Collect the whole batch','class="primary"');
+    } else if(h.kind==='store'){
+      heading='Store Ice Shards in The Freezer';detail=`The Freezer holds 5 shards; ${h.left} more waiting. You may convert five stored shards into stored Glide, then continue storing the remaining shards.`;
+      content=button('iceStoreDone','Keep the stored five · discard the excess','class="primary"');
+    } else if(h.kind==='transfer'){
+      heading='Transfer tokens from The Freezer';detail='Take any permitted amount, in any order. You may convert five board shards into Glide between transfers. You may also leave tokens stored.';
+      content=iceman.transferOptions(state).map((choice,i)=>button('iceTransfer',choice.label,`data-choice="${i}"`)).join('')+button('iceTransferDone','Finish transferring','class="primary"');
+    } else if(h.kind==='chill'){
+      heading='Everybody Chill · choose the bonus';detail=`Damage counts board shards, including this ability’s gain. Converting shards after activation does not reduce the saved damage bonus; stored Freezer shards do not count.`;
+      content=button('iceChill',`Add ${Math.max(p.iceman.shardSnapshot??0,player.iceShard??0)} damage`,'data-status="damage"')+button('iceChill','Gain 2 Ice Shards and draw 1','data-status="draw"');
+    } else if(h.kind==='frost'){
+      heading=`Ice to Meet You · ${h.left} Frost outcome(s)`;detail='Choose for each Frost. Glide cannot be spent to make room for another Glide during this ability.';
+      content=button('iceFrost','Gain Glide','data-status="glide"')+button('iceFrost','Draw 1','data-status="draw"');
+    }
+  } else if(!state.response&&state.gambitRoll&&!state.cardRoll&&!state.retry){
     const r=state.gambitRoll;phase=r.kind==='high'?'Upkeep · High Stakes':'Ace explosion';heading=r.kind==='high'?`${names[r.seat]} resolves High Stakes`:r.kind==='heartRoll'?'Heart Ace · healing roll':'Club Ace · damage roll';
     detail=r.kind==='high'?`${r.dice.length} dice. With five dice, any 1 busts the whole ability. Super Charge accelerates any Ace; Spade/Club charges a black Ace; Heart/Diamond charges a red Ace.`:'Half the final numerical value, rounded up.';
     content=tray(r.dice,r.seat,false)+(r.kind==='high'&&r.magicLeft?r.dice.map((v,i)=>button('gambitMagicReroll',`Card Magic · reroll die ${i+1} (${v}) · ${r.magicLeft} remaining`,`data-index="${i}"`)).join(''):'')+button('gambitResolveRoll','Resolve roll','class="primary"');
@@ -531,7 +560,7 @@ function arena() {
     phase='Status effect roll'; heading='Mesmerize';
     if(effect.choosing){
       const context=rollContext({...state,stage:effect.resume,mesmerizeRoll:null});
-      content=rollDisplay(context)+diceOwnedBy(context,1-effect.seat).map((value,index)=>
+      content=rollDisplay(context)+diceOwnedBy(context,1-effect.seat,state).map((value,index)=>
         button('rerollMesmerized',`Reroll die ${index+1} (${value})`,`data-index="${index}"`)).join('')+
         button('rerollMesmerized','Keep the current roll','data-index="-1"');
     } else {
@@ -1009,6 +1038,19 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'iceAbility':
+      phase='Iceman';heading=p.name;content=button('finishIcemanAbility','Continue ability','class="primary"');break;
+    case 'iceResolved':
+      phase='Iceman';heading=p.name;content=button('finishIcemanResolved','Continue after the effect roll','class="primary"');break;
+    case 'iceAfter':
+      phase='After damage';heading='Frostbite · conclude the Roll Phase';content=button('finishIcemanAfter','Continue to the end of the Roll Phase','class="primary"');break;
+    case 'iceGlideOffer':
+      phase='End of Roll Phase';heading=`Glide Path · ${p.name} → ${p.iceman.path}`;
+      detail='Spend Glide to activate the connected primary ability against the same opponent. You may gain or transfer Glide now using an eligible effect. Glide can only be spent once per turn.';
+      content=(allowed.spendGlide?button('spendGlide','Spend Glide · activate the connected ability','class="primary"'):'')+button('skipGlide','Continue to Main Phase 2');break;
+    case 'iceGlideReady':
+      phase='Glide · new Roll Phase';heading=state.iceGlideTarget;detail='No dice objective is required. Normal activation, targeting and defence rules still apply.';
+      content=button('activateIcemanGlide','Activate the connected ability','class="primary"');break;
     case 'gambitAbility':
       phase='Gambit';heading=p.name;detail='Acceleration and other selected effects have resolved. You may explode a fully charged Ace before continuing, if this ability is an attack.';
       content=button('finishGambitAbility','Continue ability','class="primary"');break;
@@ -1047,16 +1089,18 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
+  if(!state.iceFreezeChoice&&iceman.canConvert(state,responding))content+=button('iceConvert','Spend 5 board Ice Shards · gain Glide');
+  if(!state.iceFreezeChoice&&iceman.canFreezerConvert(state,responding))content+=button('iceFreezerConvert','Convert 5 stored Ice Shards into stored Glide');
   const explode=gambit.canExplode(state,responding),dissolve=gambit.dissolveChoices(state,responding);
   if(explode.length)content+=`<div class="token-actions"><strong>Explode one Ace · Attack Modifier</strong><div class="controls">${explode.map(suit=>button('gambitExplode',`Explode ${statusLabel(suit)}`,`data-status="${suit}"`)).join('')}</div></div>`;
   if(dissolve.length)content+=`<details class="token-actions"><summary>Spend Dissolution</summary><div class="controls">${dissolve.map((choice,i)=>button('spendDissolution',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
-  const support=gambit.forced(state)?[]:cyclops.supportChoices(state,responding),battlePlan=gambit.forced(state)?[]:cyclops.battleChoices(state,responding);
+  const support=state.iceFreezeChoice||gambit.forced(state)?[]:cyclops.supportChoices(state,responding),battlePlan=state.iceFreezeChoice||gambit.forced(state)?[]:cyclops.battleChoices(state,responding);
   if(support.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Support</summary><div class="controls">${support.map((choice,i)=>button('spendSupport',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   if(battlePlan.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Battle Plan</summary><div class="controls">${battlePlan.map((choice,i)=>button('spendBattlePlan',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   if(cyclops.canRecourse(state,responding))content+=button('cyclopsRecourse','Remove 2 Battle Plan · activate Recourse II against this undefendable attack');
   if(thor.canDraw(state,responding)&&!state.thorOverflow)content+=button('thorDraw','Spend 4 Electrokinesis · draw a card');
   if(thor.canMove(state,responding))content+=`<details class="token-actions"><summary>Mjölnir · discard a card to ${thor.holder(state,responding)===responding?'throw':'retrieve'}</summary><div class="controls">${state.players[responding].hand.map((id,i)=>button('thorPassive',`Discard ${seatCard(state,responding,id).name}`,`data-index="${i}"`)).join('')}</div></details>`;
-  if(!gambit.forced(state)&&!cyclops.choosing(state)&&!state.thorOverflow&&!(state.thorTask&&state.stage==='thorSequence')&&!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
+  if(!state.iceFreezeChoice&&!gambit.forced(state)&&!cyclops.choosing(state)&&!state.thorOverflow&&!(state.thorTask&&state.stage==='thorSequence')&&!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
   const probability=scarletWitch.probabilityChoices(state,responding);
   if(probability.length)content+=`<div class="token-actions"><strong>${names[responding]} · Probability Manipulation</strong><div class="controls">${probability.map((choice,i)=>button('spendProbability',choice.label,`data-choice="${i}"`)).join('')}</div></div>`;
   const scarletChanges=scarletWitch.defenceChanges(state,responding);
@@ -1193,6 +1237,10 @@ function handleAction(event) {
     document.getElementById('viewer-title').textContent=viewerImage.alt;
     viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);
     return;
+  }
+  if(type==='inspect-freezer'){
+    viewerSeat=index;viewerCard=null;viewerLeaflet=false;front.hidden=back.hidden=true;viewerImage.alt='The Freezer';viewerImage.src=art.icemanFreezer;
+    document.getElementById('viewer-title').textContent=viewerImage.alt;viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);return;
   }
   if(type==='inspect-ace'){
     viewerSeat=Number(target.dataset.seat);viewerCard=null;viewerLeaflet=false;front.hidden=back.hidden=true;

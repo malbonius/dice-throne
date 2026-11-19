@@ -37,7 +37,7 @@ const cyclops=(()=>{
   if(busy(s)&&!s.cardRoll&&!s.widowAgility&&!s.widowBombRoll&&!s.cosmicRayRoll&&!s.scarletJinx&&!s.lokiBag)return [];
   const ctx=rollContext(s),locked=!!attackLocked(s),result=[];
   if(!busy(s)&&!s.sideDamage)for(let target=0;target<2;target++)result.push({kind:'cp',target,label:`Gain 1 CP · ${heroNames(s)[target]}`});
-  if(ctx&&!locked)ctx.dice.forEach((value,index)=>result.push({kind:'reroll',index,target:dieOwner(ctx,index),label:`Reroll ${heroNames(s)[dieOwner(ctx,index)]}’s die ${index+1} (${value})`}));
+  if(ctx&&!locked)ctx.dice.forEach((value,index)=>{if(!iceman.contextLocked(s,ctx,index))result.push({kind:'reroll',index,target:dieOwner(ctx,index),label:`Reroll ${heroNames(s)[dieOwner(ctx,index)]}’s die ${index+1} (${value})`});});
   if(p.support>=3&&!busy(s)&&!s.sideDamage)for(let target=0;target<2;target++)result.push({kind:'draw',target,label:`Spend 3 Support · ${heroNames(s)[target]} draws 1`});
   return result;
  }

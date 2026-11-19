@@ -31,7 +31,7 @@ const forgemaster=(()=>{
     if(!p.forgeOre||p.resurrected||s.stage==='finished'||['nyraDamage','forgeSearch'].includes(s.stage)||s.forgeTask||s.retry||
        s.response&&s.response.seat!==seat||seat!==s.active&&attackLocked(s))return [];
     const options=[];
-    const ctx=rollContext(s), dice=diceOwnedBy(ctx,seat);
+    const ctx=rollContext(s), dice=diceOwnedBy(ctx,seat,s);
     if(p.cp>=3&&p.minesDrawTurn!==s.turn&&(p.deck.length||p.discard.length)){
       options.push({kind:'draw',label:'Spend 3 CP · draw 1 card'});
     }
