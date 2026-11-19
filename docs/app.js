@@ -1,4 +1,11 @@
 const art = window.diceThroneArt;
+function cardArtwork(match,seat,cardId) {
+  const hero=heroId(match,seat);
+  if(cardId>18)return art.uniqueCards[hero][cardId-19];
+  const marvel=sets.some(set=>['Marvel','X-Men'].includes(set.name)&&set.heroes.includes(hero));
+  return (marvel&&art.marvelSharedCards?art.marvelSharedCards:art.sharedCards)[cardId-1];
+}
+
 const match = document.getElementById('match');
 const storageKey = 'dice-throne-card-pilot-v2';
 const roll = () => 1 + Math.floor(Math.random()*6);
@@ -978,7 +985,7 @@ function showScan(side) {
   viewerImage.src=viewerLeaflet ? art.leaflets[heroId(state,viewerSeat)][side] : boardImage(state,viewerSeat,true);
   if(viewerCard){
     viewerImage.alt=seatCard(state,viewerSeat,viewerCard).name;
-    viewerImage.src=viewerCard<=18?art.sharedCards[viewerCard-1]:art.uniqueCards[heroId(state,viewerSeat)][viewerCard-19];
+    viewerImage.src=cardArtwork(state,viewerSeat,viewerCard);
   }
   document.getElementById('viewer-title').textContent=viewerImage.alt;
   front.setAttribute('aria-pressed',String(side===0));
