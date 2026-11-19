@@ -42,6 +42,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  strengthOcean:'Unique, stack limit 3; removable, never transferable. Once per turn during your Upkeep, spend 1 for 1 CP, or 2 for 1 CP and healing 2. You may choose only one option. Sea Song! is a separate card effect.',
+  strengthMountain:'Unique, stack limit 2; removable, never transferable. Persistent Attack Modifier: each token adds 1 Attack damage while present. Removing one before damage calculation removes its bonus. Does not increase pure or collateral damage.',
+  strengthSky:'Unique, stack limit 2; removable, never transferable. Each token adds one die when activating your Defensive Ability. Gaining or removing one after the defence has rolled does not resize that roll.',
   coal:'Negative, stack limit 4. With four Coal, the next CP gain first removes all Coal and reduces that gain by 1 CP. At 15 CP, an attempted gain cannot clear Coal. Amounts below four have no CP penalty.',
   gift:'Unique, stack limit 3. During your own Main Phase, spend one to draw a Reject into play. Removable, never transferable. Rejects are Companions with a separate draw/discard pile, not hand cards.',
   punchify:'Unique Potion, limit 6 across the whole board. Offensive slots only. Spend at the end of its ability’s Offensive Roll Phase for +2 Attack damage. Cannot be transferred.',
@@ -167,7 +170,7 @@ const statusNotes = {
 const token = (seat,key,label,suffix=key) => {
   const id = `status-${seat}-${suffix}`;
   const hero=heroId(state,seat);
-  const tokenArt=hero===alchemist.id&&key==='poison'?'alchemistPoison':hero===psylocke.id&&key==='agility'?'psylockeAgility':hero===thor.id&&key==='guardBreak'?'thorGuardBreak':hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
+  const tokenArt=hero===mysticBrawler.id&&key==='concussion'?'mysticConcussion':hero===alchemist.id&&key==='poison'?'alchemistPoison':hero===psylocke.id&&key==='agility'?'psylockeAgility':hero===thor.id&&key==='guardBreak'?'thorGuardBreak':hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
     hero===gunslinger.id&&key==='knockdown'?'gunslingerKnockdown':
     hero===tactician.id&&key==='targeted'?'tacticianTargeted':
     hero===tactician.id&&key==='protect'?'tacticianProtect':
@@ -251,6 +254,7 @@ function hero(seat) {
     ...alchemist.types.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
     p.coal&&token(seat,'coal',`Coal ${p.coal}/4`),
     p.gift&&token(seat,'gift',`Gift ${p.gift}/3`),
+    ...mysticBrawler.keys.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${mysticBrawler.caps[key]}`)),
     p.rage&&token(seat,'rage',`Rage ${p.rage}/3`),
     p.alpha&&token(seat,'alpha','Alpha'),
     p.tornado&&token(seat,'tornado',`Tornado ${p.tornado}/4`),
@@ -375,7 +379,13 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(state.krampusOverflow!==undefined){
+  if(state.mysticTask&&state.stage==='mysticChoices'){
+    const t=state.mysticTask,h=t.queue[0];phase='Mystic Brawler';heading=names[t.seat];
+    if(h.kind==='strengths'){heading=`Choose Strengths · ${h.left} remaining`;detail='Allocate the whole batch before the tokens are gained. Each type has its own stack limit.';content=mysticBrawler.gainOptions(state).map(key=>button('mysticStrength',`${statusLabel(key)} · ${(state.players[t.seat][key]??0)+(h.allocation[key]??0)}/${mysticBrawler.caps[key]}`,`data-status="${key}"`)).join('');}
+    if(h.kind==='tectonic'){heading='Tectonic Punch';detail='Removing a Mountain adds 3 ability damage, but that removed token no longer contributes its persistent +1.';content=button('mysticTectonic','Gain Strength of the Mountain','data-status="gain"')+(state.players[t.seat].strengthMountain?button('mysticTectonic','Remove a Mountain · add 3 damage','data-status="remove"'):'');}
+  } else if(!state.response&&state.mysticContest&&!state.cardRoll&&!state.retry){
+    phase='Strong Arm';heading='Compare the opposed roll';detail='Equal or greater: gain 1 Strength and deal 6 damage. Lower: deal 7. Each die belongs to its own roller and can be altered before resolution.';content=rollDisplay(rollContext(state))+button('resolveMysticContest','Resolve Strong Arm','class="primary"');
+  } else if(state.krampusOverflow!==undefined){
     const seat=state.krampusOverflow,player=state.players[seat];phase='Reject limit';heading=`${names[seat]} must discard down to 3 Rejects`;detail='The whole draw batch has finished. Excess Rejects must be discarded without activation.';content=player.rejects.map(id=>button('discardReject',`Discard ${krampus.names[id]}`,`data-index="${id}"`)).join('');
   } else if(state.krampusActivation){
     const a=state.krampusActivation;phase='Activate Reject';heading=krampus.names[a.reject];detail=`${a.free?'This activation keeps the Reject in play.':'The Reject is discarded after its effect.'} Each Reject can activate only once per global turn. Eligible Krampus cards can be played before finishing.`;content=`<img src="${art.krampusRejects[a.reject]}" alt="${krampus.names[a.reject]}" style="max-width:240px;width:100%">`+button('finishReject','Resolve Reject effect','class="primary"');
@@ -665,7 +675,7 @@ function arena() {
   } else if(state.cardRoll) {
     phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,seat,state.cardRoll.id).name;
     detail=`${names[seat]} can modify the roll before it resolves.`;
-    content=tray(state.cardRoll.dice,state.cardRoll.roller??seat,false)+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>heroId(state,seat)===paleLady.id||v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
+    content=tray(state.cardRoll.dice,state.cardRoll.roller??seat,false)+(allowed.mysticWildReroll?`<div class="defence-choice"><p>Reroll up to ${mysticBrawler.wildLimit(state)} different dice, once.</p>${state.cardRoll.dice.map((v,i)=>`<label><input type="checkbox" name="mystic-wild-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+button('mysticWildReroll','Reroll selected Wild Strength dice'):'')+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>heroId(state,seat)===paleLady.id||v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
   } else if(state.stage==='gunContest') {
     const contest=state.gunContest;
     phase=contest.kind==='duel'?'Defensive Roll':'Ability roll';
@@ -1131,6 +1141,14 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'mysticAbility':
+      phase='Mystic Brawler';heading=p.name;content=button('finishMysticAbility','Resolve ability effects','class="primary"');break;
+    case 'mysticStrongTarget':
+      phase='Targeting · Strong Arm';heading=`Strong Arm targets ${names[1-state.active]}`;detail='Both players roll one die after targeting.';content=button('rollMysticContest','Roll both players’ dice','class="primary"');break;
+    case 'mysticPrepared':
+      phase='Mystic Brawler';heading=p.name;content=button('finishMysticPrepared','Continue ability','class="primary"');break;
+    case 'mysticResolved':
+      phase='Mystic Brawler';heading=p.name;content=button('finishMysticResolved','Continue after the effect roll','class="primary"');break;
     case 'krampusAbility':
       phase='Krampus';heading=p.name;content=button('finishKrampusAbility','Resolve ability effects','class="primary"');break;
     case 'krampusPrepared':
@@ -1221,13 +1239,14 @@ function arena() {
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
   if(!state.psyReveal){
+  for(const n of mysticBrawler.oceanChoices(state,responding))content+=button('spendOcean',n===1?'Spend 1 Ocean · gain 1 CP':'Spend 2 Ocean · gain 1 CP and heal 2',`data-amount="${n}"`);
   if(krampus.canGift(state,responding))content+=button('spendGift','Spend Gift · draw 1 Reject');
   if(!(state.krampusTask&&state.stage==='krampusChoices'&&state.krampusTask.queue[0]?.kind==='free'))for(const [i,c] of krampus.options(state,responding).entries())content+=button('activateReject',c.label,`data-choice="${i}"`);
   const lab=alchemist.labChoices(state,responding);
   if(lab.length)content+=`<div class="token-actions"><label>The Lab <select id="alchemist-lab">${lab.map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>${button('alchemistLab','Remove Potion and reroll')}</div>`;
   for(const [i,c] of wolverine.rageChoices(state,responding).entries())content+=button('spendRage',c.label,`data-choice="${i}"`);
   }
-  if(!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
   if(storm.canTornado(state,responding))content+=button('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
   if(storm.canWind(state,responding))content+=button('spendWindShear',state.players[responding].ragingWindsTurn===state.turn?'Spend Wind Shear · prevent 4 and deal 4 isolated damage':'Spend Wind Shear · prevent 2 and deal 2 isolated damage');
   if(storm.oppReroll(state,responding))content+=`<div class="controls">${button('stormOppReroll','Reroll effect die 1','data-status="first"')}${button('stormOppReroll','Reroll effect die 2','data-status="second"')}${button('stormOppReroll','Reroll both effect dice','data-status="both"')}</div>`;
@@ -1236,7 +1255,7 @@ function arena() {
   if(rogue.canSkyward(state,responding))content+=button('spendSkyward','Spend Skyward · both players roll');
   if(rogue.boostLeach(state,responding))content+=button('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
   }
-  if(!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
   for(const c of psylocke.swaps(state,responding))content+=button('manifestSwap',c.label,`data-index="${c.index}"`);
   if(psylocke.canBoost(state,responding))content+=button('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
   for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=button('spendInfiltration',c.label,`data-choice="${i}"`);
@@ -1435,6 +1454,7 @@ function handleAction(event) {
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
+  if(type==='mysticWildReroll')action.indices=[...match.querySelectorAll('input[name="mystic-wild-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='alchemistChoice')action.choice=Number(document.getElementById('alchemist-choice').value);
   if(type==='alchemistLab')action.choice=Number(document.getElementById('alchemist-lab').value);
   if(type==='stormOppReroll')action.indices=action.status==='both'?[0,1]:action.status==='first'?[0]:[1];
