@@ -39,6 +39,8 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  dissolution:'Positive, stack limit 2. In your own Main Phase spend one to heal a chosen player 2, or remove one Negative Status Effect from that player.',
+  disruption:'Negative, stack limit 1. During Upkeep choose to lose 1 CP or receive 2 damage. If you cannot pay CP, take the damage. Then remove the token. Damage joins the other Upkeep damage.', 
   battlePlan:'Positive, stack limit 4. Each option once per turn: spend 1 to examine an opponent’s hand; spend 3 to inspect your top 3, take up to 1 Leadership card and discard/order the rest; spend 3 to inflict Focus Fire. Incoming gains arrive as one batch; spend existing tokens before collecting excess.',
   support:'Positive, stack limit 3. Spend 1 to give any player 1 CP or reroll one of their dice; spend 3 to let any player draw 1. No turn limit. Incoming gains arrive as one batch; existing tokens may be spent before collecting excess. Ultimate dice cannot be altered.',
   focusFire:'Negative, persistent, stack limit 2. Each token adds +1 incoming Attack damage as an Attack Modifier. Cannot increase pure damage or non-Attack damage.', 
@@ -217,6 +219,8 @@ function hero(seat) {
     p.grim&&token(seat,'grim',`Grim Pursuit ×${p.grim}`),
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
+    p.dissolution&&token(seat,'dissolution',`Dissolution ×${p.dissolution}`),
+    p.disruption&&token(seat,'disruption','Disruption'),
     p.battlePlan&&token(seat,'battlePlan',`Battle Plan ${p.battlePlan}/4`),
     p.support&&token(seat,'support',`Support ${p.support}/3`),
     p.focusFire&&token(seat,'focusFire',`Focus Fire ×${p.focusFire}`),
@@ -248,6 +252,7 @@ function hero(seat) {
         return cards.length?button('inspect-card',`${seatCard(state,seat,id).name} ×${cards.length}`,`data-index="${id}" data-seat="${seat}"`):'';
       }).join('')}${['mining','crafting'].map(key=>button('inspect-forging',key==='mining'?'Mining rules':'Crafting rules',`data-status="${key}"`)).join('')}</div>
     </details>`:''}
+    ${p.aces?`<details class="token-actions"><summary>Ace cards · ${p.aceTurn===state.turn?p.aceExploded??0:0}/${1+(p.aceTurn===state.turn?p.aceExtra??0:0)} exploded this turn</summary><div class="controls">${gambit.suits.map((suit,i)=>`<figure style="max-width:150px;margin:6px">${button('inspect-ace',`<img src="${p.aces[suit].up?art.gambitAces[i]:art.back}" alt="${suit} Ace" style="width:100%">`,`data-index="${i}" data-seat="${seat}"`)}<figcaption>${statusLabel(suit)} · ${p.aces[suit].up?`${p.aces[suit].charge}/${gambit.caps[suit]} charged`:'Face down'}</figcaption></figure>`).join('')}</div><p>One Ace explosion per turn in total, plus any additional allowance. Acceleration tokens remain on their own Aces and cannot be transferred or removed.</p></details>`:''}
   </section>`;
 }
 function tray(values,seat,editable,held=[]) {
@@ -314,7 +319,33 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(!state.response&&state.cyclopsTask&&state.stage==='cyclopsSequence'&&!state.cardRoll&&!state.retry){
+  if(!state.response&&state.gambitRoll&&!state.cardRoll&&!state.retry){
+    const r=state.gambitRoll;phase=r.kind==='high'?'Upkeep · High Stakes':'Ace explosion';heading=r.kind==='high'?`${names[r.seat]} resolves High Stakes`:r.kind==='heartRoll'?'Heart Ace · healing roll':'Club Ace · damage roll';
+    detail=r.kind==='high'?`${r.dice.length} dice. With five dice, any 1 busts the whole ability. Super Charge accelerates any Ace; Spade/Club charges a black Ace; Heart/Diamond charges a red Ace.`:'Half the final numerical value, rounded up.';
+    content=tray(r.dice,r.seat,false)+(r.kind==='high'&&r.magicLeft?r.dice.map((v,i)=>button('gambitMagicReroll',`Card Magic · reroll die ${i+1} (${v}) · ${r.magicLeft} remaining`,`data-index="${i}"`)).join(''):'')+button('gambitResolveRoll','Resolve roll','class="primary"');
+  } else if(!state.response&&state.gambitTask&&state.stage==='gambitSequence'&&!state.cardRoll&&!state.retry){
+    const t=state.gambitTask,h=t.queue[0];phase='Gambit';heading=names[t.seat];
+    if(h.kind==='accelerate'){
+      heading=`Accelerate · ${h.left} remaining`;detail='Allocate this batch before any tokens are placed. Aces cannot be exploded part-way through the batch. You may stop without using the remaining acceleration.';
+      content=gambit.available(state,t.seat,h).map(suit=>button('gambitCharge',`${statusLabel(suit)} · ${state.players[t.seat].aces[suit].charge+(h.allocation[suit]??0)}/${gambit.caps[suit]} allocated`,`data-status="${suit}"`)).join('')+button('gambitChargeSkip','Finish this acceleration batch','class="primary"');
+    } else if(h.kind==='regain'){
+      heading=h.optional===false?`Regain ${h.left} Ace card(s)`:`Regain up to ${h.left} Ace card(s)`;detail='Regained Aces return face up with no charge tokens.';
+      content=gambit.regainChoices(state,t.seat,h).map(suit=>button('gambitRegain',`Regain ${statusLabel(suit)}`,`data-status="${suit}"`)).join('')+(h.optional===false?'':button('gambitRegainSkip','Finish regaining','class="primary"'));
+    } else if(h.kind==='window'){
+      heading='Continue ability effects';detail=h.label;content=button('gambitContinue','Continue','class="primary"');
+    } else if(h.kind==='sleight'){
+      heading='Sleight of Hand';detail=h.upgraded?'Both choices inflict Disruption.':'The regain choice also inflicts Disruption.';
+      content=button('gambitSleight','Accelerate twice','data-status="accelerate"')+button('gambitSleight',h.upgraded?'Regain up to two Aces':'Regain an Ace','data-status="regain"');
+    } else if(h.kind==='hand'){
+      heading=`Examine ${names[h.target]}’s hand`;detail='Call Your Bluff! accelerates once if the hand contains a Roll Phase Action card.';
+      content=h.cards.map(card=>`<figure class="reveal-card"><img src="${cardArtwork(state,h.target,card)}" alt="${seatCard(state,h.target,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,h.target,card).name}</figcaption></figure>`).join('')+button('gambitHandDone','Finish examining','class="primary"');
+    } else if(h.kind==='dissolution'){
+      heading=`Gain ${h.amount} Dissolution`;detail='You may spend existing Dissolution in your Main Phase before collecting the incoming tokens. Excess above two is lost.';content=button('gambitCollect','Collect Dissolution','class="primary"');
+    } else if(h.kind==='loseCharge'){
+      heading='High Stakes bust · remove one charge';detail='Choose an Ace from which to remove one Molecular Acceleration token.';
+      content=gambit.suits.filter(k=>state.players[t.seat].aces[k].charge).map(suit=>button('gambitLoseCharge',`Remove one from ${statusLabel(suit)}`,`data-status="${suit}"`)).join('');
+    }
+  } else if(!state.response&&state.cyclopsTask&&state.stage==='cyclopsSequence'&&!state.cardRoll&&!state.retry){
     const t=state.cyclopsTask,h=t.queue[0];phase='Cyclops';heading=names[t.seat];
     if(h.kind==='then'){
       heading='Before “then”';detail=`${h.label}. You may play eligible Leadership cards first; later bonuses use the cards played by the time they resolve.`;
@@ -472,6 +503,12 @@ function arena() {
     detail=g.original?'Grow each original Spirit at most once.':`${g.left} growth ${g.left===1?'step':'steps'} left.`;
     content=growthChoices(state).map(status=>button('growSpirit',status==='seedling'?'Gain Seedling':`Grow ${statusLabel(spiritTypes[spiritTypes.indexOf(status)-1])} into ${statusLabel(status)}`,`data-status="${status}"`)).join('');
     if(allowed.finishGrowth)content+=button('finishGrowth','Finish growing','class="primary"');
+  } else if(allowed.gambitHighStakes){
+    phase='Upkeep · High Stakes';heading='Choose two or five dice';detail='With five dice, any 1 loses every reward and removes one charge token. With two dice, a 1 does not cause a bust.';
+    content=button('gambitHighStakes','Roll 2 dice','data-amount="2"')+button('gambitHighStakes','Roll 5 dice','data-amount="5"');
+  } else if(allowed.gambitTakeDisruption){
+    phase='Upkeep · Disruption';heading=`${activeName} resolves Disruption`;detail='Remove the token after choosing. Its two damage joins the other Upkeep damage and can be prevented normally.';
+    content=(allowed.gambitPayDisruption?button('gambitPayDisruption','Lose 1 CP'):'')+button('gambitTakeDisruption','Receive 2 Upkeep damage','class="primary"');
   } else if(state.retry) {
     const context=rollContext(state);
     phase='Try, Try Again!'; heading=`${actingName} can reroll once more`;
@@ -972,6 +1009,9 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'gambitAbility':
+      phase='Gambit';heading=p.name;detail='Acceleration and other selected effects have resolved. You may explode a fully charged Ace before continuing, if this ability is an attack.';
+      content=button('finishGambitAbility','Continue ability','class="primary"');break;
     case 'cyclopsAbility':
       phase='Cyclops';heading=p.name;detail=`${cyclops.count(state,state.active)} Leadership card(s) played this turn.`;
       content=button('finishCyclopsAbility','Continue ability','class="primary"');break;
@@ -1007,13 +1047,16 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
-  const support=cyclops.supportChoices(state,responding),battlePlan=cyclops.battleChoices(state,responding);
+  const explode=gambit.canExplode(state,responding),dissolve=gambit.dissolveChoices(state,responding);
+  if(explode.length)content+=`<div class="token-actions"><strong>Explode one Ace · Attack Modifier</strong><div class="controls">${explode.map(suit=>button('gambitExplode',`Explode ${statusLabel(suit)}`,`data-status="${suit}"`)).join('')}</div></div>`;
+  if(dissolve.length)content+=`<details class="token-actions"><summary>Spend Dissolution</summary><div class="controls">${dissolve.map((choice,i)=>button('spendDissolution',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  const support=gambit.forced(state)?[]:cyclops.supportChoices(state,responding),battlePlan=gambit.forced(state)?[]:cyclops.battleChoices(state,responding);
   if(support.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Support</summary><div class="controls">${support.map((choice,i)=>button('spendSupport',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   if(battlePlan.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Battle Plan</summary><div class="controls">${battlePlan.map((choice,i)=>button('spendBattlePlan',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   if(cyclops.canRecourse(state,responding))content+=button('cyclopsRecourse','Remove 2 Battle Plan · activate Recourse II against this undefendable attack');
   if(thor.canDraw(state,responding)&&!state.thorOverflow)content+=button('thorDraw','Spend 4 Electrokinesis · draw a card');
   if(thor.canMove(state,responding))content+=`<details class="token-actions"><summary>Mjölnir · discard a card to ${thor.holder(state,responding)===responding?'throw':'retrieve'}</summary><div class="controls">${state.players[responding].hand.map((id,i)=>button('thorPassive',`Discard ${seatCard(state,responding,id).name}`,`data-index="${i}"`)).join('')}</div></details>`;
-  if(!cyclops.choosing(state)&&!state.thorOverflow&&!(state.thorTask&&state.stage==='thorSequence')&&!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
+  if(!gambit.forced(state)&&!cyclops.choosing(state)&&!state.thorOverflow&&!(state.thorTask&&state.stage==='thorSequence')&&!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
   const probability=scarletWitch.probabilityChoices(state,responding);
   if(probability.length)content+=`<div class="token-actions"><strong>${names[responding]} · Probability Manipulation</strong><div class="controls">${probability.map((choice,i)=>button('spendProbability',choice.label,`data-choice="${i}"`)).join('')}</div></div>`;
   const scarletChanges=scarletWitch.defenceChanges(state,responding);
@@ -1150,6 +1193,12 @@ function handleAction(event) {
     document.getElementById('viewer-title').textContent=viewerImage.alt;
     viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);
     return;
+  }
+  if(type==='inspect-ace'){
+    viewerSeat=Number(target.dataset.seat);viewerCard=null;viewerLeaflet=false;front.hidden=back.hidden=true;
+    viewerImage.alt=`${names[viewerSeat]} · ${statusLabel(gambit.suits[index])} Ace`;viewerImage.src=art.gambitAces[index];
+    document.getElementById('viewer-title').textContent=viewerImage.alt;
+    viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);return;
   }
   if(type==='inspect-undead'){
     viewerSeat=index;viewerCard=null;viewerLeaflet=false;

@@ -24,7 +24,7 @@ const scarletWitch=(()=>{
  const cards=[['Incantation!',1,'main'],['Hex Shield!',1,'roll'],['Warped!',1,'roll'],['No Dice!',1,'roll'],['Chaos Manipulation!',1,'roll'],['Snap Crackle!',1,'main'],['Hexellent!',0,'main']];
  // Positive status classifications read from the supplied hero leaflets. Companions,
  // dials and Unique effects (including Holy Presence and Vibranium Suit) are excluded.
- const leafletPositives=[[],['evasive'],['fireMastery'],['shadows','sneak'],['chi','evasive','cleanse'],['retribution','crit','protect','accuracy'],['smoke','ninjutsu'],['wellspring'],[],['synth'],['flight','cleanse'],['bloodPower','mesmerize'],['evasive','reload'],['honor','backStrike'],['tactical','protect'],['nyraBond'],['dreadful','grim'],[],[],['feather'],['regenerate'],['guardBreak'],[],['chargedGem'],['kineticEnergy'],['agility'],['cosmicFlare','radiance'],['premonition','dejaVu'],['bagOfTricks'],['probabilityManipulation','conjure','crackle'],[],['guardBreak','electrokinesis'],['battlePlan','support']];
+ const leafletPositives=[[],['evasive'],['fireMastery'],['shadows','sneak'],['chi','evasive','cleanse'],['retribution','crit','protect','accuracy'],['smoke','ninjutsu'],['wellspring'],[],['synth'],['flight','cleanse'],['bloodPower','mesmerize'],['evasive','reload'],['honor','backStrike'],['tactical','protect'],['nyraBond'],['dreadful','grim'],[],[],['feather'],['regenerate'],['guardBreak'],[],['chargedGem'],['kineticEnergy'],['agility'],['cosmicFlare','radiance'],['premonition','dejaVu'],['bagOfTricks'],['probabilityManipulation','conjure','crackle'],[],['guardBreak','electrokinesis'],['battlePlan','support'],['dissolution']];
  const positives=[...new Set(leafletPositives.flat())];
  function countedStatuses(p){const keys=[...new Set([...positives,...negativeStatuses.filter(k=>k!=='hex'),'stun','regenerate1'])];return keys.reduce((n,k)=>n+Number(p[k]??0),0);}
  function busy(s){return !!(s.conjureTask||s.lokiTask||s.lokiIllusion||s.lokiBag?.kind==='choose'||s.strangeTask||s.premonitionTask||s.widowTask||s.widowReveal||s.growth||s.mainChoice||s.mainAction||s.retry);}
@@ -44,7 +44,8 @@ const scarletWitch=(()=>{
   return [{kind:'warp',target:1-seat,label:`Inflict Reality Warp on ${heroNames(s)[1-seat]}`},...s.players.flatMap((p,source)=>(leafletPositives[heroId(s,source)]??[]).map(status=>({kind:'copy',source,status,label:`Gain ${statusLabel(status)} from ${heroNames(s)[source]}’s leaflet`})))];
  }
  function gain(s,seat,status,source=seat){
-  if(['support','battlePlan'].includes(status))cyclops.gain(s,seat,status);
+  if(status==='dissolution')gambit.gainDissolution(s,seat);
+  else if(['support','battlePlan'].includes(status))cyclops.gain(s,seat,status);
   else if(status==='electrokinesis')thor.gain(s,seat);
   else if(status==='bagOfTricks')loki.give(s,seat,source);
   else if(status==='tactical')gainTactical(s,seat,1);
