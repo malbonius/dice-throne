@@ -42,6 +42,8 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  cheer:'Positive, stack limit 3. Spend 1 to reroll one of your own dice, or 3 to change one of your own dice to 6. Transferred Cheer belongs to its new owner. Cannot alter accepted Ultimate dice.',
+  eggNog:'Positive, stack limit 5. Spend 3 at any time to roll a Santa die: Axe deals 2 separate undefendable damage; Bell heals 2 and gains 1 CP; Star heals 2 and draws 1. Spend existing tokens before collecting a new batch; the batch is gained together.',
   strengthOcean:'Unique, stack limit 3; removable, never transferable. Once per turn during your Upkeep, spend 1 for 1 CP, or 2 for 1 CP and healing 2. You may choose only one option. Sea Song! is a separate card effect.',
   strengthMountain:'Unique, stack limit 2; removable, never transferable. Persistent Attack Modifier: each token adds 1 Attack damage while present. Removing one before damage calculation removes its bonus. Does not increase pure or collateral damage.',
   strengthSky:'Unique, stack limit 2; removable, never transferable. Each token adds one die when activating your Defensive Ability. Gaining or removing one after the defence has rolled does not resize that roll.',
@@ -254,6 +256,7 @@ function hero(seat) {
     ...alchemist.types.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
     p.coal&&token(seat,'coal',`Coal ${p.coal}/4`),
     p.gift&&token(seat,'gift',`Gift ${p.gift}/3`),
+    ...['cheer','eggNog'].map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
     ...mysticBrawler.keys.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${mysticBrawler.caps[key]}`)),
     p.rage&&token(seat,'rage',`Rage ${p.rage}/3`),
     p.alpha&&token(seat,'alpha','Alpha'),
@@ -317,7 +320,7 @@ function tray(values,seat,editable,held=[]) {
     const blank=!dieValue(value,state.players[seat]);
     const foreign=values===state.dice&&state.realityDie?.seat===seat&&state.realityDie.index===i;
     const borrowed=values===state.dice&&storm.borrowed(state,seat,i);
-    const dieHero=foreign?scarletWitch.id:values===state.dice?storm.dieHero(state,seat,i):heroId(state,seat);
+    const dieHero=values===state.santaNogRoll?.dice?santa.id:foreign?scarletWitch.id:values===state.dice?storm.dieHero(state,seat,i):heroId(state,seat);
     const label = blank?'Blank · Hex':borrowed?`${value} ${HEROES[dieHero].symbols[value-1]} · borrowed ${HEROES[dieHero].name} die${dieHero!==heroId(state,seat)?', symbol unavailable':''}`:foreign&&heroId(state,seat)!==scarletWitch.id?`${value} · Scarlet Witch die, symbol unavailable`:`${value} ${HEROES[dieHero].symbols[value-1]}`;
     const picture = blank?'<span aria-label="Blank due to Hex">—</span>':
       `<img src="${art.dice[dieHero][value-1]}" alt="${label}">`;
@@ -379,7 +382,20 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(state.mysticTask&&state.stage==='mysticChoices'){
+  if(state.santaRemoval&&!state.santaNogRoll&&!state.sideDamage&&!state.retry){
+    phase='Status effect response';heading=state.santaRemoval.choosing?`${names[state.santaRemoval.source]} resolves the removal`:`${names[state.santaRemoval.seat]} may spend tokens first`;detail='Resolve the committed removal after spending existing Cheer or Egg Nog if desired. If the chosen effect has gone, another available status effect must be selected.';content=state.santaRemoval.choosing?`<label>Remove <select id="santa-removal-choice">${santa.removalChoices(state).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('resolveSantaRemoval','Resolve status removal','class="primary"'):button('santaRemovalReady','Finish token response','class="primary"');
+  } else if(state.santaGift){
+    const g=state.santaGift;phase='White Elephant Gift';heading=g.stage==='hide'?'Santa · conceal the gift':'Opponent · choose a hand';detail=g.stage==='hide'?'Privately choose which hand holds Cheer and 3 Egg Nog from the supply, then let the opponent guess.':'Choose a hand. If it is empty, Santa gains the gift; otherwise no tokens are gained.';content=['left','right'].map(hand=>button(g.stage==='hide'?'santaGiftHide':'santaGiftGuess',`${hand==='left'?'Left':'Right'} hand`,`data-status="${hand}"`)).join('');
+  } else if(state.santaTask&&state.stage==='santaChoices'){
+    const t=state.santaTask,h=t.queue[0];phase='Santa';heading=names[responding];
+    if(h.kind==='gain'){heading=`Gain ${h.amount} ${statusLabel(h.key)}`;detail='Spend existing tokens first if desired, then collect this whole batch. Excess tokens are lost at the stack limit.';content=button('collectSantaTokens','Collect the whole batch','class="primary"');}
+    if(h.kind==='mistletoe'){heading=`Mistletoe · choose ${h.left} recipient${h.left===1?'':'s'}`;detail='The same player may be chosen twice. Both choices finish before gaining Cheer.';content=names.map((name,target)=>button('santaMistletoe',name,`data-target="${target}"`)).join('');}
+    if(h.kind==='apology'){heading='Extremely Naughty!';detail='The opponent must choose whether to apologise for being naughty. Declining causes 2 separate undefendable damage.';content=button('santaApology','Apologise','data-status="yes"')+button('santaApology','Decline · receive 2 damage','data-status="no"');}
+  } else if(state.santaNogRoll&&!state.response&&!state.retry){
+    phase='Egg Nog';heading='Resolve the Egg Nog die';detail='Axe: 2 isolated undefendable damage. Bell: heal 2 and gain 1 CP. Star: heal 2 and draw 1. This die uses Santa’s symbols regardless of its owner’s hero.';content=rollDisplay(rollContext(state))+button('resolveEggNog','Resolve Egg Nog','class="primary"');
+  } else if(state.santaRoll&&!state.cardRoll&&!state.response&&!state.retry){
+    phase=state.pending.santa.contest?'Fireside Chat':'Naughty or Nice';heading='Resolve the ability roll';detail=state.pending.santa.contest?'Each die belongs to its actual roller. Equal or greater wins, including ties. Dice can be altered before comparison.':'The final die determines whether the opponent is naughty or nice. Dice can be altered before resolution.';content=rollDisplay(rollContext(state))+button('resolveSantaRoll','Resolve the roll','class="primary"');
+  } else if(state.mysticTask&&state.stage==='mysticChoices'){
     const t=state.mysticTask,h=t.queue[0];phase='Mystic Brawler';heading=names[t.seat];
     if(h.kind==='strengths'){heading=`Choose Strengths · ${h.left} remaining`;detail='Allocate the whole batch before the tokens are gained. Each type has its own stack limit.';content=mysticBrawler.gainOptions(state).map(key=>button('mysticStrength',`${statusLabel(key)} · ${(state.players[t.seat][key]??0)+(h.allocation[key]??0)}/${mysticBrawler.caps[key]}`,`data-status="${key}"`)).join('');}
     if(h.kind==='tectonic'){heading='Tectonic Punch';detail='Removing a Mountain adds 3 ability damage, but that removed token no longer contributes its persistent +1.';content=button('mysticTectonic','Gain Strength of the Mountain','data-status="gain"')+(state.players[t.seat].strengthMountain?button('mysticTectonic','Remove a Mountain · add 3 damage','data-status="remove"'):'');}
@@ -1141,6 +1157,14 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'santaAbility':
+      phase='Santa';heading='Resolve Santa’s printed effects';content=button('finishSantaAbility','Continue Santa’s ability','class="primary"');break;
+    case 'santaTarget':
+      phase=state.pending.santa.contest?'Fireside Chat':'Naughty or Nice';heading=`Target ${names[1-state.active]}`;detail='The opponent is targeted before the subsidiary dice are rolled.';content=button('rollSantaAbility','Confirm target and roll','class="primary"');break;
+    case 'santaPrepared':
+      phase='Santa';heading='Continue the activated ability';content=button('finishSantaPrepared','Continue ability','class="primary"');break;
+    case 'santaExtraRoll':
+      phase='Comfort and Joy!';heading='Additional Offensive Roll Phase';detail='Target the same opponent again. Income is not repeated; effects that expire at the end of the previous Roll Phase have cleared.';content=button('startSantaRoll','Start the additional Roll Phase','class="primary"');break;
     case 'mysticAbility':
       phase='Mystic Brawler';heading=p.name;content=button('finishMysticAbility','Resolve ability effects','class="primary"');break;
     case 'mysticStrongTarget':
@@ -1239,6 +1263,8 @@ function arena() {
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
   if(!state.psyReveal){
+  for(const [choice,c] of santa.cheerChoices(state,responding).entries())content+=button('spendCheer',c.label,`data-choice="${choice}"`);
+  if(santa.canNog(state,responding))content+=button('spendEggNog','Spend 3 Egg Nog · roll for a benefit');
   for(const n of mysticBrawler.oceanChoices(state,responding))content+=button('spendOcean',n===1?'Spend 1 Ocean · gain 1 CP':'Spend 2 Ocean · gain 1 CP and heal 2',`data-amount="${n}"`);
   if(krampus.canGift(state,responding))content+=button('spendGift','Spend Gift · draw 1 Reject');
   if(!(state.krampusTask&&state.stage==='krampusChoices'&&state.krampusTask.queue[0]?.kind==='free'))for(const [i,c] of krampus.options(state,responding).entries())content+=button('activateReject',c.label,`data-choice="${i}"`);
@@ -1246,7 +1272,7 @@ function arena() {
   if(lab.length)content+=`<div class="token-actions"><label>The Lab <select id="alchemist-lab">${lab.map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>${button('alchemistLab','Remove Potion and reroll')}</div>`;
   for(const [i,c] of wolverine.rageChoices(state,responding).entries())content+=button('spendRage',c.label,`data-choice="${i}"`);
   }
-  if(!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
   if(storm.canTornado(state,responding))content+=button('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
   if(storm.canWind(state,responding))content+=button('spendWindShear',state.players[responding].ragingWindsTurn===state.turn?'Spend Wind Shear · prevent 4 and deal 4 isolated damage':'Spend Wind Shear · prevent 2 and deal 2 isolated damage');
   if(storm.oppReroll(state,responding))content+=`<div class="controls">${button('stormOppReroll','Reroll effect die 1','data-status="first"')}${button('stormOppReroll','Reroll effect die 2','data-status="second"')}${button('stormOppReroll','Reroll both effect dice','data-status="both"')}</div>`;
@@ -1255,7 +1281,7 @@ function arena() {
   if(rogue.canSkyward(state,responding))content+=button('spendSkyward','Spend Skyward · both players roll');
   if(rogue.boostLeach(state,responding))content+=button('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
   }
-  if(!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
   for(const c of psylocke.swaps(state,responding))content+=button('manifestSwap',c.label,`data-index="${c.index}"`);
   if(psylocke.canBoost(state,responding))content+=button('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
   for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=button('spendInfiltration',c.label,`data-choice="${i}"`);
@@ -1455,6 +1481,7 @@ function handleAction(event) {
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
   if(type==='mysticWildReroll')action.indices=[...match.querySelectorAll('input[name="mystic-wild-reroll"]:checked')].map(input=>Number(input.value));
+  if(type==='resolveSantaRemoval')action.choice=Number(document.getElementById('santa-removal-choice').value);
   if(type==='alchemistChoice')action.choice=Number(document.getElementById('alchemist-choice').value);
   if(type==='alchemistLab')action.choice=Number(document.getElementById('alchemist-lab').value);
   if(type==='stormOppReroll')action.indices=action.status==='both'?[0,1]:action.status==='first'?[0]:[1];
