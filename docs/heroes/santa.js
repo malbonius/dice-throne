@@ -74,7 +74,7 @@ const santa=(()=>{
   handle(previous,a,roll,random,bypassResponse){
    if(!['spendCheer','spendEggNog','resolveEggNog','collectSantaTokens','santaMistletoe','santaApology','rollSantaAbility','resolveSantaRoll','santaGiftHide','santaGiftGuess','santaRemovalReady'].includes(a.type))return undefined;
    const seat=cardActor(previous),t=previous.santaTask,h=t?.queue[0];let c;
-   if(a.type==='santaRemovalReady'&&(!previous.santaRemoval||previous.santaRemoval.choosing||previous.santaNogRoll||previous.retry))return previous;
+   if(a.type==='santaRemovalReady'&&(!previous.santaRemoval||previous.santaRemoval.choosing||previous.santaNogRoll||previous.deadpoolDonutRoll||previous.retry))return previous;
    if(a.type==='spendCheer'){c=cheerChoices(previous,seat)[a.choice];if(!c)return previous;}
    if(a.type==='spendEggNog'&&!canNog(previous,seat))return previous;
    if(a.type==='resolveEggNog'&&(!previous.santaNogRoll||previous.stage!=='santaNogRoll'||previous.response||previous.retry))return previous;
