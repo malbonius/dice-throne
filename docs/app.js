@@ -10,7 +10,6 @@ const match = document.getElementById('match');
 const storageKey = 'dice-throne-card-pilot-v2';
 const roll = () => 1 + Math.floor(Math.random()*6);
 let state;
-let boardOverride = null;
 try {
   const saved = JSON.parse(localStorage.getItem(storageKey));
   if (saved?.version === 2 && saved.cards && saved.players?.length === 2 && Array.isArray(saved.log)) state = saved;
@@ -32,14 +31,12 @@ function boardImage(state,seat,full=false) {
   if(id===druid.id&&form!=='druid')return art[form+(full?'DruidFullBoard':'DruidBoard')];
   return (full?art.fullBoards:art.boards)[id];
 }
-function board(seat) {
+function heroEquipment(seat) {
   const upgrades=Object.values(state.players[seat].upgrades??{});
-  return `<figure class="board-panel">${button('inspect-board',
-    `<img src="${boardImage(state,seat)}" alt="">`,`class="board-open" data-index="${seat}" aria-label="Zoom ${names[seat]} board"`)}
-    ${heroId(state,seat)===alchemist.id?`<details class="board-upgrades"><summary>Attached Potions (${alchemist.tokens(state,seat).length})</summary>${Object.entries(alchemist.slots(state.players[seat])).map(([slot,cap])=>`<p><strong>${slot==='defence'?'Passivation':slot}</strong> · ${alchemist.tokens(state,seat).filter(t=>t.slot===slot).length}/${cap} slots<br>${alchemist.tokens(state,seat).filter(t=>t.slot===slot).map(t=>alchemist.tokenLabel(t)).join('<br>')||'Empty'}</p>`).join('')}</details>`:''}
-    ${heroId(state,seat)===krampus.id?`<details class="board-upgrades"><summary>Rejects (${state.players[seat].rejects.length}/3)</summary><div class="controls">${state.players[seat].rejects.map(id=>button('inspect-reject',`<img src="${art.krampusRejects[id]}" alt="${krampus.names[id]}" style="width:100px;max-width:100%"><br>${krampus.names[id]}${state.players[seat].rejectUsed[id]===state.turn?' · used this turn':''}`,`data-index="${id}" data-seat="${seat}"`)).join('')||'No Rejects in play'}</div><p>Draw pile: ${state.players[seat].rejectDeck.length} · Discard: ${state.players[seat].rejectDiscard.map(id=>krampus.names[id]).join(', ')||'empty'}</p></details>`:''}
-    ${upgrades.length?`<details class="board-upgrades" data-seat="${seat}"><summary>Equipped upgrades (${upgrades.length})</summary>
-      ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
+  return `${heroId(state,seat)===alchemist.id?`<details class="board-upgrades" data-disclosure="potions-${seat}"><summary>Attached Potions (${alchemist.tokens(state,seat).length})</summary>${Object.entries(alchemist.slots(state.players[seat])).map(([slot,cap])=>`<p><strong>${slot==='defence'?'Passivation':slot}</strong> · ${alchemist.tokens(state,seat).filter(t=>t.slot===slot).length}/${cap} slots<br>${alchemist.tokens(state,seat).filter(t=>t.slot===slot).map(t=>alchemist.tokenLabel(t)).join('<br>')||'Empty'}</p>`).join('')}</details>`:''}
+    ${heroId(state,seat)===krampus.id?`<details class="board-upgrades" data-disclosure="rejects-${seat}"><summary>Rejects (${state.players[seat].rejects.length}/3)</summary><div class="controls">${state.players[seat].rejects.map(id=>button('inspect-reject',`<img src="${art.krampusRejects[id]}" alt="${krampus.names[id]}" style="width:100px;max-width:100%"><br>${krampus.names[id]}${state.players[seat].rejectUsed[id]===state.turn?' · used this turn':''}`,`data-index="${id}" data-seat="${seat}"`)).join('')||'No Rejects in play'}</div><p>Draw pile: ${state.players[seat].rejectDeck.length} · Discard: ${state.players[seat].rejectDiscard.map(id=>krampus.names[id]).join(', ')||'empty'}</p></details>`:''}
+    ${upgrades.length?`<details class="board-upgrades" data-disclosure="upgrades-${seat}"><summary>Equipped upgrades (${upgrades.length})</summary>
+      ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}`;
 }
 const statusNotes = {
   donut:'Positive, stack limit 2. When gaining Donut, choose any player to receive it. During your own Upkeep, spend one and roll: heal half the final value, rounded up. Healing uses the existing end-of-Upkeep timing.',
@@ -185,64 +182,64 @@ const token = (seat,key,label,suffix=key) => {
   return `<span class="token-help">${button('status',`<span class="token"><img src="${image}" alt="">${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
-function hero(seat) {
-  const p=state.players[seat];
-  return `<section class="hero" aria-label="${names[seat]}" style="--hero:${seat ? '#91ddff' : '#ffad86'}">
-    <div class="hero-head"><h2>${names[seat]}</h2><span class="vitals"><strong>${p.hp} health</strong><strong>${p.cp} CP</strong></span>
-    ${heroId(state,seat)===cyclops.id?`<div class="leadership-counter" role="status">Leadership cards played this turn: <strong>${cyclops.count(state,seat)}</strong></div>`:''}
-    ${p.nyra?`<div class="tokens"><span class="token"><img src="${art.nyraDials[Number(p.nyra.downed)]}" alt="">
-      Nyra · ${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health</span></div>`:''}
-    <div class="tokens">${[p.evasive && token(seat,'evasive',`Evasive ×${p.evasive}`),p.entangle && token(seat,'entangle','Entangle'),p.blind && token(seat,'blind','Blind'),p.targeted && token(seat,'targeted','Targeted'),
-    p.pirateCoins?.[seat]&&token(seat,'doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`),
-    p.pirateCoins?.[1-seat]&&token(seat,'doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent'),
-    ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
-    ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
-    ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+function hero(seat, decisionSeat, responding) {
+  const p = state.players[seat];
+  const statusLabels = [];
+  const status = (key, label, suffix) => {
+    statusLabels.push(label);
+    return token(seat, key, label, suffix);
+  };
+  const statuses = [p.evasive && status('evasive',`Evasive ×${p.evasive}`),p.entangle && status('entangle','Entangle'),p.blind && status('blind','Blind'),p.targeted && status('targeted','Targeted'),
+    p.pirateCoins?.[seat]&&status('doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`),
+    p.pirateCoins?.[1-seat]&&status('doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent'),
+    ...['powderKeg','wither','parlay'].map(key=>p[key]&&status(key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
+    ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&status(key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
+    ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&status(key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
     ...Object.entries(p.armor??{}).filter(([,tier])=>tier).map(([slot,tier])=>{
       const name=forgemaster.armorName(slot,tier);
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
       return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
     }),
-    p.combo&&token(seat,'combo','Combo'),
-    p.invisibility&&token(seat,'invisibility','Invisibility'),
-    p.webbed&&token(seat,'webbed','Webbed'),
-    p.probabilityManipulation>0&&token(seat,'probabilityManipulation',`Probability Manipulation ×${p.probabilityManipulation}`),
-    p.realityWarp&&token(seat,'realityWarp','Reality Warp'),
-    state.realityDie?.seat===seat&&token(seat,'realityWarp','Reality Warp · Scarlet Witch die 5','active'),
-    p.conjure&&token(seat,'conjure','Conjure'),
-    p.crackle>0&&token(seat,'crackle',`Crackle ×${p.crackle}`),
-    p.illusion>0&&token(seat,'illusion',`Illusion ×${p.illusion}`),
-    ...(p.trickBags??[]).map(b=>token(seat,'bagOfTricks',`Bag of Tricks · ${names[b.owner]}`,`bag-${b.id}`)),
-    ...(p.boundAbilities??[]).map(b=>token(seat,'spellbound',`Spellbound · ${b.key}`,`bound-${b.id}`)),
-    p.premonition>0&&token(seat,'premonition',`Premonition ×${p.premonition}`),
-    p.dejaVu&&token(seat,'dejaVu','Déjà Vu'),
-    p.crimsonBands&&token(seat,'crimsonBands','Crimson Bands'),
-    p.cosmicRay>0&&token(seat,'cosmicRay',`Cosmic Ray ×${p.cosmicRay} · ${(p.cosmicRays??[]).filter(ray=>captainMarvel.readyRay(ray,state.turn)).length} ready`),
-    p.cosmicFlare>0&&token(seat,'cosmicFlare',`Cosmic Flare ×${p.cosmicFlare}`),
-    p.radiance>0&&token(seat,'radiance',`Radiance ×${p.radiance}`),
-    p.covertOps>0&&token(seat,'covertOps',`Covert Ops ×${p.covertOps}`),
-    p.agility>0&&token(seat,'agility',`Agility ×${p.agility}`),
-    ...(p.timeBombTimers??[]).map((b,i)=>token(seat,'timeBomb',`Time Bomb ${i+1} · 0:0${b.ticks}`,`timeBomb-${b.id}`)),
-    p.kineticEnergy>0&&token(seat,'kineticEnergy',`Kinetic Energy ${p.kineticEnergy}/${statusCap(p,'kineticEnergy')}`),
-    p.vibraniumSuit&&token(seat,'vibraniumSuit','Vibranium Suit'),
-    p.sunDial!==undefined&&token(seat,'sunDial',`${p.sunDawn?'Dawn':'Dusk'} · ${p.sunDial}/5`),
-    p.sunMarked&&token(seat,'sunMarked','Sun Marked'),
-    p.chargedGem&&token(seat,'chargedGem','Charged Gem'),
-    p.footwork!==undefined&&token(seat,'footwork',`Footwork · ${duelist.positions[p.footwork+2]}`),
-    p.guardBreak>0&&token(seat,'guardBreak',`Guard Break ×${p.guardBreak}`),
-    p.disarm&&token(seat,'disarm','Disarm'),
+    p.combo&&status('combo','Combo'),
+    p.invisibility&&status('invisibility','Invisibility'),
+    p.webbed&&status('webbed','Webbed'),
+    p.probabilityManipulation>0&&status('probabilityManipulation',`Probability Manipulation ×${p.probabilityManipulation}`),
+    p.realityWarp&&status('realityWarp','Reality Warp'),
+    state.realityDie?.seat===seat&&status('realityWarp','Reality Warp · Scarlet Witch die 5','active'),
+    p.conjure&&status('conjure','Conjure'),
+    p.crackle>0&&status('crackle',`Crackle ×${p.crackle}`),
+    p.illusion>0&&status('illusion',`Illusion ×${p.illusion}`),
+    ...(p.trickBags??[]).map(b=>status('bagOfTricks',`Bag of Tricks · ${names[b.owner]}`,`bag-${b.id}`)),
+    ...(p.boundAbilities??[]).map(b=>status('spellbound',`Spellbound · ${b.key}`,`bound-${b.id}`)),
+    p.premonition>0&&status('premonition',`Premonition ×${p.premonition}`),
+    p.dejaVu&&status('dejaVu','Déjà Vu'),
+    p.crimsonBands&&status('crimsonBands','Crimson Bands'),
+    p.cosmicRay>0&&status('cosmicRay',`Cosmic Ray ×${p.cosmicRay} · ${(p.cosmicRays??[]).filter(ray=>captainMarvel.readyRay(ray,state.turn)).length} ready`),
+    p.cosmicFlare>0&&status('cosmicFlare',`Cosmic Flare ×${p.cosmicFlare}`),
+    p.radiance>0&&status('radiance',`Radiance ×${p.radiance}`),
+    p.covertOps>0&&status('covertOps',`Covert Ops ×${p.covertOps}`),
+    p.agility>0&&status('agility',`Agility ×${p.agility}`),
+    ...(p.timeBombTimers??[]).map((b,i)=>status('timeBomb',`Time Bomb ${i+1} · 0:0${b.ticks}`,`timeBomb-${b.id}`)),
+    p.kineticEnergy>0&&status('kineticEnergy',`Kinetic Energy ${p.kineticEnergy}/${statusCap(p,'kineticEnergy')}`),
+    p.vibraniumSuit&&status('vibraniumSuit','Vibranium Suit'),
+    p.sunDial!==undefined&&status('sunDial',`${p.sunDawn?'Dawn':'Dusk'} · ${p.sunDial}/5`),
+    p.sunMarked&&status('sunMarked','Sun Marked'),
+    p.chargedGem&&status('chargedGem','Charged Gem'),
+    p.footwork!==undefined&&status('footwork',`Footwork · ${duelist.positions[p.footwork+2]}`),
+    p.guardBreak>0&&status('guardBreak',`Guard Break ×${p.guardBreak}`),
+    p.disarm&&status('disarm','Disarm'),
     p.druidForm&&`<span class="token">${druid.formName(p.druidForm)} Form</span>`,
-    p.shapeShift>0&&token(seat,'shapeshift',`Shape Shift ×${p.shapeShift}`),
-    p.regenerate>0&&token(seat,'regenerate',`Regenerate (2) ×${p.regenerate}`),
-    p.regenerate1>0&&token(seat,'regenerate1',`Regenerate (1) ×${p.regenerate1}`),
-    p.wound>0&&token(seat,'wound',`Wound ×${p.wound}`),
-    p.hex&&token(seat,'hex','Hex'),
-    p.feather>0&&token(seat,'feather',`Feathers ${p.feather}/${p.featherCap??5}`),
+    p.shapeShift>0&&status('shapeshift',`Shape Shift ×${p.shapeShift}`),
+    p.regenerate>0&&status('regenerate',`Regenerate (2) ×${p.regenerate}`),
+    p.regenerate1>0&&status('regenerate1',`Regenerate (1) ×${p.regenerate1}`),
+    p.wound>0&&status('wound',`Wound ×${p.wound}`),
+    p.hex&&status('hex','Hex'),
+    p.feather>0&&status('feather',`Feathers ${p.feather}/${p.featherCap??5}`),
     ...state.players.flatMap((owner,i)=>owner.nevermoreSeat===seat?
-      [token(seat,'nevermore',`Nevermore${heroId(state,1-i)===raveness.id?` (P${i+1})`:''} · ${owner.nevermoreVitality}/3`,`nevermore-${i}`)]:[]),
+      [status('nevermore',`Nevermore${heroId(state,1-i)===raveness.id?` (P${i+1})`:''} · ${owner.nevermoreVitality}/3`,`nevermore-${i}`)]:[]),
     p.werewolf&&'<span class="token">Werewolf form</span>',
-    p.moonShard>0&&token(seat,'moonShard',`Moon Shards ×${p.moonShard}`),
-    p.prey>0&&token(seat,'prey',`Prey ×${p.prey}`),
+    p.moonShard>0&&status('moonShard',`Moon Shards ×${p.moonShard}`),
+    p.prey>0&&status('prey',`Prey ×${p.prey}`),
     p.corpses!==undefined&&`<span class="token"><img src="${art.corpseDial}" alt="">Corpses ${p.corpses}/10</span>`,
     p.covered&&`<span class="token">Unearth covers ${p.covered}</span>`,
     ...Object.entries(p.undead??{}).filter(([,count])=>count).map(([kind,count])=>{
@@ -250,74 +247,100 @@ function hero(seat) {
       return `<span class="token"><img src="${art[key]}" alt="">${name} ×${count}</span>`;
     }),
     p.resurrected&&'<span class="token">Resurrected · CP and cards locked</span>',
-    p.resurrect&&token(seat,'resurrect','Resurrect'),
-    p.decrepify&&token(seat,'decrepify','Decrep-ify'),
-    p.dreadful&&token(seat,'dreadful',`Dreadful ×${p.dreadful}`),
-    p.grim&&token(seat,'grim',`Grim Pursuit ×${p.grim}`),
-    ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
-    p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
+    p.resurrect&&status('resurrect','Resurrect'),
+    p.decrepify&&status('decrepify','Decrep-ify'),
+    p.dreadful&&status('dreadful',`Dreadful ×${p.dreadful}`),
+    p.grim&&status('grim',`Grim Pursuit ×${p.grim}`),
+    ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&status('hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
+    p.nyraBond&&status('nyraBond','Nyra’s Bond'),
     heroId(state,seat)===jeanGrey.id&&`<span class="token">${p.darkPhoenix?'Dark Phoenix':'Jean Grey'} active</span>`,
-    ...alchemist.types.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
-    p.coal&&token(seat,'coal',`Coal ${p.coal}/4`),
-    p.gift&&token(seat,'gift',`Gift ${p.gift}/3`),
-    ...['donut','onomatopoeia','rps'].map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
-    ...['cheer','eggNog'].map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
-    ...mysticBrawler.keys.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${mysticBrawler.caps[key]}`)),
-    p.rage&&token(seat,'rage',`Rage ${p.rage}/3`),
-    p.alpha&&token(seat,'alpha','Alpha'),
-    p.tornado&&token(seat,'tornado',`Tornado ${p.tornado}/4`),
-    p.windShear&&token(seat,'windShear','Wind Shear'),
-    p.lightningCharges&&`<details class="token-actions"><summary>Lightning · ${Object.values(p.lightningCharges).filter(Boolean).length} charged abilities</summary>${storm.slots.map(key=>`<span class="token">${token(seat,'lightning',key+': '+(p.lightningCharges[key]?'Charged':'empty'))}</span>`).join('')}</details>`,
-    p.influence&&token(seat,'influence',`Influence ${p.influence}/3`),
-    p.ionicEnergy&&token(seat,'ionicEnergy',`Ionic (1) ×${p.ionicEnergy} · ${rogue.total(p)}/${rogue.cap(p)}`),
-    p.ionicEnergy2&&token(seat,'ionicEnergy2',`Ionic (2) ×${p.ionicEnergy2} · ${rogue.total(p)}/${rogue.cap(p)}`),
-    p.skyward&&token(seat,'skyward',`Skyward ${p.skyward}/2`),
-    p.paralyze&&token(seat,'paralyze','Paralyze'),
-    p.infiltration&&token(seat,'infiltration',`Infiltration ${p.infiltration}/2`),
-    heroId(state,seat)===psylocke.id&&token(seat,'manifestDie',`Manifest die · ${p.manifestDie||1}${!p.manifestDie?' · not rolled':''}${p.manifestUsedTurn===state.turn?' · used this turn':''}`),
-    p.acuity&&token(seat,'acuity',`Acuity ${p.acuity}/4`),
-    p.flameBlast&&token(seat,'flameBlast',`Flame Blast ${p.flameBlast}/5`),
-    p.forceField&&token(seat,'forceField','Force Field'),
-    p.phoenixBurn&&token(seat,'phoenixBurn','Phoenix Burn'),
-    p.iceShard&&token(seat,'iceShard',`Ice Shards ${p.iceShard}/5`),
-    p.diceCube&&token(seat,'diceCube',`Dice Cube ×${p.diceCube}`),
-    p.glide&&token(seat,'glide','Glide'),
-    p.dissolution&&token(seat,'dissolution',`Dissolution ×${p.dissolution}`),
-    p.disruption&&token(seat,'disruption','Disruption'),
-    p.battlePlan&&token(seat,'battlePlan',`Battle Plan ${p.battlePlan}/4`),
-    p.support&&token(seat,'support',`Support ${p.support}/3`),
-    p.focusFire&&token(seat,'focusFire',`Focus Fire ×${p.focusFire}`),
-    p.electrokinesis&&token(seat,'electrokinesis',`Electrokinesis ${p.electrokinesis}/4`),
-    ...state.players.map((owner,i)=>owner.mjolnirSeat===seat&&token(seat,'mjolnir',i===seat?'Own Mjölnir':`${names[i]}’s Mjölnir`,`mjolnir-${i}`)),
-    p.tactical&&token(seat,'tactical',`Tactical Advantage ${p.tactical}/${statusCap(p,'tactical')}`),
-    p.constrict&&token(seat,'constrict','Constrict'),
-    p.honor&&token(seat,'honor',`Honor ×${p.honor}`),p.shame&&token(seat,'shame',`Shame ×${p.shame}`),
-    p.backStrike&&token(seat,'backStrike','Back Strike'),
-    p.reload&&token(seat,'reload',`Reload ×${p.reload}`),p.bounty&&token(seat,'bounty','Bounty'),
-    p.synth&&token(seat,'synth',`Synth ×${p.synth}`),p.nanite&&token(seat,'nanite',`Nanite ×${p.nanite}`),
+    ...alchemist.types.map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
+    p.coal&&status('coal',`Coal ${p.coal}/4`),
+    p.gift&&status('gift',`Gift ${p.gift}/3`),
+    ...['donut','onomatopoeia','rps'].map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
+    ...['cheer','eggNog'].map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
+    ...mysticBrawler.keys.map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${mysticBrawler.caps[key]}`)),
+    p.rage&&status('rage',`Rage ${p.rage}/3`),
+    p.alpha&&status('alpha','Alpha'),
+    p.tornado&&status('tornado',`Tornado ${p.tornado}/4`),
+    p.windShear&&status('windShear','Wind Shear'),
+    p.lightningCharges&&`<details class="token-actions"><summary>Lightning · ${Object.values(p.lightningCharges).filter(Boolean).length} charged abilities</summary>${storm.slots.map(key=>`<span class="token">${status('lightning',key+': '+(p.lightningCharges[key]?'Charged':'empty'))}</span>`).join('')}</details>`,
+    p.influence&&status('influence',`Influence ${p.influence}/3`),
+    p.ionicEnergy&&status('ionicEnergy',`Ionic (1) ×${p.ionicEnergy} · ${rogue.total(p)}/${rogue.cap(p)}`),
+    p.ionicEnergy2&&status('ionicEnergy2',`Ionic (2) ×${p.ionicEnergy2} · ${rogue.total(p)}/${rogue.cap(p)}`),
+    p.skyward&&status('skyward',`Skyward ${p.skyward}/2`),
+    p.paralyze&&status('paralyze','Paralyze'),
+    p.infiltration&&status('infiltration',`Infiltration ${p.infiltration}/2`),
+    heroId(state,seat)===psylocke.id&&status('manifestDie',`Manifest die · ${p.manifestDie||1}${!p.manifestDie?' · not rolled':''}${p.manifestUsedTurn===state.turn?' · used this turn':''}`),
+    p.acuity&&status('acuity',`Acuity ${p.acuity}/4`),
+    p.flameBlast&&status('flameBlast',`Flame Blast ${p.flameBlast}/5`),
+    p.forceField&&status('forceField','Force Field'),
+    p.phoenixBurn&&status('phoenixBurn','Phoenix Burn'),
+    p.iceShard&&status('iceShard',`Ice Shards ${p.iceShard}/5`),
+    p.diceCube&&status('diceCube',`Dice Cube ×${p.diceCube}`),
+    p.glide&&status('glide','Glide'),
+    p.dissolution&&status('dissolution',`Dissolution ×${p.dissolution}`),
+    p.disruption&&status('disruption','Disruption'),
+    p.battlePlan&&status('battlePlan',`Battle Plan ${p.battlePlan}/4`),
+    p.support&&status('support',`Support ${p.support}/3`),
+    p.focusFire&&status('focusFire',`Focus Fire ×${p.focusFire}`),
+    p.electrokinesis&&status('electrokinesis',`Electrokinesis ${p.electrokinesis}/4`),
+    ...state.players.map((owner,i)=>owner.mjolnirSeat===seat&&status('mjolnir',i===seat?'Own Mjölnir':`${names[i]}’s Mjölnir`,`mjolnir-${i}`)),
+    p.tactical&&status('tactical',`Tactical Advantage ${p.tactical}/${statusCap(p,'tactical')}`),
+    p.constrict&&status('constrict','Constrict'),
+    p.honor&&status('honor',`Honor ×${p.honor}`),p.shame&&status('shame',`Shame ×${p.shame}`),
+    p.backStrike&&status('backStrike','Back Strike'),
+    p.reload&&status('reload',`Reload ×${p.reload}`),p.bounty&&status('bounty','Bounty'),
+    p.synth&&status('synth',`Synth ×${p.synth}`),p.nanite&&status('nanite',`Nanite ×${p.nanite}`),
     ...Object.entries(p.bots??{}).map(([bot,level])=>`<span class="token"><img src="${art.artificerBots[bot][level-1]}" alt="">${level===2?'Advanced':'Basic'} ${artificer.bots[bot]}</span>`),
-    p.barbed&&token(seat,'barbed','Barbed Vine'),p.wellspring&&token(seat,'wellspring','Wellspring'),
-    ...spiritTypes.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ×${p[key]}`)),
-    p.delayedPoison&&token(seat,'delayedPoison',`Delayed Poison ×${p.delayedPoison}`),
-    p.smoke&&token(seat,'smoke','Smoke Bomb'),p.ninjutsu&&token(seat,'ninjutsu',`Ninjutsu ×${p.ninjutsu}`),
-    ...[...paladinBuffs,'blessing'].map(key=>p[key]&&token(seat,key,statusLabel(key))),
-    p.chi&&token(seat,'chi',`Chi ${p.chi}/${statusCap(p,'chi')}`),p.cleanse&&token(seat,'cleanse',`Cleanse ×${p.cleanse}`),
-    p.poison&&token(seat,'poison',`Poison ×${p.poison}`),p.shadows&&token(seat,'shadows','Shadows'),p.sneak&&token(seat,'sneak','Sneak Attack'),
-    p.burn&&token(seat,'burn','Burn'),p.knockdown&&token(seat,'knockdown','Knockdown'),
-    p.fireMastery&&token(seat,'fireMastery',`Fire Mastery ${p.fireMastery}/${statusCap(p,'fireMastery')}`),
-    p.concussion && token(seat,'concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && token(seat,'stun','Stun')].filter(Boolean).join('') || 'No status effects'}</div></div>
-    ${board(seat)}<div class="inventory"><span class="deck">${(p.deck.length??p.deck) ? `<img src="${art.back}" alt="">` : ''} Draw ${p.deck.length??p.deck} · Discard ${p.discard?.length??0}</span><span class="hand-tools"><span class="hand-count">${p.hand.length??p.hand} in hand</span>
-      ${button('open-hand','Hand',`data-index="${seat}" aria-label="Open ${names[seat]}’s hand" aria-haspopup="dialog" ${seat===cardActor(state)&&!['finished','nyraDamage'].includes(state.stage)?'':'disabled'}`)}</span>${button('inspect-leaflet','Leaflet',`class="leaflet" data-index="${seat}" aria-label="${names[seat]} leaflet"`)}${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}</div>
-    ${heroId(state,seat)===deadpool.id?`<details class="token-actions deadpool-shoot" data-seat="${seat}"><summary>Shoot · ${p.shootActive?'Active':'Inactive'}</summary><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="Shoot ${p.shootActive?'Active':'Inactive'}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}${seat===cardActor(state)&&seat===state.active&&isMain(state)?button('toggleCurmudgeon',`Curmudgeon coin · ${p.curmudgeon?'On':'Off'}`):''}</div><p>The Shoot card is separate from the draw deck. Curmudgeon coin waives Deadpool’s spoken bonus requirements.</p></details>`:''}
+    p.barbed&&status('barbed','Barbed Vine'),p.wellspring&&status('wellspring','Wellspring'),
+    ...spiritTypes.map(key=>p[key]&&status(key,`${statusLabel(key)} ×${p[key]}`)),
+    p.delayedPoison&&status('delayedPoison',`Delayed Poison ×${p.delayedPoison}`),
+    p.smoke&&status('smoke','Smoke Bomb'),p.ninjutsu&&status('ninjutsu',`Ninjutsu ×${p.ninjutsu}`),
+    ...[...paladinBuffs,'blessing'].map(key=>p[key]&&status(key,statusLabel(key))),
+    p.chi&&status('chi',`Chi ${p.chi}/${statusCap(p,'chi')}`),p.cleanse&&status('cleanse',`Cleanse ×${p.cleanse}`),
+    p.poison&&status('poison',`Poison ×${p.poison}`),p.shadows&&status('shadows','Shadows'),p.sneak&&status('sneak','Sneak Attack'),
+    p.burn&&status('burn','Burn'),p.knockdown&&status('knockdown','Knockdown'),
+    p.fireMastery&&status('fireMastery',`Fire Mastery ${p.fireMastery}/${statusCap(p,'fireMastery')}`),
+    p.concussion && status('concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && status('stun','Stun')].filter(Boolean);
+  const visibleStatuses = statusLabels.slice(0, 2).join(' · ');
+  const moreStatuses = statusLabels.length > 2 ? ` · +${statusLabels.length - 2}` : '';
+  const statusSummary = visibleStatuses ? visibleStatuses + moreStatuses : 'Hero details';
+  const ready = seat === decisionSeat && state.stage !== 'finished';
+  return `<section class="hero seat-${seat}" aria-label="${names[seat]}" data-deciding="${ready}" style="--hero:${seat ? '#89cbc5' : '#e9a987'}">
+    <div class="hero-head">
+      <span class="seat-label">Player ${seat + 1}</span>
+      <h2>${names[seat]}</h2>
+      <div class="vitals"><span><strong>${p.hp}</strong> Health</span><span><strong>${p.cp}</strong> CP</span></div>
+      <div class="hero-links">
+        ${button('inspect-board','Board',`data-index="${seat}" aria-label="Open ${names[seat]}’s board" aria-haspopup="dialog"`)}
+        ${button('inspect-leaflet','Leaflet',`data-index="${seat}" aria-label="Open ${names[seat]}’s leaflet" aria-haspopup="dialog"`)}
+      </div>
+    </div>
+    <details class="hero-information" data-disclosure="hero-${seat}">
+      <summary>${statusSummary}</summary>
+      <div class="hero-information-body">
+        ${heroId(state,seat)===cyclops.id?`<div class="leadership-counter" role="status">Leadership cards played this turn: <strong>${cyclops.count(state,seat)}</strong></div>`:''}
+        ${p.nyra?`<div class="tokens"><span class="token"><img src="${art.nyraDials[Number(p.nyra.downed)]}" alt="">Nyra · ${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health</span></div>`:''}
+        <div class="tokens">${statuses.join('') || 'No status effects'}</div>
+        <div class="inventory">
+          <span>Draw ${p.deck.length ?? p.deck} · Discard ${p.discard?.length ?? 0}</span>
+          <span>${p.hand.length ?? p.hand} in hand</span>
+          ${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}
+        </div>
+        ${heroEquipment(seat)}
+    ${heroId(state,seat)===deadpool.id?`<details class="token-actions deadpool-shoot" data-disclosure="shoot-${seat}"><summary>Shoot · ${p.shootActive?'Active':'Inactive'}</summary><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="Shoot ${p.shootActive?'Active':'Inactive'}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}${seat===responding&&seat===state.active&&isMain(state)?button('toggleCurmudgeon',`Curmudgeon coin · ${p.curmudgeon?'On':'Off'}`):''}</div><p>The Shoot card is separate from the draw deck. Curmudgeon coin waives Deadpool’s spoken bonus requirements.</p></details>`:''}
     ${p.spellBook?`<div class="forge-inventory"><strong>Book of Vishanti · ${p.spellBook.length} prepared</strong><div class="controls">${p.spellBook.map(id=>button('inspect-card',doctorStrange.spells[id],`data-index="${id}" data-seat="${seat}"`)).join('')||'No prepared Spells'}</div></div>`:''}
-    ${p.forgeOre?`<details class="forge-inventory" data-seat="${seat}"><summary>The Forge · ${p.forgeOre.length} Ore</summary>
+    ${p.forgeOre?`<details class="forge-inventory" data-disclosure="forge-${seat}"><summary>The Forge · ${p.forgeOre.length} Ore</summary>
       <div class="controls">${[19,28,34].map(id=>{
         const ore=forgemaster.oreType(id),cards=p.forgeOre.filter(card=>forgemaster.oreType(card)===ore);
         return cards.length?button('inspect-card',`${seatCard(state,seat,id).name} ×${cards.length}`,`data-index="${id}" data-seat="${seat}"`):'';
       }).join('')}${['mining','crafting'].map(key=>button('inspect-forging',key==='mining'?'Mining rules':'Crafting rules',`data-status="${key}"`)).join('')}</div>
     </details>`:''}
-    ${p.freezer?`<details class="token-actions"><summary>The Freezer · ${p.freezer.shards}/5 Ice Shards · ${p.freezer.glide?'Glide stored':'No Glide stored'}</summary><div class="controls">${button('inspect-freezer','View The Freezer',`data-index="${seat}"`)}</div><p>Stored tokens are out of play. They cannot be removed, transferred by ordinary status cards or counted for damage. Only an authorised ability or card can transfer them to your board. Five stored shards can be converted into stored Glide.</p></details>`:''}
-    ${p.aces?`<details class="token-actions"><summary>Ace cards · ${p.aceTurn===state.turn?p.aceExploded??0:0}/${1+(p.aceTurn===state.turn?p.aceExtra??0:0)} exploded this turn</summary><div class="controls">${gambit.suits.map((suit,i)=>`<figure style="max-width:150px;margin:6px">${button('inspect-ace',`<img src="${p.aces[suit].up?art.gambitAces[i]:art.back}" alt="${suit} Ace" style="width:100%">`,`data-index="${i}" data-seat="${seat}"`)}<figcaption>${statusLabel(suit)} · ${p.aces[suit].up?`${p.aces[suit].charge}/${gambit.caps[suit]} charged`:'Face down'}</figcaption></figure>`).join('')}</div><p>One Ace explosion per turn in total, plus any additional allowance. Acceleration tokens remain on their own Aces and cannot be transferred or removed.</p></details>`:''}
+    ${p.freezer?`<details class="token-actions" data-disclosure="freezer-${seat}"><summary>The Freezer · ${p.freezer.shards}/5 Ice Shards · ${p.freezer.glide?'Glide stored':'No Glide stored'}</summary><div class="controls">${button('inspect-freezer','View The Freezer',`data-index="${seat}"`)}</div><p>Stored tokens are out of play. They cannot be removed, transferred by ordinary status cards or counted for damage. Only an authorised ability or card can transfer them to your board. Five stored shards can be converted into stored Glide.</p></details>`:''}
+    ${p.aces?`<details class="token-actions" data-disclosure="aces-${seat}"><summary>Ace cards · ${p.aceTurn===state.turn?p.aceExploded??0:0}/${1+(p.aceTurn===state.turn?p.aceExtra??0:0)} exploded this turn</summary><div class="controls">${gambit.suits.map((suit,i)=>`<figure style="max-width:150px;margin:6px">${button('inspect-ace',`<img src="${p.aces[suit].up?art.gambitAces[i]:art.back}" alt="${suit} Ace" style="width:100%">`,`data-index="${i}" data-seat="${seat}"`)}<figcaption>${statusLabel(suit)} · ${p.aces[suit].up?`${p.aces[suit].charge}/${gambit.caps[suit]} charged`:'Face down'}</figcaption></figure>`).join('')}</div><p>One Ace explosion per turn in total, plus any additional allowance. Acceleration tokens remain on their own Aces and cannot be transferred or removed.</p></details>`:''}
+      </div>
+    </details>
   </section>`;
 }
 function tray(values,seat,editable,held=[]) {
@@ -383,8 +406,8 @@ function rollDisplay(context){
   if(!context.owners)return tray(context.dice,context.seat,false);
   return context.dice.map((value,i)=>`<div><strong>${names[dieOwner(context,i)]}</strong>${tray([value],dieOwner(context,i),false)}</div>`).join('');
 }
-function arena() {
-  const allowed=legal(state), seat=actor(state), p=state.pending, responding=cardActor(state);
+function arena(seat, responding, decisionSeat) {
+  const allowed=legal(state), p=state.pending;
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
@@ -1293,6 +1316,8 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
+  const decisionContent = content;
+  content = '';
   if(!state.psyReveal){
   for(const [choice,c] of deadpool.onomChoices(state,responding).entries())content+=button('spendOnomatopoeia',c.label,`data-choice="${choice}"`);
   if(deadpool.canRps(state,responding))content+=button('spendRps','Spend RPS · play Rock, Paper, Scissors');
@@ -1417,25 +1442,37 @@ function arena() {
   if(titheActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · ${state.players[responding].upgrades?.Tithe?'Tithe II':'Tithe'}</strong><div class="controls">${titheActions.join('')}</div></div>`;
   }
   }
+  const playing = state.stage !== 'finished';
+  const canOpenHand = playing && state.cards && state.stage !== 'nyraDamage';
+  const decisionName = names[decisionSeat];
+  const handCount = state.players[responding].hand.length ?? state.players[responding].hand;
   return `<section class="arena" aria-label="Match actions">
     <div class="phase"><span>Turn ${state.turn} · ${phase}</span><span>${state.stage==='offence' ? `Roll ${state.attempts}/${state.budget}` : ''}</span></div>
-    <h2 tabindex="-1" id="action-title">${heading}</h2><p>Active hero · ${activeName}</p>
+    ${playing?`<div class="decision-owner" data-player="${decisionSeat}">
+      <strong>${decisionName} to act</strong>
+      ${decisionSeat!==state.active?`<span>${activeName}’s turn</span>`:''}
+    </div>`:''}
+    <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${detail?`<p>${detail}</p>`:''}
-    ${state.pending?.paralyzePrevented?.length?`<p>Paralyze prevented: ${state.pending.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}${content}
-    <details class="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
+    ${p?.paralyzePrevented?.length?`<p>Paralyze prevented: ${p.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}
+    <div class="decision-actions">${decisionContent}</div>
+    ${content?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!decisionContent?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${content}</div></details>`:''}
+    <details class="action-log" data-disclosure="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
+    ${canOpenHand?`<nav class="match-tools" aria-label="Match references"><span>${names[responding]}</span><div class="match-tool-buttons">
+      ${button('inspect-board','Board',`class="quick-board" data-index="${responding}" aria-label="Open ${names[responding]}’s board" aria-haspopup="dialog"`)}
+      ${button('open-hand',`Hand (${handCount})`,`data-index="${responding}" aria-label="Open ${names[responding]}’s hand" aria-haspopup="dialog"`)}
+    </div></nav>`:''}
     </section>`;
 }
 function render() {
-  const openShoot=new Set([...match.querySelectorAll('.deadpool-shoot[open]')].map(el=>el.dataset.seat));
-  const logOpen=match.querySelector('.action-log')?.open;
-  const openForge=new Set([...match.querySelectorAll('.forge-inventory[open]')].map(el=>el.dataset.seat));
-  const openUpgrades=new Set([...match.querySelectorAll('.board-upgrades[open]')].map(el=>el.dataset.seat));
-  const selected=boardOverride ?? cardActor(state);
-  match.innerHTML=hero(0)+arena()+hero(1)+`<section class="mobile-board" aria-label="Hero boards"><div class="tabs">${names.map((name,i)=>button('board',`${name} board`,`data-index="${i}" aria-pressed="${selected===i}"`)).join('')}</div>${board(selected)}</section>`;
-  match.querySelector('.action-log').open=!!logOpen;
-  for(const details of match.querySelectorAll('.deadpool-shoot'))details.open=openShoot.has(details.dataset.seat);
-  for(const details of match.querySelectorAll('.forge-inventory'))details.open=openForge.has(details.dataset.seat);
-  for(const details of match.querySelectorAll('.board-upgrades'))details.open=openUpgrades.has(details.dataset.seat);
+  const open = new Set(Array.from(match.querySelectorAll('details[data-disclosure][open]'), detail => detail.dataset.disclosure));
+  const seat = actor(state);
+  const responding = cardActor(state);
+  const decisionSeat = state.response ? responding : seat;
+  match.innerHTML = hero(0, decisionSeat, responding) + hero(1, decisionSeat, responding) + arena(seat, responding, decisionSeat);
+  for (const detail of match.querySelectorAll('details[data-disclosure]')) {
+    if (open.has(detail.dataset.disclosure)) detail.open = true;
+  }
   if(handDialog.open)renderHand();
   try { localStorage.setItem(storageKey,JSON.stringify(state)); } catch {}
 }
@@ -1510,12 +1547,6 @@ function handleAction(event) {
     target.setAttribute('aria-expanded',String(!note.hidden));
     return;
   }
-  if (type==='board') {
-    boardOverride=index;
-    render();
-    match.querySelector(`button[data-action="board"][data-index="${index}"]`).focus();
-    return;
-  }
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
@@ -1533,11 +1564,11 @@ function handleAction(event) {
   state=transition(state,action,roll);
   if(oldStage!==state.stage || oldSeat!==cardActor(state) || type==='playCard' || type==='sell')selectedCard=null;
   if(handDialog.open && (oldStage!==state.stage || oldSeat!==cardActor(state) || (!oldState.retry&&state.retry) || (!oldState.cardRoll&&state.cardRoll) || (!oldState.mainAction&&state.mainAction)))handDialog.close();
-  if (oldStage!==state.stage) boardOverride=null;
   render();
-  const focus=oldStage!==state.stage ? document.getElementById('action-title')
+  const decisionChanged = oldStage!==state.stage || oldState.response?.seat!==state.response?.seat;
+  const focus=decisionChanged ? document.getElementById('action-title')
     : type==='hold' ? match.querySelector(`button[data-index="${index}"][data-action="hold"]`) : match.querySelector('button[data-action="roll"]:enabled');
-  if (focus && !handDialog.open) focus.focus({preventScroll:true});
+  if (focus && !handDialog.open) focus.focus({preventScroll:!decisionChanged});
   else if(handDialog.open) {
     const nextCard=handContent.querySelector('button[data-action="select-card"]');
     (nextCard??handDialog.querySelector('button')).focus({preventScroll:true});
@@ -1673,7 +1704,9 @@ document.getElementById('reset').addEventListener('click',()=>{
   for(const details of match.querySelectorAll('.deadpool-shoot'))details.open=false;
   state=createMatch(roll,{promo:document.getElementById('promos').checked,heroes:setupHeroes});
   names=heroNames(state);
-  selectedCard=null;boardOverride=null;render();
+  selectedCard=null;
+  document.getElementById('match-setup').open=false;
+  render();
 });
 document.getElementById('promos').checked=state.promo;
 render();

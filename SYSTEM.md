@@ -1,6 +1,14 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.52.0. Base: the merged architecture refactor.
+Version: Playtest 0.52.0 · UI preview 1. Base: the merged architecture release.
+
+## Match interface preview
+
+The `ui/match-screen` branch starts from Playtest 0.52.0. The match shows both players' Health, CP and a short status summary, then identifies who is making the current decision. The Hand button follows the player who can play cards. Hero details expand to show statuses, decks and hero-specific resources. Board and Leaflet use the existing zoomable viewer. Ability descriptions stay in the Offensive Roll Phase list. Extra effects sit in a labelled disclosure below the current action.
+
+On narrow screens the player summaries sit side by side above the match actions, with Hand and Board both reachable from the bottom toolbar. On wide screens the player panels flank the action area. The setup controls use a disclosure in the header.
+
+The match-interface checks cover playing and selling from Hand, opening Board and Leaflet, visible ability descriptions, a Paladin response and Alchemist Potion details. All 30,932 baseline comparisons passed, and the offline cache simulation served 103 assets including the new stylesheet. Responsive layout and touch still need a visual check on Windows and Android.
 
 ## Architecture review
 
@@ -63,7 +71,8 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 
 ## Project structure
 
-- `docs/index.html`: UI shell, styles, ordered classic-script loading, version label.
+- `docs/index.html`: UI shell, base styles, ordered classic-script loading and version label.
+- `docs/match-ui.css`: responsive match layout, hero details and the action area.
 - `docs/heroes/*.js`: hero boards, upgrades, action cards, defence rules and hero-specific helpers. Black Widow is in `black-widow.js`; Captain Marvel is in `captain-marvel.js`.
 - `docs/engine.js`: two-seat state machine, shared cards, hero registration, legal actions and common damage/status handling.
 - `docs/turn.js`: turn advancement, Upkeep entry and settlement, Income, Main Phase 1 preparation and Offensive Roll Phase entry.
@@ -73,7 +82,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.1.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
