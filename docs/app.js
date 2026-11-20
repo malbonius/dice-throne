@@ -26,6 +26,12 @@ const handDialog=document.getElementById('hand-dialog');
 const handTitle=document.getElementById('hand-title');
 const handContent=document.getElementById('hand-content');
 const button = (action,label,attrs='') => `<button type="button" data-action="${action}" ${attrs}>${label}</button>`;
+function previewCard(state, seat, id, label = 'View') {
+  return button('inspect-card', label, `data-index="${id}" data-seat="${seat}" aria-label="View ${seatCard(state,seat,id).name}" aria-haspopup="dialog"`);
+}
+function previewableOption(state, seat, id, controls) {
+  return `<div class="card-option">${controls}${previewCard(state,seat,id)}</div>`;
+}
 function boardImage(state,seat,full=false) {
   const id=heroId(state,seat);
   if(id===cursedPirate.id && state.players[seat].cursed)
@@ -329,7 +335,7 @@ function hero(seat, decisionSeat, responding) {
         ${p.nyra?`<div class="tokens"><span class="token"><img src="${art.nyraDials[Number(p.nyra.downed)]}" alt="">Nyra · ${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health</span></div>`:''}
         <div class="tokens">${statuses.join('') || 'No status effects'}</div>
         <div class="inventory">
-          <span>Draw ${p.deck.length ?? p.deck} · Discard ${p.discard?.length ?? 0}</span>
+          <span class="draw-count"><img src="${art.back}" alt="">Draw ${p.deck.length ?? p.deck}</span><span>Discard ${p.discard?.length ?? 0}</span>
           <span>${p.hand.length ?? p.hand} in hand</span>
           ${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}
         </div>
@@ -377,7 +383,7 @@ function handPanel() {
       choices.length ? `<label>Choose effect <select id="card-choice">${choices.map((choice,i)=>`<option value="${i}">${choice.label}</option>`).join('')}</select></label>` : '';
     const entry=`<div class="hand-card">
       ${button('select-card',`<strong>${c.name}</strong><small>${price(state,seat,id)} CP · ${c.phase}</small>`,`data-index="${id}" aria-expanded="${chosen}"`)}
-      ${button('inspect-card','View',`data-index="${id}" data-seat="${seat}" aria-label="View ${c.name}"`)}
+      ${previewCard(state,seat,id)}
     </div>${chosen?`<div class="card-command">${detail}
       ${choices.length?button('playCard','Play card',`class="primary" data-index="${id}"`):'<small>Unavailable in this window.</small>'}
       ${canPlay&&isSelling(state)&&seat===state.active?button('sell','Sell for 1 CP',`data-index="${id}"`):''}</div>`:''}`;
@@ -441,9 +447,22 @@ function offenceDice() {
   return state.dice.length ? state.dice : Array(5+(state.stormDice?.count??0)).fill(null);
 }
 
+function abilityRequirement(ability) {
+  if (ability.straight) {
+    const length = ability.straight;
+    const label = {4:'Small straight', 5:'Large straight', 6:'Six-number straight'}[length] ?? `${length}-number straight`;
+    const ranges = Array.from({length: 7 - length}, (_, index) => `${index + 1}–${index + length}`);
+    return `${label} (${ranges.length > 1 ? ranges.slice(0, -1).join(', ') + ' or ' + ranges.at(-1) : ranges[0]})`;
+  }
+  return Object.entries(ability.symbols).map(([symbol, count]) => `${count} × ${symbol}`).join(' + ');
+}
+
 function offenceAbilities(seat, available = []) {
-  return `<div class="abilities">${abilitiesFor(state,seat).map((a,i)=>button('declare',`<strong>${a.label??a.name}</strong><small>${a.text}</small>`,
-    `class="ability" data-ability="${i}" ${available.includes(a.name)?'':'disabled'}`)).join('')}</div>`;
+  return `<div class="abilities">${abilitiesFor(state,seat).map((a,i)=>{
+    const text = a.straight ? a.text.replace(/^(Small|Large|Six-number) straight · /i, '') : a.text;
+    return button('declare',`<strong>${a.label??a.name}</strong><small class="ability-requirement">${abilityRequirement(a)}</small><small>${text}</small>`,
+      `class="ability" data-ability="${i}" ${available.includes(a.name)?'':'disabled'}`);
+  }).join('')}</div>`;
 }
 
 function rollResultTray(request) {
@@ -690,7 +709,7 @@ function arena(seat, responding, decisionSeat) {
   } else if(!state.response&&state.alphaRoll&&!state.cardRoll&&!state.retry){
     const t=state.alphaRoll;phase='Alpha';heading=`${names[t.seat]} challenges ${names[t.target]}`;detail='If the attacker’s result is lower, remove Alpha. A tie retains it. Each die uses its owner’s Hex and manipulation rules.';content=rollDisplay(rollContext(state))+button('resolveAlpha','Resolve Alpha','class="primary"');
   } else if(state.wolverineIntimidate){
-    const t=state.wolverineIntimidate;phase='Intimidate!';heading=`${names[t.target]} chooses`;detail='Discard one card, or receive 4 isolated damage. This discard does not trigger Recovery or Frenzy.';content=state.players[t.target].hand.map(id=>button('wolverineIntimidate',`Discard ${seatCard(state,t.target,id).name}`,`data-status="discard" data-index="${id}"`)).join('')+button('wolverineIntimidate','Receive 4 isolated damage','data-status="damage"');
+    const t=state.wolverineIntimidate;phase='Intimidate!';heading=`${names[t.target]} chooses`;detail='Discard one card, or receive 4 isolated damage. This discard does not trigger Recovery or Frenzy.';content=state.players[t.target].hand.map(id=>previewableOption(state,t.target,id,button('wolverineIntimidate',`Discard ${seatCard(state,t.target,id).name}`,`data-status="discard" data-index="${id}"`))).join('')+button('wolverineIntimidate','Receive 4 isolated damage','data-status="damage"');
   } else if(!state.response&&state.wolverineGain){
     const t=state.wolverineGain;phase='Gain Rage';heading=`${names[t.seat]} gains ${t.amount} Rage`;detail='Spend existing Rage first if desired, then collect the whole batch. Tokens beyond the stack limit are lost.';content=button('collectRage','Collect incoming Rage','class="primary"');
   } else if(!state.response&&state.stormTask&&state.stage==='stormChoices'){
@@ -766,7 +785,7 @@ function arena(seat, responding, decisionSeat) {
       detail=h.cards.length?'This does not discard, draw or transfer any cards.':'The opponent’s hand is empty.';
     } else if(h.kind==='scout'){
       heading='Battle Plan · top three cards';detail=h.picking?'Reveal and add up to one Leadership card to your hand, or skip.':'For each remaining card, discard it or choose it as the next card returned. The first returned card will be on top.';
-      content=h.cards.map((card,i)=>`<figure class="reveal-card"><img src="${cardArtwork(state,t.seat,card)}" alt="${seatCard(state,t.seat,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,t.seat,card).name}</figcaption>${h.picking?(cyclops.isLeadership(state,t.seat,card)?button('cyclopsScoutTake','Reveal and take',`data-index="${i}"`):''):button('cyclopsScoutTop','Return next to deck',`data-index="${i}"`)+button('cyclopsScoutDiscard','Discard',`data-index="${i}"`)}</figure>`).join('')+(h.picking?button('cyclopsScoutSkip','Take no Leadership card','class="primary"'):'');
+      content=h.cards.map((card,i)=>`<figure class="reveal-card"><img src="${cardArtwork(state,t.seat,card)}" alt="${seatCard(state,t.seat,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,t.seat,card).name}</figcaption>${previewCard(state,t.seat,card)}${h.picking?(cyclops.isLeadership(state,t.seat,card)?button('cyclopsScoutTake','Reveal and take',`data-index="${i}"`):''):button('cyclopsScoutTop','Return next to deck',`data-index="${i}"`)+button('cyclopsScoutDiscard','Discard',`data-index="${i}"`)}</figure>`).join('')+(h.picking?button('cyclopsScoutSkip','Take no Leadership card','class="primary"'):'');
       if(h.order.length)detail+=` ${h.order.length} card(s) already ordered.`;
     } else if(h.kind==='defence'){
       heading='Recourse · Blast result';detail='This choice applies once, regardless of the number of Blast symbols.';
@@ -783,7 +802,7 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.conjureTask){
     const t=state.conjureTask,opponent=1-t.seat;phase='Conjure';heading=`${names[opponent]} may block Conjure`;
     detail=`${names[t.seat]} wants to gain ${statusLabel(t.choice.status)} from ${names[t.choice.source]}’s leaflet. Discard one card to prevent the gain, or allow it.`;
-    content=state.players[opponent].hand.map(id=>button('conjureDiscard',`Discard ${seatCard(state,opponent,id).name}`,`data-index="${id}"`)).join('')+button('conjureAllow','Allow the status gain','class="primary"');
+    content=state.players[opponent].hand.map(id=>previewableOption(state,opponent,id,button('conjureDiscard',`Discard ${seatCard(state,opponent,id).name}`,`data-index="${id}"`))).join('')+button('conjureAllow','Allow the status gain','class="primary"');
   } else if(!state.response&&state.scarletJinx&&!state.cardRoll&&!state.retry){
     const t=state.scarletJinx;phase='Jinx';heading=`${activeName} resolves a Crown reroll`;
     detail=`${p.scarlet.jinxUpgrade?'Each Crown adds 1 damage and rolls again.':'Each On outcome can happen only once across the whole ability.'} ${t.left} reroll${t.left===1?'':'s'} pending. Earlier dice have resolved and cannot be changed or matched.`;
@@ -824,13 +843,20 @@ function arena(seat, responding, decisionSeat) {
       content=button('choosePremonition','Normal Income · draw 1','data-amount="0"')+(player.premonition>=1?button('choosePremonition','Spend 1 Premonition · draw 2','data-amount="1"'):'')+(player.premonition>=3?button('choosePremonition','Spend 3 Premonition · draw 3','data-amount="3"'):'');
     } else if(t.kind==='return'){
       detail='Return one of these newly drawn cards. Other cards in your hand cannot be returned.';
-      content=t.drawn.map(id=>`<div class="controls"><strong>${seatCard(state,t.seat,id).name}</strong>${button('returnPremonition','Put on top',`data-index="${id}" data-status="top"`)}${button('returnPremonition','Put on bottom',`data-index="${id}" data-status="bottom"`)}</div>`).join('');
+      content=t.drawn.map(id=>previewableOption(state,t.seat,id,`<div class="controls">
+        <strong>${seatCard(state,t.seat,id).name}</strong>
+        ${button('returnPremonition','Put on top',`data-index="${id}" data-status="top"`)}
+        ${button('returnPremonition','Put on bottom',`data-index="${id}" data-status="bottom"`)}
+      </div>`)).join('');
     } else {detail='Income complete.';content=button('completePremonition','Continue to Main Phase','class="primary"');}
   } else if(state.strangeTask&&state.stage!=='sideDamage'){
     const task=state.strangeTask,t=task.queue[0];phase='Spells';heading=t.kind==='prepare'?'Prepare a Spell':t.kind==='cast'?'Cast a Spell':t.kind==='order'?'Order the remaining cards':t.kind==='heal'?'Choose a Hero to heal':t.kind==='dejaTarget'?'Give Déjà Vu to a player':'Remove a status effect';
     if(t.kind==='prepare'||t.kind==='cast')detail=`${t.left} remaining · ${t.zone==='peek'?'among the top five cards':t.zone==='book'?'from the Book of Vishanti':'from your discard pile'}. Resolve this effect completely before choosing another Spell.`;
     if(t.kind==='order')detail='Choose from top to bottom. The remaining cards stay in the order you choose.';
-    content=doctorStrange.options(state).map((choice,i)=>button('strangeChoose',choice.label,`data-choice="${i}"`)).join('')+(t.optional?button('strangeSkip','Continue without this effect','class="primary"'):'');
+    content=doctorStrange.options(state).map((choice,i)=>{
+      const select=button('strangeChoose',choice.label,`data-choice="${i}"`);
+      return choice.card===undefined?select:previewableOption(state,task.seat,choice.card,select);
+    }).join('')+(t.optional?button('strangeSkip','Continue without this effect','class="primary"'):'');
   } else if(!state.response&&state.cosmicRayRoll&&!state.cardRoll&&!state.retry){
     phase='Cosmic Ray';heading=`${actingName} chooses the damage bonus`;
     detail=state.cosmicRayRoll.locked?'Ultimate: these dice cannot be altered. Choose one die.':'Choose one of the two dice to add to your attack. Dice may be altered before this choice is final.';
@@ -853,15 +879,17 @@ function arena(seat, responding, decisionSeat) {
     if(t.revealed?.length)detail='Revealed upgrades/cards: '+t.revealed.map(id=>seatCard(state,t.seat,id).name).join(', ')+'.';
     if(t.kind==='covert'){
       detail='Put an upgrade from your hand into play for free, or look at the top 3 cards of your deck.';
-      content=blackWidow.upgradeChoices(state,t.seat,'hand').map(id=>button('widowHandUpgrade',`Play ${seatCard(state,t.seat,id).name}`,`data-index="${id}"`)).join('')+button('widowPeek','Look at top 3 cards');
+      content=blackWidow.upgradeChoices(state,t.seat,'hand').map(id=>previewableOption(state,t.seat,id,button('widowHandUpgrade',`Play ${seatCard(state,t.seat,id).name}`,`data-index="${id}"`))).join('')+button('widowPeek','Look at top 3 cards');
     } else if(t.kind==='order'){
       detail+=' Choose the next card from top to bottom.';
       if(t.ordered?.length)detail+=' Chosen: '+t.ordered.map(id=>seatCard(state,t.seat,id).name).join(' → ')+'.';
-      content=t.cards.map(id=>button('widowOrder',seatCard(state,t.seat,id).name,`data-index="${id}"`)).join('')+button('widowKeep','Keep remaining order','class="primary"');
+      content=t.cards.map(id=>previewableOption(state,t.seat,id,button('widowOrder',seatCard(state,t.seat,id).name,`data-index="${id}"`))).join('')+button('widowKeep','Keep remaining order','class="primary"');
     } else {
-      if(t.kind==='covertSearch')detail='No upgrades in the top 3. You may reveal these cards and search for an upgrade: '+(t.revealed??[]).map(id=>seatCard(state,t.seat,id).name).join(', ')+'.';
-      else detail=`Choose up to ${t.left} more upgrades. Your deck is shuffled before any passive card draws.`;
-      content=(t.kind==='search'&&!t.left?[]:blackWidow.upgradeChoices(state,t.seat)).map(id=>button('widowSearch',seatCard(state,t.seat,id).name,`data-index="${id}"`)).join('')+button(t.kind==='search'?'widowSearchDone':'widowKeep',t.kind==='search'?'Finish selection and shuffle':'Do not search','class="primary"');
+      if(t.kind==='covertSearch'){
+        detail='No upgrades in the top 3. You may reveal these cards and search for an upgrade.';
+        content=(t.revealed??[]).map(id=>previewCard(state,t.seat,id,seatCard(state,t.seat,id).name)).join('');
+      } else detail=`Choose up to ${t.left} more upgrades. Your deck is shuffled before any passive card draws.`;
+      content+=(t.kind==='search'&&!t.left?[]:blackWidow.upgradeChoices(state,t.seat)).map(id=>previewableOption(state,t.seat,id,button('widowSearch',seatCard(state,t.seat,id).name,`data-index="${id}"`))).join('')+button(t.kind==='search'?'widowSearchDone':'widowKeep',t.kind==='search'?'Finish selection and shuffle':'Do not search','class="primary"');
     }
   } else if(!state.response&&state.widowAgility&&!state.cardRoll&&!state.retry){
     phase='Agility';heading=`${actingName} rolls for Agility`;
@@ -1024,7 +1052,7 @@ function arena(seat, responding, decisionSeat) {
       phase='Ability choice'; heading=p.name;
       detail='Choose one card to put into your hand. The rest of the deck will be shuffled.';
       const deck=state.players[state.active].deck.slice().sort((a,b)=>seatCard(state,seat,a).name.localeCompare(seatCard(state,seat,b).name));
-      content=deck.map(id=>button('searchVampireDeck',seatCard(state,seat,id).name,`data-index="${id}"`)).join('');
+      content=deck.map(id=>previewableOption(state,seat,id,button('searchVampireDeck',seatCard(state,seat,id).name,`data-index="${id}"`))).join('');
       break;
     }
     case 'vampireChoice':
@@ -1101,8 +1129,9 @@ function arena(seat, responding, decisionSeat) {
     case 'forgeMine': {
       const task=state.forgeTask, ores=task.cards.filter(forgemaster.oreType);
       phase='The Mines';heading=`${actingName} looks at the top ${task.cards.length} cards`;
-      detail=task.cards.map(id=>seatCard(state,task.seat,id).name).join(' · ');
-      content=ores.map(id=>button('forgeMineChoice',`Reveal ${seatCard(state,task.seat,id).name}`,`data-index="${id}" data-status="one"`)).join('')+
+      content=task.cards.map(id=>forgemaster.oreType(id)
+        ? previewableOption(state,task.seat,id,button('forgeMineChoice',`Reveal ${seatCard(state,task.seat,id).name}`,`data-index="${id}" data-status="one"`))
+        : previewCard(state,task.seat,id,seatCard(state,task.seat,id).name)).join('')+
         (task.all&&ores.length>1?button('forgeMineChoice','Reveal all Ore','data-status="all"'):'')+
         button('forgeMineChoice','Reveal none · gain 1 CP','data-status="none"');
       break;
@@ -1110,12 +1139,12 @@ function arena(seat, responding, decisionSeat) {
     case 'forgeOrder':
       phase='The Mines';heading='Return the remaining cards';
       detail='Choose which card goes on the bottom next.';
-      content=state.forgeTask.cards.map(id=>button('forgeOrder',seatCard(state,seat,id).name,`data-index="${id}"`)).join('');
+      content=state.forgeTask.cards.map(id=>previewableOption(state,seat,id,button('forgeOrder',seatCard(state,seat,id).name,`data-index="${id}"`))).join('');
       break;
     case 'forgeSearch':
       phase='Ultimate';heading='Final Touches!';
       content=[...new Map(state.players[state.active].deck.filter(forgemaster.oreType).map(id=>[forgemaster.oreType(id),id])).values()]
-        .map(id=>button('forgeSearch',`Forge ${seatCard(state,state.active,id).name}`,`data-index="${id}"`)).join('');
+        .map(id=>previewableOption(state,state.active,id,button('forgeSearch',`Forge ${seatCard(state,state.active,id).name}`,`data-index="${id}"`))).join('');
       break;
     case 'forgeAbility':
       phase='Ability';heading=p.name;
@@ -1184,7 +1213,7 @@ function arena(seat, responding, decisionSeat) {
       break;
     case 'ravenDiscard':
       phase='Upkeep';heading='Nevermore forces a discard';
-      content=state.players[seat].hand.map(id=>button('ravenDiscard',seatCard(state,seat,id).name,`data-index="${id}"`)).join('');
+      content=state.players[seat].hand.map(id=>previewableOption(state,seat,id,button('ravenDiscard',seatCard(state,seat,id).name,`data-index="${id}"`))).join('');
       break;
     case 'ravenAttackChoice': {
       const holder=state.players[seat].nevermoreSeat;
@@ -1221,7 +1250,7 @@ function arena(seat, responding, decisionSeat) {
       }
       if(allowed.resolveDisarm){
         heading='Disarm';detail='Discard one card or skip your Income Phase.';
-        content=hero.hand.map(id=>button('resolveDisarm',`Discard ${seatCard(state,state.active,id).name}`,`data-index="${id}" data-status="discard"`)).join('')+
+        content=hero.hand.map(id=>previewableOption(state,state.active,id,button('resolveDisarm',`Discard ${seatCard(state,state.active,id).name}`,`data-index="${id}" data-status="discard"`))).join('')+
           button('resolveDisarm','Skip Income Phase','data-status="skip"');
         break;
       }
@@ -1278,8 +1307,16 @@ function arena(seat, responding, decisionSeat) {
       const {kind,seat: chooser}=state.pirateChoice;
       const titles={coins:'Gain Cursed Doubloons',remove:'Shiver Me Timbers',plank:'Walk the Plank',discard:'Choose a card to discard',inspect:'Crow’s Nest!',yoHo:'Yo Ho!',ransom:'Ransom!',passKeg:'Powder Keg'};
       phase='Choice'; heading=titles[kind]; detail=`${actingName} chooses.`;
-      if(kind==='inspect')detail=state.players[1-chooser].hand.map(id=>seatCard(state,1-chooser,id).name).join(' · ')||'Opponent’s hand is empty.';
-      content=cursedPirate.choices(state).map((label,i)=>button('resolvePirateChoice',label,`data-choice="${i}"`)).join('');
+      if(kind==='inspect'){
+        const cards=state.players[1-chooser].hand;
+        detail=cards.length?'':'Opponent’s hand is empty.';
+        content=cards.map(id=>previewCard(state,1-chooser,id,seatCard(state,1-chooser,id).name)).join('');
+      }
+      content+=cursedPirate.choices(state).map((label,i)=>{
+        const select=button('resolvePirateChoice',label,`data-choice="${i}"`);
+        const card=state.players[chooser].hand[i];
+        return kind==='discard'&&card!==undefined?previewableOption(state,chooser,card,select):select;
+      }).join('');
       break;
     }
     case 'knockdown':
@@ -1606,7 +1643,7 @@ function matchEffects(state, responding, renderButton = button) {
   if(battlePlan.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Battle Plan</summary><div class="controls">${battlePlan.map((choice,i)=>renderButton('spendBattlePlan',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   if(cyclops.canRecourse(state,responding))content+=renderButton('cyclopsRecourse','Remove 2 Battle Plan · activate Recourse II against this undefendable attack');
   if(thor.canDraw(state,responding)&&!state.thorOverflow)content+=renderButton('thorDraw','Spend 4 Electrokinesis · draw a card');
-  if(thor.canMove(state,responding))content+=`<details class="token-actions"><summary>Mjölnir · discard a card to ${thor.holder(state,responding)===responding?'throw':'retrieve'}</summary><div class="controls">${state.players[responding].hand.map((id,i)=>renderButton('thorPassive',`Discard ${seatCard(state,responding,id).name}`,`data-index="${i}"`)).join('')}</div></details>`;
+  if(thor.canMove(state,responding))content+=`<details class="token-actions"><summary>Mjölnir · discard a card to ${thor.holder(state,responding)===responding?'throw':'retrieve'}</summary><div class="controls">${state.players[responding].hand.map((id,i)=>previewableOption(state,responding,id,renderButton('thorPassive',`Discard ${seatCard(state,responding,id).name}`,`data-index="${i}"`))).join('')}</div></details>`;
   if(!state.iceFreezeChoice&&!gambit.forced(state)&&!cyclops.choosing(state)&&!state.thorOverflow&&!(state.thorTask&&state.stage==='thorSequence')&&!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
   const probability=scarletWitch.probabilityChoices(state,responding);
   if(probability.length)content+=`<div class="token-actions"><strong>${names[responding]} · Probability Manipulation</strong><div class="controls">${probability.map((choice,i)=>renderButton('spendProbability',choice.label,`data-choice="${i}"`)).join('')}</div></div>`;
@@ -1623,7 +1660,7 @@ function matchEffects(state, responding, renderButton = button) {
   if(spiderMan.canInvisibility(state,responding))content+=renderButton('spendInvisibility','Spend Invisibility · activate a Defensive Ability');
   if(spiderMan.canSenseReroll(state,responding))content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="spider-sense-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+renderButton('spiderSenseReroll','Discard Invisibility · Spider-Sense additional Roll Attempt');
   if(loki.canIllusion(state,responding))content+=renderButton('spendIllusion',`${names[responding]} · spend Illusion`);
-  if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>renderButton('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`)).join('')}</div></div>`;
+  if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>previewableOption(state,state.active,id,renderButton('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`))).join('')}</div></div>`;
   if(doctorStrange.canDeja(state,state.active))content+=renderButton('spendDejaVu',`${names[state.active]} · spend Déjà Vu and restart the roll`);
   if(captainMarvel.canRay(state,responding))content+=renderButton('spendCosmicRay','Spend Cosmic Ray · roll 2 dice');
   for(const die of captainMarvel.radianceDice(state,responding))content+=renderButton('spendRadiance',`Spend Radiance · defence die ${die.index+1} (${die.value}) → 6`,`data-index="${die.index}"`);
@@ -1634,7 +1671,10 @@ function matchEffects(state, responding, renderButton = button) {
   }
   if(state.players[responding].vibraniumSuit&&blackPanther.incoming(state,responding))
     content+=renderButton('spendVibraniumSuit','Spend Vibranium Suit · prevent 3 damage');
-  const forgeActions=forgemaster.choices(state,responding).map(({label},i)=>renderButton('forgemasterAction',label,`data-choice="${i}"`));
+  const forgeActions=forgemaster.choices(state,responding).map(({label,card},i)=>{
+    const select=renderButton('forgemasterAction',label,`data-choice="${i}"`);
+    return card===undefined?select:previewableOption(state,responding,card,select);
+  });
   if(forgeActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · The Mines and The Forge</strong><div class="controls">${forgeActions.join('')}</div></div>`;
   const shapeSeats=state.response?[responding]:state.stage==='announce'?[responding,state.active]:[responding];
   for(const owner of shapeSeats){
@@ -1865,10 +1905,19 @@ const viewerScroll = document.getElementById('viewer-scroll');
 const front = document.getElementById('leaflet-front');
 const back = document.getElementById('leaflet-back');
 let viewerSeat, viewerLeaflet, viewerCard, zoom=1, pinch=null;
+const desktopLeaflet = window.matchMedia('(hover: hover) and (pointer: fine)');
 function setZoom(value) {
   zoom=bounded(value-1,3)+1;
-  viewerImage.style.width=`${(viewerCard?Math.min(460,viewerScroll.clientWidth):viewerScroll.clientWidth)*zoom}px`;
+  const width=viewerScroll.clientWidth;
+  let fit=viewerCard?Math.min(460,width):width;
+  if(viewerLeaflet&&desktopLeaflet.matches&&viewerImage.naturalHeight){
+    fit=Math.min(width,viewerScroll.clientHeight*viewerImage.naturalWidth/viewerImage.naturalHeight);
+  }
+  viewerImage.style.width=`${fit*zoom}px`;
 }
+viewerImage.addEventListener('load',()=>{
+  if(viewer.open&&viewerLeaflet)setZoom(zoom);
+});
 function showScan(side) {
   const reference = viewerLeaflet ? `leaflet, ${side ? 'back' : 'front'}` : 'board';
   viewerImage.alt=`${names[viewerSeat]} ${reference}`;

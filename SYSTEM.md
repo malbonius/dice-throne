@@ -1,8 +1,14 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.52.0 · UI preview 4.2. Base: the merged architecture release.
+Version: Playtest 0.52.0 · UI preview 4.3. Base: the merged architecture release.
 
 ## Match interface preview
+
+### Preview 4.3 · Ability and card references
+
+Offensive Ability requirements are rendered from the symbol counts and straight lengths used by the engine, including upgraded abilities and Storm's six-number straight. Desktop leaflets fit the viewer height and width when first opened. The draw count displays the card-back icon.
+
+Card selection effects now offer a separate View control for card faces already available to the chooser. This includes Black Widow's upgrades, Doctor Strange's Spells, and the deck search, ordering and discard controls. Viewing a card leaves the pending choice in place.
 
 ### Preview 4.2 · Defence rolls in place
 
@@ -114,7 +120,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.4.2.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.4.3.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility

@@ -189,6 +189,17 @@ main {
   overflow-wrap: anywhere;
 }
 
+.draw-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.draw-count img {
+  width: 21px;
+  height: 33px;
+  object-fit: contain;
+}
+
 .hero-information-body .inventory {
   padding: 7px 0;
   flex-wrap: wrap;
@@ -305,6 +316,29 @@ main {
   line-height: 1.34;
   font-size: .82rem;
 }
+
+.ability .ability-requirement,
+.ability:disabled .ability-requirement {
+  margin-top: 4px;
+  color: var(--gold);
+  font-weight: 650;
+}
+
+.card-option {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: top;
+  gap: 5px;
+  max-width: 100%;
+  margin: 2px 5px 3px 0;
+}
+
+.card-option > :not(:last-child) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.card-option > :last-child { flex-shrink: 0; }
 
 .ability:disabled {
   opacity: 1;
