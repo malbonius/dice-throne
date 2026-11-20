@@ -8,13 +8,14 @@ const baseline = process.argv[2];
 const loadEngine = (directory, context = vm.createContext({structuredClone})) => {
   const html = fs.readFileSync(path.join(directory, 'index.html'), 'utf8');
   vm.runInContext('Math.random = () => 0.37', context);
-  const scripts = html.matchAll(/<script src="\.\/((?:heroes\/[^"]+|turn|rolls|engine)\.js)"/g);
+  const scripts = html.matchAll(/<script src="\.\/((?:heroes\/[^"]+|damage|turn|rolls|engine)\.js)"/g);
   for (const [, file] of scripts) {
     vm.runInContext(fs.readFileSync(path.join(directory, file), 'utf8'), context, {filename: file});
   }
   return vm.runInContext(`({
     createMatch, transition, legal, actor, cardActor, cardChoices, tokenChoices, tacticalChoices,
     rollContext, rollPhase, attackLocked, dieOwner, diceOwnedBy, isSelling,
+    updateDamage, returnDamageFor, upkeepIncoming, sideIncoming, startSideDamage,
     names: HEROES.map(hero => hero.name),
     leafletKeys: typeof positiveStatusKeys === 'undefined' ? scarletWitch.positives : positiveStatusKeys,
     conjure: scarletWitch.conjureChoices, fourthWall: deadpool.fourthChoices
@@ -346,6 +347,82 @@ function rollTimingResults(rules) {
   return snapshots;
 }
 
+function damageResults(rules) {
+  const results = [];
+  const record = state => {
+    results.push(plain(state));
+    return state;
+  };
+
+  const attack = start(rules, [0, 5]);
+  attack.players.forEach(player => { player.hand = []; });
+  attack.stage = 'damage';
+  attack.pending = {
+    attack: true, grossDamage: 11, prevention: 2, protect: 1,
+    returnDamage: 2, retribution: true, returnPrevention: 2, returnProtect: 1
+  };
+  rules.updateDamage(attack.pending);
+  assert.equal(attack.pending.damage, 4);
+  assert.equal(rules.returnDamageFor(attack), 2);
+  record(attack);
+  const settled = record(stepPassing(rules, plain(attack), 'settle'));
+  assert.deepEqual(Array.from(settled.players, player => player.hp), [48, 46]);
+
+  const doubledProtection = {...attack.pending, protect: 2};
+  rules.updateDamage(doubledProtection);
+  assert.equal(doubledProtection.damage, 0);
+  assert.equal(rules.returnDamageFor({...attack, pending: doubledProtection}), 2);
+  record(doubledProtection);
+
+  const avoided = {...attack.pending, evaded: true};
+  rules.updateDamage(avoided);
+  assert.equal(avoided.damage, 0);
+  assert.equal(rules.returnDamageFor({...attack, pending: avoided}), 0);
+  record(avoided);
+
+  const simultaneous = plain(attack);
+  simultaneous.players[0].hp = 2;
+  simultaneous.players[1].hp = 4;
+  const draw = record(stepPassing(rules, simultaneous, 'settle'));
+  assert.deepEqual(Array.from(draw.players, player => player.hp), [0, 0]);
+  assert.equal(draw.stage, 'finished');
+  assert.equal(draw.winner, 'Draw');
+
+  const saved = plain(simultaneous);
+  saved.players[1].blessing = true;
+  const blessing = record(stepPassing(rules, saved, 'settle'));
+  assert.equal(blessing.players[1].hp, 1);
+  assert.equal(blessing.players[1].blessing, false);
+  assert.equal(blessing.winner, 'Paladin wins');
+
+  const upkeep = start(rules, [0, 5]);
+  upkeep.players.forEach(player => { player.hand = []; });
+  Object.assign(upkeep, {stage: 'upkeep', turn: 2, upkeepBagDamage: 4, upkeepPrevention: 2, upkeepProtect: 1});
+  Object.assign(upkeep.players[0], {burn: true, poison: 3});
+  assert.equal(rules.upkeepIncoming(upkeep), 3);
+  assert.equal(rules.upkeepIncoming({...upkeep, upkeepInvulnerability: true}), 0);
+  const upkeepSettled = record(stepPassing(rules, plain(upkeep), 'resolveUpkeep'));
+  assert.equal(upkeepSettled.players[0].hp, 47);
+  assert.equal(upkeepSettled.stage, 'main1');
+  assert.equal(upkeepSettled.upkeepProtect, 0);
+
+  const isolated = plain(attack);
+  rules.startSideDamage(isolated, 1, 4, 'Time Bomb', false, {keepPending: true});
+  rules.startSideDamage(isolated, 0, 7, 'Shattered!');
+  Object.assign(isolated.sideDamage, {prevention: 2, protect: 1});
+  assert.equal(rules.sideIncoming(isolated.sideDamage), 2);
+  assert.equal(rules.sideIncoming({...isolated.sideDamage, evaded: true}), 0);
+  const nestedSettled = record(stepPassing(rules, plain(isolated), 'resolveSideDamage'));
+  assert.equal(nestedSettled.players[0].hp, 48);
+  assert.equal(nestedSettled.stage, 'sideDamage');
+  assert.equal(nestedSettled.sideDamage.source, 'Time Bomb');
+  const parentSettled = record(stepPassing(rules, plain(nestedSettled), 'resolveSideDamage'));
+  assert.equal(parentSettled.players[1].hp, 46);
+  assert.equal(parentSettled.stage, 'damage');
+  assert.deepEqual(plain(parentSettled.pending), plain(attack.pending));
+  return results;
+}
+
 // Run the actual hand-panel click handler with only the DOM methods it needs.
 function checkHandControls() {
   const elements = new Map();
@@ -417,7 +494,8 @@ function checkHandControls() {
 checkHandControls();
 const turnBoundaries = turnBoundaryResults(engine);
 const rollTiming = rollTimingResults(engine);
-console.log('Hand controls, Positive statuses, transfers, turn lifecycle and roll timing checks passed.');
+const damageChecks = damageResults(engine);
+console.log('Hand controls, Positive statuses, transfers, turn lifecycle, roll timing and damage checks passed.');
 
 if (baseline) {
   const old = loadEngine(path.resolve(baseline));
@@ -444,6 +522,10 @@ if (baseline) {
   const previousRollTiming = rollTimingResults(old);
   for (const [index, snapshot] of rollTiming.entries()) {
     compare(previousRollTiming[index], snapshot, `Roll timing scenario ${index + 1}`);
+  }
+  const previousDamage = damageResults(old);
+  for (const [index, result] of damageChecks.entries()) {
+    compare(previousDamage[index], result, `Damage scenario ${index + 1}`);
   }
   compare(old.names, engine.names, 'Hero identities and order');
   compare(old.leafletKeys, engine.leafletKeys, 'Positive status catalogue and order');

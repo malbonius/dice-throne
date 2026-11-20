@@ -140,41 +140,6 @@ const isMain=s=>s.stage==='main1'||s.stage==='main';
 function discardRandom(p,random){
  if(p.hand.length)p.discard.push(p.hand.splice(Math.floor(random()*p.hand.length),1)[0]);
 }
-const shadowAvoids=(s)=>!!s.players[1-s.active].shadows&&!s.pending?.ultimate;
-const incomingDamage=s=>shadowAvoids(s)?0:(s.pending?.damage??0);
-const upkeepDamage=(p,seat)=>(p.burn?2:0)+(p.poison??0)+(p.pirateCoins?.[1-seat]??0);
-const reducedDamage=(amount,halves=0)=>Math.max(0,amount-halves*Math.ceil(amount/2));
-const upkeepIncoming=s=>s.upkeepInvulnerability?0:reducedDamage(upkeepDamage(s.players[s.active],s.active)+(s.upkeepBagDamage??0)+(s.upkeepDisruptionDamage??0)-(s.upkeepPrevention??0),s.upkeepProtect);
-function reviveNecromancer(p){
- if(!p.resurrect||p.hp>0)return false;
- p.hp=5;
- p.resurrect=false;
- p.resurrected=true;
- p.cp=0;
- if(Array.isArray(p.hand)){p.discard.push(...p.hand);p.hand=[];}
- return true;
-}
-function takeDamage(player,damage,absorb=true) {
- const saved=damage>=player.hp&&player.blessing;
- player.hp=saved?1:bounded(player.hp-damage,60);
- if(saved)removeStatus(player,'blessing');
- else reviveNecromancer(player);
- if(absorb&&damage>0&&player.hp>0&&player.hero===blackPanther.id)blackPanther.gain(player,1);
- return saved;
-}
-function stealNecroHealth(s,seat,amount){
- if(!amount)return false;
- const victim=s.players[1-seat], thief=s.players[seat], names=heroNames(s);
- const stolen=Math.min(victim.hp,amount);
- takeDamage(victim,stolen,false);
- thief.hp=bounded(thief.hp+stolen,60);
- s.log.unshift(`${names[seat]} steals ${stolen} Health.`);
- if(victim.hp)return false;
- s.stage='finished';
- s.winner=`${names[seat]} wins`;
- s.log.unshift(s.winner);
- return true;
-}
 const attackLocked=s=>s.deadpoolTask?.locked||s.deadpoolFourthResume?.locked||s.santaTask?.locked||s.santaNogRoll?.locked||s.mysticTask?.locked||s.krampusTask?.locked||s.krampusActivation?.locked||s.jeanTask?.locked||s.pending?.ultimate&&['jeanAbility','jeanResolved','psyAbility','paralyzeAfter','rogueAbility','rogueInfluence','rogueSkyward','stormCharge','stormAbility','stormResolved','stormChoices','deadpoolAbility','deadpoolPrepared','deadpoolResolved','santaAbility','santaTarget','santaRoll','santaPrepared','mysticAbility','mysticStrongTarget','mysticContest','mysticPrepared','mysticResolved','krampusAbility','krampusPrepared','krampusResolved','alchemistAbility','alchemistChoices','alchemistPotions','alchemistDefence','wolverineAbility','wolverineResolved','wolverineBarrage','wolverineRemove','wolverineSevere','alphaRoll'].includes(s.stage)||s.iceTask?.locked||s.pending?.ultimate&&['iceAbility','iceResolved'].includes(s.stage)||s.gambitTask?.locked||s.pending?.ultimate&&s.stage==='gambitAbility'||s.cyclopsTask?.locked||s.pending?.ultimate&&s.stage==='cyclopsAbility'||s.thorTask?.locked||s.pending?.ultimate&&s.stage==='thorAbility'||s.lokiBag?.locked||s.pending?.ultimate&&['lokiChoices','lokiAbility'].includes(s.stage)||s.pending?.ultimate&&['strangeSpells','strangeAbility'].includes(s.stage)||s.cosmicRayRoll?.locked||s.pending?.ultimate&&['widowAbility','widowSearch'].includes(s.stage)||s.sideDamage?.pantherLocked||s.pending?.ultimate&&s.stage==='pantherAbility'||s.pending?.ultimate&&s.stage==='sunMarked'||s.pending?.ultimate&&['forgeSearch','forgeAbility'].includes(s.stage)||s.pending?.ultimate&&s.stage==='duelMove'||s.ravenActivation?.locked||s.pending?.ultimate&&['ravenAbility','prey','druidReady'].includes(s.stage)||s.undeadRoll?.resume==='locked'||s.stage==='undeadRemove'&&s.undeadResume==='locked'||s.stage==='locked'||s.horseRoll?.resume==='locked'||s.gunReload?.resume==='locked'||s.artRoll?.resume==='locked'||s.seraphRoll?.resume==='locked'||s.stage==='sideDamage'&&s.sideDamage.resume==='locked'||s.ninjutsuReturnStage==='locked'||s.pending?.ultimate&&['sneakOffer','growSpirits','evasion'].includes(s.stage);
 function cardChoices(s,seat,id) {
  if(s.deadpoolRps||s.deadpoolRemoval||s.deadpoolTask&&s.stage==='deadpoolChoices')return [];
@@ -272,14 +237,6 @@ function cardChoices(s,seat,id) {
  return heroRoster[hero].cardChoices?.(id,{s,seat,pos:writable,d,one,heroTargets:heroes})??one;
 }
 
-const attackReduction=p=>Math.min((p.witherReduction??0)+(p.shameReduction??0)+(p.decrepReduction??0),
- Math.max(0,p.grossDamage-(p.collateral??0)));
-// Hail the King is one combined incoming attack, including its collateral damage.
-const modifiedAttackDamage=p=>Math.max(0,p.grossDamage-(p.iceman?0:p.collateral??0)-attackReduction(p));
-const damageSubtotal=p=>Math.max(0,p.grossDamage-(p.prevention??0)-attackReduction(p));
-function updateDamage(p) {
- p.damage=p.evaded||p.parlayBlocked||p.illusionPreventAll||p.invulnerabilityAll?0:reducedDamage(damageSubtotal(p),Number(!!p.halfDefence)+Number(!!p.blindingHalf)+(p.protect??0)+(p.illusionHalves??0));
-}
 function removeBountyBonus(s,seat){
  const hit=s.pending;
  if(seat===s.active||!hit?.bountyBonus||s.players[seat].bounty||['postHit','main','main1','discard','finished'].includes(s.stage))return;
@@ -329,17 +286,6 @@ const flightMode=(s,seat)=>{
  if(seat!==s.active&&['defence','defenceResponse','damage','purify'].includes(s.stage)&&incomingDamage(s)>0)return 'defence';
  return null;
 };
-const retributionDamage=p=>p.retribution&&!p.evaded&&!p.shadowAvoided?Math.ceil(damageSubtotal(p)/2):0;
-const returnIncoming=p=>p.returnEvaded||p.returnInvulnerable?0:reducedDamage(
- p.returnDamage+(p.necroReturn??0)+(p.disengageDamage??0)+(p.backStrikeDamage??0)+(p.artSelfDamage??0)+(p.vineDamage??0)+(p.absolutionReturn??0)+retributionDamage(p)+(p.damage>0?(p.recoil??0):0)-(p.returnPrevention??0),p.returnProtect);
-const sideIncoming=p=>p.evaded||p.invulnerabilityAll||p.shadowBlocked||p.parlayBlocked?0:reducedDamage(p.amount-(p.prevention??0),p.protect);
-function startSideDamage(s,seat,amount,source,endTurn=false,extra={}){
- const parent=s.sideDamage;
- if(!extra.keepPending&&!parent)s.pending=null;
- s.sideDamage={seat,amount,source,endTurn,resume:s.stage,...extra};
- if(parent)s.sideDamage.parent=parent;
- s.stage='sideDamage';
-}
 function flushPowderKegs(state) {
  if(state.sideDamage || state.stage==='finished' || !state.powderExplosions?.length) return state;
  startSideDamage(state,state.powderExplosions.shift(),3,'Powder Keg',false,{keepPending:true});
@@ -363,8 +309,6 @@ function grantPirateStatus(state,seat,status,afterRoll=false) {
   grantAttackStatus(state,player,status);
  else grantStatus(player,status);
 }
-const vineDamage=s=>s.players[s.active].barbed?(s.vineAttempts??0):0;
-const returnDamageFor=s=>returnIncoming({...s.pending,damage:incomingDamage(s),shadowAvoided:shadowAvoids(s),vineDamage:vineDamage(s)});
 const titheDrawCost=p=>p.upgrades?.Tithe?2:3;
 function titheChoices(s,seat) {
  const p=s.players[seat];
@@ -3641,11 +3585,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         attacker.hp=bounded(attacker.hp+attackDamage,60);
         add(`${names[state.active]} heals ${attacker.hp-before} with Blood Power.`);
       }
-      if (!attacker.hp || !defender.hp) {
-        state.stage='finished';
-        state.winner=!attacker.hp && !defender.hp ? 'Draw' : `${names[attacker.hp ? state.active : 1-state.active]} wins`;
-        add(state.winner);
-      } else {
+      if (!finishMatchIfDefeated(state)) {
         if(p.pirateRemove&&(attacker.pirateCoins?.[state.active]??0)>0){
           cursedPirate.choose(state,state.active,'remove',{after:'finishRoll'});break;
         }
@@ -3689,11 +3629,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
           }
         });
         state.artDetonation=null;
-        if(!attacker.hp||!defender.hp){
-          state.stage='finished';
-          state.winner=!attacker.hp&&!defender.hp?'Draw':`${names[attacker.hp?state.active:1-state.active]} wins`;
-          add(state.winner);
-        }
+        finishMatchIfDefeated(state);
         break;
       }
       const saved=takeDamage(receiver,damage,!event.suppressPassives);

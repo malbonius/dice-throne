@@ -211,8 +211,7 @@ function finishUpkeep(state, roll, random) {
     add(`${names[1-state.active]} takes ${state.upkeepFlareDamage} damage from Cosmic Flare.`);
   }
   delete state.upkeepFlareDamage;
-  if(!attacker.hp||!defender.hp){
-    state.stage='finished';state.winner=!attacker.hp&&!defender.hp?'Draw':`${names[attacker.hp?state.active:1-state.active]} wins`;add(state.winner);
-  } else if(state.turn===1&&state.income?.skipped==='first-turn')state.stage='main1';
+  if (finishMatchIfDefeated(state)) return;
+  if(state.turn===1&&state.income?.skipped==='first-turn')state.stage='main1';
   else resolveIncome(state, roll, random);
 }
