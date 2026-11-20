@@ -38,6 +38,7 @@ const monk = (() => {
   };
 
   return {
+    leafletPositives: {chi: true, evasive: true, cleanse: true},
     board,
     upgrades,
     cards,

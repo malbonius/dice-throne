@@ -46,6 +46,7 @@ const ninja = (() => {
   };
 
   return {
+    leafletPositives: {smoke: true, ninjutsu: true},
     board,
     upgrades,
     cards,

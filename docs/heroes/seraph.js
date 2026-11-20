@@ -34,6 +34,7 @@ const seraph = (() => {
   const cards = [['To the Skies!',1,'main'],['Divine Intervention!',4,'main'],
     ['Angelic Combat!',1,'roll'],['Smote!',1,'roll'],['Holier Than Thou!',0,'main']];
   return {
+    leafletPositives: {flight: true, cleanse: true},
     id, board, upgrades, cards, promoId:33,
     effects:{
       triumphant(hit,counts) {

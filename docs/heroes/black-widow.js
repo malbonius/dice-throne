@@ -71,7 +71,9 @@ const blackWidow=(()=>{
     const p=s.players[seat];return s.cards&&p.covertOps>0&&seat===s.active&&isMain(s)&&p.covertTurn!==s.turn&&!s.response&&!s.cardRoll&&!s.mainAction&&!s.widowTask&&!s.widowReveal;
   }
   function task(s,seat,kind,cards,extra={}){s.widowTask={seat,kind,cards,resume:s.stage,...extra};}
-  return {id,board,upgrades,cards,promoId:33,count,sync,inflict,removeBomb,advance,advanceAll,upgradeChoices,install,refresh,incoming,half,canCovert,
+  return {
+    leafletPositives: {agility: true},
+   id,board,upgrades,cards,promoId:33,count,sync,inflict,removeBomb,advance,advanceAll,upgradeChoices,install,refresh,incoming,half,canCovert,
     initialize(s,seat){Object.assign(s.players[seat],{covertOps:3,agility:0});},
     defenceDiceCount(p){return p.upgrades?.defence?4:3;},
     resolveDefence({state,seat,defender,counts,updateDamage}){

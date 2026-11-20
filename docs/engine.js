@@ -6,6 +6,20 @@ const sharedCards = [
 ];
 const heroRoster = [barbarian, moonElf, pyromancer, shadowThief, monk, paladin, ninja, treant, cursedPirate, artificer, seraph, vampireLord, gunslinger, samurai, tactician, huntress, headlessHorseman, necromancer, paleLady, raveness, druid, duelist, forgemaster, sunElf, blackPanther, blackWidow, captainMarvel, doctorStrange, loki, scarletWitch, spiderMan, thor, cyclops, gambit, iceman, jeanGrey, psylocke, rogue, storm, wolverine, alchemist, krampus, mysticBrawler, santa, deadpool];
 const HEROES = heroRoster.map(hero => hero.board);
+// Leaflet entries use true for ordinary gains and a function for hero-specific gains.
+const positiveStatusGains = Object.assign(Object.create(null), ...heroRoster.map(hero => hero.leafletPositives));
+const positiveStatusKeys = Object.keys(positiveStatusGains);
+
+function leafletPositiveStatuses(state, seat) {
+ return Object.keys(heroRoster[heroId(state, seat)]?.leafletPositives ?? {});
+}
+
+function gainCopiedStatus(state, seat, key, source = seat) {
+ const gain = positiveStatusGains[key];
+ if (typeof gain === 'function') gain(state, seat, source);
+ else grantStatus(state.players[seat], key);
+}
+
 const abilityEffects = Object.assign({}, ...heroRoster.map(hero => hero.effects));
 const abilityEffectDice = Object.assign(
   {}, ...heroRoster.map(hero => hero.effectDiceCount)
@@ -23,6 +37,10 @@ const cardInfo = (seat,id) => {
 const newStatuses=['powderKeg','wither','parlay','synth','nanite','flight','blindingLight','holyPresence','bloodPower','bleed','mesmerize','bounty','reload','honor','shame','backStrike','tactical','constrict','nyraBond','dreadful','grim','decrepify','prey','feather','hex','wound','regenerate','regenerate1','guardBreak','disarm','chargedGem','sunMarked','kineticEnergy','vibraniumSuit','covertOps','agility','timeBomb','cosmicRay','cosmicFlare','radiance','premonition','dejaVu','crimsonBands','illusion','bagOfTricks','spellbound','probabilityManipulation','realityWarp','conjure','crackle','combo','invisibility','webbed','electrokinesis','support','battlePlan','focusFire','dissolution','disruption','iceShard','diceCube','glide','forceField','acuity','flameBlast','phoenixBurn','paralyze','infiltration','influence','ionicEnergy','ionicEnergy2','skyward','tornado','windShear','rage','alpha','punchify','bolsterate','cleansitude','toxification','gift','coal','strengthOcean','strengthMountain','strengthSky','cheer','eggNog','donut','onomatopoeia','rps'];
 const statusKeys=['blind','entangle','evasive','targeted','concussion','burn','knockdown','fireMastery','poison','shadows','sneak','chi','cleanse','crit','accuracy','protect','retribution','delayedPoison','smoke','ninjutsu','wellspring','barbed',...newStatuses.filter(key=>!['covertOps','cosmicRay','glide'].includes(key))];
 const negativeStatuses=['entangle','blind','concussion','targeted','burn','knockdown','poison','delayedPoison','barbed','powderKeg','wither','parlay','nanite','blindingLight','bleed','bounty','shame','constrict','decrepify','prey','hex','wound','disarm','sunMarked','timeBomb','crimsonBands','realityWarp','webbed','focusFire','disruption','diceCube','phoenixBurn','paralyze','influence','coal'];
+const nonTransferableStatuses = new Set([
+ 'holyPresence', 'hex', 'vibraniumSuit', 'illusion', 'spellbound', 'combo',
+ 'invisibility', 'alpha', 'gift', 'onomatopoeia', ...mysticBrawler.keys, ...alchemist.types
+]);
 const spiritTypes=['seedling','sapling','dryad'];
 const spiritCaps={seedling:3,sapling:2,dryad:1};
 const spiritTotal=p=>spiritTypes.reduce((total,key)=>total+(p[key]??0),0);
@@ -122,95 +140,7 @@ const isMain=s=>s.stage==='main1'||s.stage==='main';
 function discardRandom(p,random){
  if(p.hand.length)p.discard.push(p.hand.splice(Math.floor(random()*p.hand.length),1)[0]);
 }
-const shadowAvoids=(s)=>!!s.players[1-s.active].shadows&&!s.pending?.ultimate;
-const incomingDamage=s=>shadowAvoids(s)?0:(s.pending?.damage??0);
-const upkeepDamage=(p,seat)=>(p.burn?2:0)+(p.poison??0)+(p.pirateCoins?.[1-seat]??0);
-const reducedDamage=(amount,halves=0)=>Math.max(0,amount-halves*Math.ceil(amount/2));
-const upkeepIncoming=s=>s.upkeepInvulnerability?0:reducedDamage(upkeepDamage(s.players[s.active],s.active)+(s.upkeepBagDamage??0)+(s.upkeepDisruptionDamage??0)-(s.upkeepPrevention??0),s.upkeepProtect);
-function reviveNecromancer(p){
- if(!p.resurrect||p.hp>0)return false;
- p.hp=5;
- p.resurrect=false;
- p.resurrected=true;
- p.cp=0;
- if(Array.isArray(p.hand)){p.discard.push(...p.hand);p.hand=[];}
- return true;
-}
-function takeDamage(player,damage,absorb=true) {
- const saved=damage>=player.hp&&player.blessing;
- player.hp=saved?1:bounded(player.hp-damage,60);
- if(saved)removeStatus(player,'blessing');
- else reviveNecromancer(player);
- if(absorb&&damage>0&&player.hp>0&&player.hero===blackPanther.id)blackPanther.gain(player,1);
- return saved;
-}
-function stealNecroHealth(s,seat,amount){
- if(!amount)return false;
- const victim=s.players[1-seat], thief=s.players[seat], names=heroNames(s);
- const stolen=Math.min(victim.hp,amount);
- takeDamage(victim,stolen,false);
- thief.hp=bounded(thief.hp+stolen,60);
- s.log.unshift(`${names[seat]} steals ${stolen} Health.`);
- if(victim.hp)return false;
- s.stage='finished';
- s.winner=`${names[seat]} wins`;
- s.log.unshift(s.winner);
- return true;
-}
 const attackLocked=s=>s.deadpoolTask?.locked||s.deadpoolFourthResume?.locked||s.santaTask?.locked||s.santaNogRoll?.locked||s.mysticTask?.locked||s.krampusTask?.locked||s.krampusActivation?.locked||s.jeanTask?.locked||s.pending?.ultimate&&['jeanAbility','jeanResolved','psyAbility','paralyzeAfter','rogueAbility','rogueInfluence','rogueSkyward','stormCharge','stormAbility','stormResolved','stormChoices','deadpoolAbility','deadpoolPrepared','deadpoolResolved','santaAbility','santaTarget','santaRoll','santaPrepared','mysticAbility','mysticStrongTarget','mysticContest','mysticPrepared','mysticResolved','krampusAbility','krampusPrepared','krampusResolved','alchemistAbility','alchemistChoices','alchemistPotions','alchemistDefence','wolverineAbility','wolverineResolved','wolverineBarrage','wolverineRemove','wolverineSevere','alphaRoll'].includes(s.stage)||s.iceTask?.locked||s.pending?.ultimate&&['iceAbility','iceResolved'].includes(s.stage)||s.gambitTask?.locked||s.pending?.ultimate&&s.stage==='gambitAbility'||s.cyclopsTask?.locked||s.pending?.ultimate&&s.stage==='cyclopsAbility'||s.thorTask?.locked||s.pending?.ultimate&&s.stage==='thorAbility'||s.lokiBag?.locked||s.pending?.ultimate&&['lokiChoices','lokiAbility'].includes(s.stage)||s.pending?.ultimate&&['strangeSpells','strangeAbility'].includes(s.stage)||s.cosmicRayRoll?.locked||s.pending?.ultimate&&['widowAbility','widowSearch'].includes(s.stage)||s.sideDamage?.pantherLocked||s.pending?.ultimate&&s.stage==='pantherAbility'||s.pending?.ultimate&&s.stage==='sunMarked'||s.pending?.ultimate&&['forgeSearch','forgeAbility'].includes(s.stage)||s.pending?.ultimate&&s.stage==='duelMove'||s.ravenActivation?.locked||s.pending?.ultimate&&['ravenAbility','prey','druidReady'].includes(s.stage)||s.undeadRoll?.resume==='locked'||s.stage==='undeadRemove'&&s.undeadResume==='locked'||s.stage==='locked'||s.horseRoll?.resume==='locked'||s.gunReload?.resume==='locked'||s.artRoll?.resume==='locked'||s.seraphRoll?.resume==='locked'||s.stage==='sideDamage'&&s.sideDamage.resume==='locked'||s.ninjutsuReturnStage==='locked'||s.pending?.ultimate&&['sneakOffer','growSpirits','evasion'].includes(s.stage);
-const rollPhase=s=>s.deadpoolTask&&s.stage==='deadpoolChoices'?rollPhase({...s,deadpoolTask:s.deadpoolTask.parent??null,stage:s.deadpoolTask.resume}):s.santaNogRoll?rollPhase({...s,santaNogRoll:null,stage:s.santaNogRoll.resume}):s.santaTask&&s.stage==='santaChoices'?rollPhase({...s,santaTask:s.santaTask.parent??null,stage:s.santaTask.resume}):s.mysticTask&&s.stage==='mysticChoices'?rollPhase({...s,mysticTask:s.mysticTask.parent??null,stage:s.mysticTask.resume}):s.krampusTask&&s.stage==='krampusChoices'?rollPhase({...s,krampusTask:s.krampusTask.parent??null,stage:s.krampusTask.resume}):s.jeanTask&&s.stage==='jeanChoices'?rollPhase({...s,jeanTask:s.jeanTask.parent??null,stage:s.jeanTask.resume}):s.iceTask&&s.stage==='iceChoices'?rollPhase({...s,iceTask:s.iceTask.parent??null,stage:s.iceTask.resume}):s.gambitRoll?s.gambitRoll.kind==='high'?false:rollPhase({...s,gambitRoll:null,stage:s.gambitRoll.resume}):s.gambitTask&&s.stage==='gambitSequence'?rollPhase({...s,gambitTask:s.gambitTask.parent??null,stage:s.gambitTask.resume}):s.cyclopsTask&&s.stage==='cyclopsSequence'?rollPhase({...s,cyclopsTask:s.cyclopsTask.parent??null,stage:s.cyclopsTask.resume}):s.thorTask?rollPhase({...s,thorTask:null,stage:s.thorTask.resume}):s.scarletJinx?true:s.lokiBag?rollPhase({...s,lokiBag:s.lokiBag.parent??null,stage:s.lokiBag.resume}):s.strangeTask?!['main','main1'].includes(s.strangeTask.resume):s.cosmicRayRoll?true:s.mesmerizeRoll?.resume!=='upkeep'&&s.artRoll?.resume!=='upkeep'&&s.evasionReturnStage!=='upkeep'&&(s.evasionReturnStage!=='sideDamage'||s.sideDamage?.source==='Barbed Vine')&&['offence','announce','blind','effect','effectResponse','defence','defenceResponse','damage','evasion','postHit','targeting','combustion','pickpocket','sneakOffer','sneakRoll','monkChoice','ninjaGain','ninjutsuRoll','ninjutsuChoice','pirateKegRoll','artRoll','seraphRoll','mesmerizeRoll','gunContest','gunReload','gunDuelChoice','horseRoll','undeadRoll','necroChoice','horrifyChoice','samuraiRoll','vampireChoice','seraphTarget','purify','dryadResponse','spiritPayment','overgrowthWells','prey','druidReady','guardBreakRoll','guardOffer','sunMarked','thorAbility','cyclopsAbility','gambitAbility','iceAbility','iceResolved','iceGlideReady','iceGlideDeclare','jeanAbility','jeanResolved','psyAbility','paralyzeAfter','rogueAbility','rogueInfluence','rogueSkyward','stormCharge','stormAbility','stormResolved','stormChoices','deadpoolAbility','deadpoolPrepared','deadpoolResolved','santaAbility','santaTarget','santaRoll','santaPrepared','mysticAbility','mysticStrongTarget','mysticContest','mysticPrepared','mysticResolved','krampusAbility','krampusPrepared','krampusResolved','krampusChoices','krampusActivation','alchemistAbility','alchemistChoices','alchemistPotions','alchemistDefence','wolverineAbility','wolverineResolved','wolverineBarrage','wolverineRemove','wolverineSevere','alphaRoll'].includes(s.stage);
-function rollContext(s) {
- if(s.deadpoolDonutRoll)return {dice:s.deadpoolDonutRoll.dice,seat:s.deadpoolDonutRoll.seat};
- if(s.deadpoolLucky?.dice&&!s.cardRoll)return {dice:s.deadpoolLucky.dice,seat:s.deadpoolLucky.target};
- if(s.santaNogRoll)return {dice:s.santaNogRoll.dice,seat:s.santaNogRoll.seat};
- if(s.santaRoll&&!s.cardRoll)return {dice:s.santaRoll.dice,seat:s.santaRoll.seat,owners:s.santaRoll.dice.length===2?[s.santaRoll.seat,1-s.santaRoll.seat]:undefined};
- if(s.mysticContest&&!s.cardRoll)return {dice:s.mysticContest.dice,seat:s.mysticContest.seat,owners:[s.mysticContest.seat,1-s.mysticContest.seat]};
- if(s.alchemistRoll&&!s.cardRoll)return {dice:s.alchemistRoll.dice,seat:s.alchemistRoll.seat};
- if(s.wolverineRageRoll&&!s.cardRoll)return {dice:s.wolverineRageRoll.dice,seat:s.wolverineRageRoll.seat};
- if(s.alphaRoll&&!s.cardRoll)return {dice:s.alphaRoll.dice,seat:s.alphaRoll.seat,owners:[s.alphaRoll.seat,s.alphaRoll.target]};
- if(s.rogueRoll&&!s.cardRoll)return {dice:s.rogueRoll.dice,seat:s.rogueRoll.seat,...(s.rogueRoll.kind==='skyward'?{owners:[s.rogueRoll.seat,1-s.rogueRoll.seat]}:{})};
- if(s.jeanBurnRoll&&!s.cardRoll)return {dice:s.jeanBurnRoll.dice,seat:s.jeanBurnRoll.seat};
- if(s.jeanTask&&s.stage==='jeanChoices'&&!s.cardRoll&&!s.retry)return rollContext({...s,jeanTask:s.jeanTask.parent??null,stage:s.jeanTask.resume});
- if(s.iceTask&&s.stage==='iceChoices'&&!s.cardRoll&&!s.retry)return rollContext({...s,iceTask:s.iceTask.parent??null,stage:s.iceTask.resume});
- if(s.gambitRoll&&!s.cardRoll)return {dice:s.gambitRoll.dice,seat:s.gambitRoll.seat};
- if(s.gambitTask&&s.stage==='gambitSequence'&&!s.cardRoll&&!s.retry)return gambit.forced(s)?null:rollContext({...s,gambitTask:s.gambitTask.parent??null,stage:s.gambitTask.resume});
- if(s.cyclopsTask&&s.stage==='cyclopsSequence'&&!s.cardRoll&&!s.retry)return cyclops.choosing(s)?null:rollContext({...s,cyclopsTask:s.cyclopsTask.parent??null,stage:s.cyclopsTask.resume});
- if(s.scarletJinx&&!s.cardRoll)return {dice:s.scarletJinx.dice,seat:s.scarletJinx.seat};
- if(s.lokiBag?.kind==='roll'&&!s.cardRoll)return {dice:s.lokiBag.dice,seat:s.lokiBag.seat};
- if(s.cosmicRayRoll&&!s.cardRoll)return {dice:s.cosmicRayRoll.dice,seat:s.cosmicRayRoll.seat};
- if(s.widowAgility&&!s.cardRoll)return {dice:s.widowAgility.dice,seat:s.widowAgility.seat};
- if(s.widowBombRoll&&!s.cardRoll)return {dice:s.widowBombRoll.dice,seat:s.active};
- if(s.sunGemRoll)return {dice:s.sunGemRoll.dice,seat:s.active};
- if(s.mesmerizeRoll&&!s.mesmerizeRoll.choosing)return {dice:s.mesmerizeRoll.dice,seat:s.mesmerizeRoll.seat};
- if(s.guardBreakRoll&&!s.cardRoll)return {dice:s.guardBreakRoll,seat:s.active};
- if(s.woundRoll&&!s.cardRoll)return {dice:s.woundRoll,seat:s.active};
- if(s.nevermoreRoll&&!s.cardRoll)return {dice:s.nevermoreRoll.dice,seat:s.nevermoreRoll.target};
- if(s.preyRoll&&!s.cardRoll)return {dice:s.preyRoll,seat:s.active};
- if(s.bleedRoll&&!s.cardRoll)return {dice:s.bleedRoll,seat:s.active};
- if(s.cardRoll) return {dice:s.cardRoll.dice,seat:s.cardRoll.roller??s.cardRoll.seat};
- if(s.stage==='gunReload')return {dice:s.gunReload.dice,seat:s.gunReload.seat};
- if(s.stage==='gunContest')return {dice:s.gunContest.dice,seat:s.gunContest.seat,owners:[s.gunContest.seat,1-s.gunContest.seat]};
- if(s.stage==='undeadRoll')return {dice:s.undeadRoll.dice,seat:s.undeadRoll.seat};
- if(s.stage==='horseRoll')return {dice:s.horseRoll.dice,seat:s.horseRoll.seat};
- if(s.stage==='samuraiRoll')return {dice:s.samuraiRoll.dice,seat:s.samuraiRoll.seat};
- if(s.seraphRoll)return {dice:s.seraphRoll.dice,seat:s.seraphRoll.seat};
- if(s.artRoll) return {dice:s.artRoll.dice,seat:s.artRoll.seat};
- if(['offence','announce'].includes(s.stage) && s.dice.length) return {dice:s.dice,seat:s.active};
- if(['blind','pirateKegRoll'].includes(s.stage)) return {dice:[s.effectDie],seat:s.active,scalar:true};
- if(s.stage==='sneakRoll'||s.stage==='ninjutsuRoll') return {dice:[s.effectDie],seat:s.active,scalar:true};
- if(s.stage==='evasion') return {dice:[s.effectDie],seat:s.evasionSeat??1-s.active,scalar:true};
- if(s.stage==='effectResponse') return {dice:s.pending.effectDice,seat:s.active};
- if(s.stage==='defenceResponse') return {dice:s.defenceDice,seat:1-s.active};
- return null;
-}
-const dieOwner=(ctx,index)=>ctx?.owners?.[index]??ctx?.seat;
-function diceOwnedBy(ctx,seat,s){
- if(!ctx)return [];
- if(!ctx.owners){if(ctx.seat!==seat)return [];if(!s||!ctx.dice.some((_,i)=>iceman.contextLocked(s,ctx,i)))return ctx.dice;const dice=ctx.dice.slice();dice.forEach((_,i)=>{if(iceman.contextLocked(s,ctx,i))delete dice[i];});return dice;}
- const dice=[];
- ctx.dice.forEach((value,index)=>{if(dieOwner(ctx,index)===seat&&(!s||!iceman.contextLocked(s,ctx,index)))dice[index]=value;});
- return dice;
-}
 function cardChoices(s,seat,id) {
  if(s.deadpoolRps||s.deadpoolRemoval||s.deadpoolTask&&s.stage==='deadpoolChoices')return [];
  if((s.deadpoolDonutRoll||s.deadpoolLucky)&&![8,9,11,12,13,14,16,18].includes(id))return [];
@@ -260,7 +190,7 @@ function cardChoices(s,seat,id) {
  const pos=d?.dice.map((value,i)=>({value,i,label:d.owners?`${names[dieOwner(d,i)]}’s die (${value})`:`die ${i+1} (${value})`}))??[];
  const ownDice=pos.filter(die=>dieOwner(d,die.i)===seat),writable=pos.filter(die=>!iceman.contextLocked(s,d,die.i)),writableOwn=ownDice.filter(die=>!iceman.contextLocked(s,d,die.i));
  const flips=writable.flatMap(({i,label,value})=>[1,2,3,4,5,6].filter(v=>v!==value).map(v=>({label:`${label} → ${v}`,i,v})));
- if(id===1)return statuses.filter(x=>!['holyPresence','hex','vibraniumSuit','illusion','spellbound','combo','invisibility','alpha','gift','onomatopoeia',...mysticBrawler.keys,...alchemist.types].includes(x.status))
+ if(id===1)return statuses.filter(x=>!nonTransferableStatuses.has(x.status))
    .filter(x=>!['ionicEnergy','ionicEnergy2'].includes(x.status)||rogue.total(s.players[1-x.target])<rogue.cap(s.players[1-x.target])).filter(x=>!x.status.startsWith('regenerate')||druid.regenTotal(s.players[1-x.target])<2).filter(x=>statusCap(s.players[1-x.target],x.status)===1||!s.players[1-x.target][x.status]||s.players[1-x.target][x.status]<statusCap(s.players[1-x.target],x.status)).map(x=>({...x,label:`${x.label} → ${names[1-x.target]}`}));
  if(id===2)return heroes.filter(x=>statusKeys.some(k=>k!=='covertOps'&&s.players[x.target][k]));
  if(id===4||id===7)return statuses.flatMap(choice=>{
@@ -307,14 +237,6 @@ function cardChoices(s,seat,id) {
  return heroRoster[hero].cardChoices?.(id,{s,seat,pos:writable,d,one,heroTargets:heroes})??one;
 }
 
-const attackReduction=p=>Math.min((p.witherReduction??0)+(p.shameReduction??0)+(p.decrepReduction??0),
- Math.max(0,p.grossDamage-(p.collateral??0)));
-// Hail the King is one combined incoming attack, including its collateral damage.
-const modifiedAttackDamage=p=>Math.max(0,p.grossDamage-(p.iceman?0:p.collateral??0)-attackReduction(p));
-const damageSubtotal=p=>Math.max(0,p.grossDamage-(p.prevention??0)-attackReduction(p));
-function updateDamage(p) {
- p.damage=p.evaded||p.parlayBlocked||p.illusionPreventAll||p.invulnerabilityAll?0:reducedDamage(damageSubtotal(p),Number(!!p.halfDefence)+Number(!!p.blindingHalf)+(p.protect??0)+(p.illusionHalves??0));
-}
 function removeBountyBonus(s,seat){
  const hit=s.pending;
  if(seat===s.active||!hit?.bountyBonus||s.players[seat].bounty||['postHit','main','main1','discard','finished'].includes(s.stage))return;
@@ -322,6 +244,20 @@ function removeBountyBonus(s,seat){
  hit.grossDamage--;
  updateDamage(hit);
 }
+function transferTrackedStatus(state, from, key, tokenId, source) {
+ if (key === 'bagOfTricks') {
+  const bag = loki.removeBag(state.players[from], tokenId);
+  if (bag) loki.give(state, 1-from, bag.owner, 1, bag);
+  return true;
+ }
+ if (key === 'timeBomb') {
+  const bomb = blackWidow.removeBomb(state.players[from], tokenId);
+  if (bomb) blackWidow.inflict(state, 1-from, source, bomb.ticks);
+  return true;
+ }
+ return false;
+}
+
 function removeMatchStatus(s,seat,key,tokenId){
  const player=s.players[seat], hit=s.pending;
  if(!statusKeys.includes(key)||!player[key])return;
@@ -350,17 +286,6 @@ const flightMode=(s,seat)=>{
  if(seat!==s.active&&['defence','defenceResponse','damage','purify'].includes(s.stage)&&incomingDamage(s)>0)return 'defence';
  return null;
 };
-const retributionDamage=p=>p.retribution&&!p.evaded&&!p.shadowAvoided?Math.ceil(damageSubtotal(p)/2):0;
-const returnIncoming=p=>p.returnEvaded||p.returnInvulnerable?0:reducedDamage(
- p.returnDamage+(p.necroReturn??0)+(p.disengageDamage??0)+(p.backStrikeDamage??0)+(p.artSelfDamage??0)+(p.vineDamage??0)+(p.absolutionReturn??0)+retributionDamage(p)+(p.damage>0?(p.recoil??0):0)-(p.returnPrevention??0),p.returnProtect);
-const sideIncoming=p=>p.evaded||p.invulnerabilityAll||p.shadowBlocked||p.parlayBlocked?0:reducedDamage(p.amount-(p.prevention??0),p.protect);
-function startSideDamage(s,seat,amount,source,endTurn=false,extra={}){
- const parent=s.sideDamage;
- if(!extra.keepPending&&!parent)s.pending=null;
- s.sideDamage={seat,amount,source,endTurn,resume:s.stage,...extra};
- if(parent)s.sideDamage.parent=parent;
- s.stage='sideDamage';
-}
 function flushPowderKegs(state) {
  if(state.sideDamage || state.stage==='finished' || !state.powderExplosions?.length) return state;
  startSideDamage(state,state.powderExplosions.shift(),3,'Powder Keg',false,{keepPending:true});
@@ -384,8 +309,6 @@ function grantPirateStatus(state,seat,status,afterRoll=false) {
   grantAttackStatus(state,player,status);
  else grantStatus(player,status);
 }
-const vineDamage=s=>s.players[s.active].barbed?(s.vineAttempts??0):0;
-const returnDamageFor=s=>returnIncoming({...s.pending,damage:incomingDamage(s),shadowAvoided:shadowAvoids(s),vineDamage:vineDamage(s)});
 const titheDrawCost=p=>p.upgrades?.Tithe?2:3;
 function titheChoices(s,seat) {
  const p=s.players[seat];
@@ -511,7 +434,7 @@ function tacticalChoices(s,seat){
      const receiver=s.players[1-from];
      for(const status of statusKeys){
        const balance=Number(receiver[status]??0)-(status==='tactical'&&from!==seat?4:0);
-       if(['holyPresence','hex','vibraniumSuit','illusion','spellbound','combo','invisibility','alpha','gift','onomatopoeia',...mysticBrawler.keys,...alchemist.types].includes(status)||status.startsWith('regenerate')&&druid.regenTotal(receiver)>=2||!player[status]||balance>=statusCap(receiver,status))continue;
+       if(nonTransferableStatuses.has(status)||status.startsWith('regenerate')&&druid.regenTotal(receiver)>=2||!player[status]||balance>=statusCap(receiver,status))continue;
        if(status==='tactical'&&from===seat&&p.tactical===4)continue;
        if(status==='bagOfTricks'){for(const b of player.trickBags??[])options.push({kind:'transfer',cost:4,from,status,bagId:b.id,label:`Transfer Bag of Tricks from ${names[from]} to ${names[1-from]} · created by ${names[b.owner]}`});continue;}
        if(status==='timeBomb'){for(const b of player.timeBombTimers??[])options.push({kind:'transfer',cost:4,from,status,bombId:b.id,label:`Transfer Time Bomb 0:0${b.ticks} from ${names[from]} to ${names[1-from]}`});continue;}
@@ -559,8 +482,7 @@ function applyTactical(s,seat,option,roll,random){
    case 'protect': grantStatus(s.players[option.target],'protect');break;
    case 'transfer':
      if(option.status==='webbed'){removeMatchStatus(s,option.from,'webbed');spiderMan.inflict(s,1-option.from,seat);break;}
-     if(option.status==='bagOfTricks'){const bag=loki.removeBag(s.players[option.from],option.bagId);if(bag)loki.give(s,1-option.from,bag.owner,1,bag);break;}
-     if(option.status==='timeBomb'){const bomb=blackWidow.removeBomb(s.players[option.from],option.bombId);if(bomb)blackWidow.inflict(s,1-option.from,seat,bomb.ticks);break;}
+     if(transferTrackedStatus(s,option.from,option.status,option.status==='timeBomb'?option.bombId:option.bagId,seat))break;
      removeMatchStatus(s,option.from,option.status);
      grantStatus(s.players[1-option.from],option.status);
      break;
@@ -653,7 +575,6 @@ const hasResponse=(s,seat)=>{
    tokens.accuracy||tokens.protect||tokens.retribution||tokens.smoke||tokens.ninjutsu||tokens.evadeSide||tokens.seedling.length||tokens.sapling||tokens.dryad||tokens.dryadPrevent.length||tokens.wellspring||tithe.draw||tithe.dice?.length||
    s.stage==='damage'&&s.players[seat].evasive&&(seat===s.active?returnDamageFor(s):incomingDamage(s))>0&&!s.cardRoll);
 };
-const cardActor=s=>s.response?.seat??s.deadpoolDonutRoll?.seat??(s.deadpoolRps?deadpool.rpsActor(s):undefined)??(s.deadpoolLucky?s.deadpoolLucky.target:undefined)??(s.deadpoolTask&&s.stage==='deadpoolChoices'?s.deadpoolTask.seat:undefined)??(s.santaRemoval&&!s.santaNogRoll&&!s.sideDamage?(s.santaRemoval.choosing?s.santaRemoval.source:s.santaRemoval.seat):undefined)??(s.santaGift?(s.santaGift.stage==='hide'?s.santaGift.seat:1-s.santaGift.seat):undefined)??s.santaNogRoll?.seat??(s.santaTask&&s.stage==='santaChoices'?(s.santaTask.queue[0]?.kind==='apology'?1-s.santaTask.seat:s.santaTask.queue[0]?.target??s.santaTask.seat):undefined)??(!s.cardRoll&&!s.retry?s.santaRoll?.seat:undefined)??(s.mysticTask&&s.stage==='mysticChoices'?s.mysticTask.seat:undefined)??(!s.cardRoll&&!s.retry?s.mysticContest?.seat:undefined)??s.krampusActivation?.seat??s.krampusOverflow??(s.krampusTask&&s.stage==='krampusChoices'?s.krampusTask.seat:undefined)??(s.alchemistTask&&s.stage==='alchemistChoices'?s.alchemistTask.seat:undefined)??(!s.cardRoll&&!s.retry?s.alchemistRoll?.seat:undefined)??(s.stage==='alchemistPotions'?s.alchemistSpend?.seat:undefined)??(!s.cardRoll&&!s.retry?s.wolverineRageRoll?.seat:undefined)??(!s.cardRoll&&!s.retry?s.alphaRoll?.seat:undefined)??s.wolverineIntimidate?.target??s.wolverineGain?.seat??(s.stormTask&&s.stage==='stormChoices'?s.stormTask.seat:undefined)??s.rogueGain?.seat??(!s.cardRoll&&!s.retry?s.rogueRoll?.seat:undefined)??s.psyReveal?.seat??(!s.cardRoll&&!s.retry?s.jeanBurnRoll?.seat:undefined)??(s.jeanTask&&s.stage==='jeanChoices'&&!s.cardRoll&&!s.retry?s.jeanTask.seat:undefined)??s.iceFreezeChoice?.seat??(s.iceTask&&s.stage==='iceChoices'&&!s.cardRoll&&!s.retry?s.iceTask.seat:undefined)??(!s.cardRoll&&!s.retry?s.gambitRoll?.seat:undefined)??(s.gambitTask&&s.stage==='gambitSequence'&&!s.cardRoll&&!s.retry?s.gambitTask.seat:undefined)??(s.cyclopsTask&&s.stage==='cyclopsSequence'&&!s.cardRoll&&!s.retry?s.cyclopsTask.seat:undefined)??s.thorOverflow?.seat??(s.thorTask&&s.stage==='thorSequence'?s.thorTask.seat:undefined)??(s.conjureTask?1-s.conjureTask.seat:undefined)??(s.scarletJinx&&!s.cardRoll&&!s.retry?s.scarletJinx.seat:undefined)??lokiActor(s)??s.premonitionTask?.seat??(s.strangeTask&&s.stage!=='sideDamage'?s.strangeTask.seat:undefined)??s.cosmicRayRoll?.seat??s.cosmicRayOverflow?.seat??s.widowTask?.seat??s.widowReveal?.seat??s.widowAgility?.seat??(s.widowBombRoll?s.active:undefined)??s.grimOverflow?.seat??(s.stage==='nyraDamage'?1-s.active:s.tacticalOverflow?.seat??s.tacticalRemoval?.seat??s.honorOverflow?.seat??s.bloodOverflow?.seat??s.response?.seat??(s.cards&&s.stage==='damage'&&!s.cardRoll&&!s.retry&&hasResponse(s,s.active)?s.active:actor(s)));
 const isSelling=s=>s.cards&&!s.deadpoolTask&&!s.deadpoolRps&&!s.deadpoolDonutRoll&&!s.deadpoolLucky&&!s.santaRemoval&&!s.santaTask&&!s.santaRoll&&!s.santaNogRoll&&!s.santaGift&&!s.mysticTask&&!s.mysticContest&&!s.krampusTask&&!s.krampusActivation&&s.krampusOverflow===undefined&&!alchemist.busy(s)&&!s.wolverineGain&&!s.wolverineRageRoll&&!s.alphaRoll&&!s.wolverineIntimidate&&!s.stormTask&&!s.rogueGain&&!s.rogueRoll&&!s.psyReveal&&!s.jeanTask&&!s.jeanBurnRoll&&!s.iceTask&&!s.iceFreezeChoice&&!s.gambitTask&&!s.gambitRoll&&!s.cyclopsTask&&!s.thorTask&&!s.thorOverflow&&!s.conjureTask&&!s.scarletJinx&&!s.lokiTask&&!s.lokiBag&&!s.lokiIllusion&&!s.strangeTask&&!s.premonitionTask&&!s.cosmicRayRoll&&!s.cosmicRayOverflow&&!s.widowTask&&!s.widowReveal&&!s.widowAgility&&!s.widowBombRoll&&!s.forgeTask&&!s.shapeOverflow&&!s.ravenFeathers && (isMain(s)||s.stage==='discard')&&!s.mainAction&&!s.mainChoice&&!s.cardRoll&&!s.artRoll&&!s.bloodOverflow&&!s.honorOverflow&&!s.tacticalOverflow&&!s.tacticalRemoval&&!s.retry&&!s.response;
 function grantAttackStatus(s,defender,key,amount=1){
  if(psylocke.block(s,defender,key,amount))return;
@@ -702,10 +623,9 @@ function applyCard(s,seat,id,choice,roll,random,add,bypassSanta=false) {
   if(hero===blackPanther.id&&c.slot==='Energy Absorption')blackPanther.gain(p,0);
   return;
  }
- if(id===1&&choice.status==='bagOfTricks'){const bag=loki.removeBag(s.players[choice.target],choice.tokenId);if(bag)loki.give(s,1-choice.target,bag.owner,1,bag);return;}
- if([1,4,7].includes(id)&&choice.status==='timeBomb'){
-  const bomb=blackWidow.removeBomb(s.players[choice.target],choice.bombId);
-  if(id===1&&bomb)blackWidow.inflict(s,1-choice.target,seat,bomb.ticks);
+ if(id===1&&transferTrackedStatus(s,choice.target,choice.status,choice.status==='timeBomb'?choice.bombId:choice.tokenId,seat))return;
+ if([4,7].includes(id)&&choice.status==='timeBomb'){
+  blackWidow.removeBomb(s.players[choice.target],choice.bombId);
   return;
  }
  if(id===7&&!bypassSanta&&choice.target!==seat&&['cheer','eggNog','donut','rps','onomatopoeia'].includes(choice.status)&&(santa.cheerChoices(s,choice.target).length||santa.canNog(s,choice.target)||deadpool.onomChoices(s,choice.target).length||deadpool.canRps(s,choice.target)||deadpool.canDonut(s,choice.target))){s.santaRemoval={seat:choice.target,source:seat,choice};return;}
@@ -861,7 +781,7 @@ function createMatch(roll, options) {
     state.version=2;
     state.cards=true;
     state.promo=!!options.promo;
-    state.stage=[7,artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id,paleLady.id,duelist.id,forgemaster.id,sunElf.id,gambit.id,alchemist.id].includes(heroId(state,active))?'upkeep':'main1';
+    state.stage=needsTurnStartUpkeep(state, true)?'upkeep':'main1';
     state.income={skipped:'first-turn'};
     state.players.forEach((p,i)=>{
       heroRoster[heroId(state,i)].initialize?.(state,i,options.random??Math.random);
@@ -903,7 +823,6 @@ const ninjutsuLabel=outcome=>({one:'+1 damage',two:'+2 damage',delayedPoison:'In
 const ninjutsuOutcomes=s=>['two','delayedPoison',...(!s.pending.undefendable&&!s.pending.ultimate&&!s.defenceDice.length&&
   ['ninjaGain','targeting','sneakOffer','defence'].includes(s.ninjutsuReturnStage)?['undefendable']:[])];
 const canRerollMaul=s=>s.pending?.effect==='druidMaul'&&!s.pending.maulRerolled&&s.players[s.active].druidForm==='bear';
-function lokiActor(s){if(s.lokiTask)return s.lokiTask.seat;if(s.lokiIllusion)return s.lokiIllusion.kind==='pick'?s.active:s.lokiIllusion.seat;if(s.lokiBag)return s.cardRoll?.seat??s.retry?.seat??(s.lokiBag.kind==='choose'?s.lokiBag.owner:s.lokiBag.seat);}
 function legal(state) {
  if(state.deadpoolRps){const r=state.deadpoolRps;return {deadpoolRpsPick:['first','second'].includes(r.step),deadpoolRpsRandom:r.step==='second',deadpoolRpsReveal:r.step==='reveal',deadpoolShoot:r.step==='shoot'};}
  if(state.deadpoolTask&&state.stage==='deadpoolChoices'){const h=state.deadpoolTask.queue[0];return {deadpoolDonutTarget:h?.kind==='donuts',deadpoolCollect:h?.kind==='gain'&&h.window,deadpoolSpeech:['speechCP','speechTaco'].includes(h?.kind),deadpoolFourth:h?.kind==='fourth'};}
@@ -1140,91 +1059,6 @@ function legal(state) {
     case 'main': return state.cards?{endMain:true}:{next:true};
     default: return {};
   }
-}
-function actor(state) {
-  if(state.deadpoolDonutRoll)return state.deadpoolDonutRoll.seat;
-  if(state.deadpoolRps)return deadpool.rpsActor(state);
-  if(state.deadpoolLucky)return state.deadpoolLucky.target;
-  if(state.deadpoolTask&&state.stage==='deadpoolChoices')return state.deadpoolTask.seat;
-  if(state.santaRemoval&&!state.santaNogRoll&&!state.deadpoolDonutRoll&&!state.sideDamage)return state.santaRemoval.choosing?state.santaRemoval.source:state.santaRemoval.seat;
-  if(state.santaGift)return state.santaGift.stage==='hide'?state.santaGift.seat:1-state.santaGift.seat;
-  if(state.santaNogRoll)return state.santaNogRoll.seat;
-  if(state.santaTask&&state.stage==='santaChoices')return state.santaTask.queue[0]?.kind==='apology'?1-state.santaTask.seat:state.santaTask.queue[0]?.target??state.santaTask.seat;
-  if(state.santaRoll&&!state.cardRoll&&!state.retry)return state.santaRoll.seat;
-  if(state.mysticTask&&state.stage==='mysticChoices')return state.mysticTask.seat;
-  if(state.mysticContest&&!state.cardRoll&&!state.retry)return state.mysticContest.seat;
-  if(state.krampusOverflow!==undefined)return state.krampusOverflow;
-  if(state.krampusActivation)return state.krampusActivation.seat;
-  if(state.krampusTask&&state.stage==='krampusChoices')return state.krampusTask.seat;
-  if(state.alchemistTask&&state.stage==='alchemistChoices')return state.alchemistTask.seat;
-  if(state.alchemistRoll&&!state.cardRoll&&!state.retry)return state.alchemistRoll.seat;
-  if(state.stage==='alchemistPotions'&&state.alchemistSpend)return state.alchemistSpend.seat;
-  if(state.wolverineIntimidate)return state.wolverineIntimidate.target;
-  if(state.wolverineGain&&!state.wolverineRageRoll)return state.wolverineGain.seat;
-  if(state.wolverineRageRoll&&!state.cardRoll&&!state.retry)return state.wolverineRageRoll.seat;
-  if(state.alphaRoll&&!state.cardRoll&&!state.retry)return state.alphaRoll.seat;
-  if(state.stormTask&&state.stage==='stormChoices')return state.stormTask.seat;
-  if(state.rogueGain)return state.rogueGain.seat;
-  if(state.santaNogRoll&&!state.retry)return {resolveEggNog:true};
-  if(state.santaRoll&&!state.cardRoll&&!state.retry)return {resolveSantaRoll:true};
-  if(state.alchemistRoll&&!state.cardRoll&&!state.retry)return {resolveAlchemistLab:true};
-  if(state.rogueRoll&&!state.cardRoll&&!state.retry)return state.rogueRoll.seat;
-  if(state.psyReveal)return state.psyReveal.seat;
-  if(state.jeanBurnRoll&&!state.cardRoll)return state.jeanBurnRoll.seat;
-  if(state.jeanTask&&state.stage==='jeanChoices'&&!state.cardRoll&&!state.retry)return state.jeanTask.seat;
-  if(state.iceFreezeChoice)return state.iceFreezeChoice.seat;
-  if(state.iceTask&&state.stage==='iceChoices'&&!state.cardRoll&&!state.retry)return state.iceTask.seat;
-  if(state.gambitRoll&&!state.cardRoll&&!state.retry)return state.gambitRoll.seat;
-  if(state.gambitTask&&state.stage==='gambitSequence'&&!state.cardRoll&&!state.retry)return state.gambitTask.seat;
-  if(state.cyclopsTask&&state.stage==='cyclopsSequence'&&!state.cardRoll&&!state.retry)return state.cyclopsTask.seat;
-  if(state.thorOverflow)return state.thorOverflow.seat;
-  if(state.thorTask&&state.stage==='thorSequence')return state.thorTask.seat;
-  if(state.conjureTask)return 1-state.conjureTask.seat;
-  if(state.scarletJinx&&!state.cardRoll&&!state.retry)return state.scarletJinx.seat;
-  const lokiSeat=lokiActor(state);if(lokiSeat!==undefined)return lokiSeat;
-  if(state.premonitionTask)return state.premonitionTask.seat;
-  if(state.strangeTask&&state.stage!=='sideDamage')return state.strangeTask.seat;
-  if(state.cosmicRayRoll)return state.cosmicRayRoll.seat;
-  if(state.cosmicRayOverflow)return state.cosmicRayOverflow.seat;
-  if(state.widowTask)return state.widowTask.seat;
-  if(state.widowReveal)return state.widowReveal.seat;
-  if(state.widowAgility)return state.widowAgility.seat;
-  if(state.widowBombRoll)return state.active;
-  if(state.stage==='sunMarked'&&!state.pending.ultimate)return 1-state.active;
-  if(state.forgeTask)return state.forgeTask.seat;
-  if(['forgeMasterwork','forgeArmor'].includes(state.stage))return 1-state.active;
-  if(state.stage==='duelMove')return state.duelMovement.seat;
-  if(legal(state).collectShapeShift)return state.shapeOverflow.seat;
-  if(legal(state).collectFeathers)return state.ravenFeathers.seat;
-  if(state.stage==='ravenActivate')return state.ravenActivation.owner;
-  if(state.stage==='ravenNevermoreRoll'||state.stage==='ravenDiscard')return state.active;
-  if(state.stage==='ravenAttackChoice')return state.ravenAttackChoice.owner;
-  if(state.grimOverflow)return state.grimOverflow.seat;
-  if(state.stage==='undeadRoll')return state.undeadRoll.seat;
-  if(state.stage==='horseRoll')return state.horseRoll.seat;
-  if(state.growth)return state.growth.seat;
-  if(state.retry)return state.retry.seat;
-  if(state.petulant)return 1-state.petulant.seat;
-  if(state.mainChoice)return state.mainChoice.seat;
-  if(state.pirateChoice)return state.pirateChoice.seat;
-  if(state.monkChoice)return state.monkChoice.seat;
-  if(state.tacticalOverflow)return state.tacticalOverflow.seat;
-  if(state.tacticalRemoval)return state.tacticalRemoval.seat;
-  if(state.honorOverflow)return state.honorOverflow.seat;
-  if(state.bloodOverflow)return state.bloodOverflow.seat;
-  if(state.mesmerizeRoll)return state.mesmerizeRoll.seat;
-  if(state.bleedRoll&&!state.cardRoll)return state.active;
-  if(state.cardRoll)return state.cardRoll.seat;
-  if(state.stage==='samuraiRoll')return state.samuraiRoll.seat;
-  if(state.stage==='gunReload')return state.gunReload.seat;
-  if(state.stage==='gunContest')return state.gunContest.seat;
-  if(state.stage==='gunDuelChoice')return 1-state.active;
-  if(state.seraphRoll)return state.seraphRoll.seat;
-  if(state.artRoll)return state.artRoll.seat;
-  if(state.mainAction)return 1-state.mainAction.seat;
-  if(state.stage==='evasion')return state.evasionSeat??1-state.active;
-  if(state.stage==='sideDamage')return state.sideDamage.seat;
-  return ['announce','defence','defenceResponse','damage','nyraDamage','preventStatus','dryadResponse','defenceWells'].includes(state.stage) ? 1-state.active : state.active;
 }
 function startSeraphRoll(s,seat,kind,count,roll){
  s.seraphRoll={seat,kind,dice:Array.from({length:count},()=>roll()),resume:s.stage};
@@ -1814,20 +1648,6 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     state.effectDie=null;
     state.ninjutsuReturnStage=null;
   }
-  function startRoll(player,enter=true) {
-    delete state.stormDice;
-    iceman.onStart(state);psylocke.start(state);alchemist.start(state);
-    scarletWitch.start(state,state.active,enter);
-    Object.assign(state,{stage:player.knockdown?'knockdown':'offence',dice:[],held:[],defenceDice:[],attempts:0,defenceKind:null,
-      budget:player.entangle?2:3,wasEntangled:!!player.entangle,extraDefence:0,pending:null,vineAttempts:0});
-    if(player.boundAbilities?.length)state.spellboundExpires=player.boundAbilities.map(b=>b.id);else delete state.spellboundExpires;
-    if(player.crimsonBands)state.bandsTurn=state.turn;else delete state.bandsTurn;
-    if(player.decrepify)state.wasDecrepified=true;
-    else delete state.wasDecrepified;
-    if(enter)rogue.start(state,roll);
-    if(player.constrict)state.wasConstricted=true;
-    else delete state.wasConstricted;
-  }
   function consumeVine(){
     const damage=vineDamage(state);
     state.vinePaid=(state.vinePaid??0)+damage;
@@ -1836,6 +1656,12 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     return damage;
   }
   function finishRoll(attack=state.pending?.attack) {return psylocke.withoutAbility(state,()=>finishRollBody(attack));}
+  function restartOffensiveRoll(attack) {
+    finishRoll(attack);
+    // Use the existing resume stage so saved side-damage responses remain valid.
+    if (state.stage === 'sideDamage') state.sideDamage.resume = 'tacticalRestart';
+    else startOffensiveRoll(state, roll);
+  }
   function finishRollBody(attack) {
     if(psylocke.pauseEnd(state))return;
     const hit=state.pending;
@@ -2258,122 +2084,6 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     state.pending=null;
     finishRoll(Boolean(wouldAttack)&&!defender.cursed);
   }
-  function income(player) {
-    if(player.alpha){
-      removeStatus(player,'alpha');player.concussion=false;delete state.disarmSkip;state.income={skipped:'alpha'};
-      add(`Turn ${state.turn}. ${names[state.active]} skips Income due to Alpha.`);
-    } else if(player.hero===jeanGrey.id&&player.darkPhoenix){
-      player.concussion=false;delete state.disarmSkip;state.income={skipped:'dark-phoenix'};
-      add(`Turn ${state.turn}. ${names[state.active]} skips Income while Dark Phoenix is Active.`);
-    } else if (player.concussion||state.disarmSkip) {
-      player.concussion=false;
-      const reason=state.disarmSkip?'Disarm':'Concussion';
-      state.income={skipped:reason.toLowerCase()};
-      delete state.disarmSkip;
-      add(`Turn ${state.turn}. ${names[state.active]} skips income due to ${reason}.`);
-    } else {
-      if(state.cards&&player.premonition&&!player.resurrected){state.premonitionTask={seat:state.active,kind:'choose'};state.stage='incomePremonition';return;}
-      const previousCP=player.cp,coalBlocked=player.coal===4&&player.cp<15&&!player.resurrected;
-      if(!player.resurrected)gainCP(player,1);
-      const previousHand=state.cards?player.hand.length:player.hand;
-      if(state.cards)drawCards(player,1,random);
-      else if(player.deck){player.deck--;player.hand=Math.min(6,player.hand+1);}
-      const drawn=(state.cards?player.hand.length:player.hand)-previousHand;
-      state.income={cp:player.cp-previousCP,drawn,...(coalBlocked?{coal:true}:{})};
-      add(`Turn ${state.turn}. ${names[state.active]} gains ${state.income.cp} CP and draws ${drawn} ${drawn===1?'card':'cards'} in the Income Phase.`);
-    }
-    if(player.entangle)add(`${names[state.active]} has one fewer Roll Attempt due to Entangle.`);
-    startRoll(player,!state.cards);
-    if(state.cards)state.stage='main1';
-  }
-  function advanceTurn(){
-    if(attacker.werewolf){
-      if(!attacker.keepMoonShard)attacker.moonShard=Math.max(0,attacker.moonShard-1);
-      if(!attacker.moonShard){attacker.werewolf=false;add('Twilight returns Werewolf to Pale Lady.');}
-    }
-    delete attacker.keepMoonShard;
-    if(attacker.druidForm==='druid')druid.regenerate(attacker);
-    delete state.regenerateChecked;
-    delete state.repositioned;
-    delete state.minesChecked;
-    delete state.sunUpkeep;
-    delete state.disarmSkip;
-    delete state.woundsResolved;
-    delete state.woundsRemoved;
-    delete state.woundsAtStart;
-    if(attacker.hex)removeStatus(attacker,'hex');
-    delete state.nevermoreChecked;
-    if(heroId(state,state.active)===headlessHorseman.id&&attacker.hauntedHeadSeat===1-state.active){
-      grantStatus(attacker,'dreadful');
-      add('The Haunted Head grants Dreadful at the end of the turn.');
-    }
-    if(state.horseUpkeep)delete state.horseUpkeep;
-    if(state.necroUpkeep)delete state.necroUpkeep;
-    if(heroId(state,state.active)===samurai.id&&state.attempts>0&&state.attempts<3){
-      const before=attacker.honor??0;
-      grantStatus(attacker,'honor');
-      if(attacker.honor>before)add(`${names[state.active]} gains Honor from Bushido.`);
-    }
-    if(state.bloodReward){
-      delete state.bloodReward;
-      grantStatus(attacker,'bloodPower');
-      add(`${names[state.active]} gains Blood Power for damaging an opponent with 2 Bleed.`);
-    }
-    if(attacker.shadowsStarted)removeStatus(attacker,'shadows');
-    for(const player of state.players){player.chiFresh=0;player.spentSpirits=[];}
-    state.vineAttempts=0;
-    state.vinePaid=0;
-    state.fertilized=false;
-    if(heroId(state,state.active)===cursedPirate.id)cursedPirate.endTurn(state,state.active,add);
-    state.active=1-state.active;
-    state.turn++;
-    delete state.widowBombChecked;
-    delete state.cosmicFlareChecked;delete state.upkeepFlareDamage;delete state.upkeepBagDamage;delete state.upkeepBagHeal;
-    const player=state.players[state.active];
-    jeanGrey.startTurn(state,state.active);delete state.jeanBurnChecked;
-    player.shadowsStarted=!!player.shadows;
-    if(state.pirateKegChecked)delete state.pirateKegChecked;
-    if(state.holyPresenceChecked)delete state.holyPresenceChecked;
-    if(state.bleedChecked)delete state.bleedChecked;
-    if(state.quickDrawChecked)delete state.quickDrawChecked;
-    if(player.donut||player.strengthOcean||player.phoenixBurn||player.disruption||player.bagOfTricks||player.cosmicFlare||player.timeBomb||player.disarm||player.wound||druid.regenTotal(player)||nevermoreOwner(state)!==null||upkeepDamage(player,state.active)||player.fireMastery||heroId(state,state.active)===7||player.cursed||player.powderKeg||player.nanite||player.holyPresence||player.bleed||player.nyra?.downed||[artificer.id,gunslinger.id,headlessHorseman.id,necromancer.id,paleLady.id,duelist.id,forgemaster.id,sunElf.id,gambit.id,jeanGrey.id,alchemist.id].includes(heroId(state,state.active))){
-      state.pending=null;
-      state.stage='upkeep';
-      state.upkeepEvaded=false;state.upkeepPrevention=0;delete state.upkeepInvulnerability;delete state.upkeepDisruptionDamage;state.upkeepProtect=0;
-    } else income(player);
-  }
-  function finishUpkeep(){
-    if(state.upkeepBagHeal){attacker.hp+=state.upkeepBagHeal;add(`${names[state.active]} heals ${state.upkeepBagHeal} from Bag of Tricks at the end of Upkeep.`);}
-    delete state.upkeepBagHeal;
-    if(state.upkeepDonutHeal){attacker.hp+=state.upkeepDonutHeal;add(`${names[state.active]} heals ${state.upkeepDonutHeal} from Donut at the end of Upkeep.`);delete state.upkeepDonutHeal;}
-    if(state.upkeepOceanHeal){attacker.hp+=state.upkeepOceanHeal;add(`${names[state.active]} heals ${state.upkeepOceanHeal} from Strength of the Ocean at the end of Upkeep.`);delete state.upkeepOceanHeal;}
-    const nyraUpdate=huntress.upkeep(attacker);
-    if(nyraUpdate)add(nyraUpdate);
-    if(attacker.cursed){
-      const saved=takeDamage(attacker,4);
-      add(`${names[state.active]} takes 4 unpreventable damage from Cursed.`);
-      if(saved)add(`${names[state.active]} survives through Blessing of Divinity.`);
-    }
-    if(attacker.fireMastery){
-      removeStatus(attacker,'fireMastery');add(`${names[state.active]} cools off and loses 1 Fire Mastery.`);
-    }
-    const damage=upkeepIncoming(state);
-    if(attacker.hp&&damage&&!state.upkeepEvaded){
-      if(takeDamage(attacker,damage))add(`${names[state.active]} survives through Blessing of Divinity.`);
-      add(`${names[state.active]} takes ${damage} upkeep damage from ${[(state.upkeepBagDamage??0)?'Bag of Tricks':'',attacker.burn?'Burn':'',attacker.poison?'Poison':'',state.upkeepDisruptionDamage?'Disruption':'',cursedPirate.foreignCoins(state,state.active)?'Cursed Doubloon':''].filter(Boolean).join(' and ')}.`);
-    }
-    attacker.hp=bounded(attacker.hp,60);delete state.upkeepBagDamage;
-    state.upkeepEvaded=false;state.upkeepPrevention=0;delete state.upkeepInvulnerability;delete state.upkeepDisruptionDamage;state.upkeepProtect=0;
-    if(state.upkeepFlareDamage){
-      takeDamage(defender,state.upkeepFlareDamage);
-      add(`${names[1-state.active]} takes ${state.upkeepFlareDamage} damage from Cosmic Flare.`);
-    }
-    delete state.upkeepFlareDamage;
-    if(!attacker.hp||!defender.hp){
-      state.stage='finished';state.winner=!attacker.hp&&!defender.hp?'Draw':`${names[attacker.hp?state.active:1-state.active]} wins`;add(state.winner);
-    } else if(state.turn===1&&state.income?.skipped==='first-turn')state.stage='main1';
-    else income(attacker);
-  }
   function addOverflowPrey(p){
     if(p.preyOverflow){
       grantStatus(defender,'prey',p.preyOverflow);
@@ -2395,7 +2105,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     state.growth=null;
     state.stage=g.resume;
     if(g.after==='offence')continueOffence(state.pending);
-    else if(g.after==='upkeep')finishUpkeep();
+    else if(g.after==='upkeep')finishUpkeep(state,roll,random);
     else if(g.collateral)startSideDamage(state,1-g.seat,g.collateral,g.source);
   }
   switch (action.type) {
@@ -2754,7 +2464,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       if(state.pending.ultimate||state.pending.stun)activate();
       else enterTargeting(state.pending);
       break;
-    case 'payKnockdown': attacker.cp-=2;attacker.knockdown=false;startRoll(attacker);break;
+    case 'payKnockdown': attacker.cp-=2;attacker.knockdown=false;startOffensiveRoll(state,roll);break;
     case 'skipKnockdown':
       attacker.knockdown=false;
       delete state.iceGlideTarget;
@@ -2870,7 +2580,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     }
     case 'restartTacticalOffence':
-      startRoll(attacker);
+      startOffensiveRoll(state,roll);
       break;
     case 'collectHonor': {
       const {seat,amount}=state.honorOverflow;
@@ -3080,7 +2790,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         state.fertilized=true;
         if(queueGrowth(state,state.active,1,'Fertilize','upkeep'))break;
       }
-      finishUpkeep();
+      finishUpkeep(state,roll,random);
       break;
     case 'evadeUpkeep':
       state.evasionSeat=state.active;state.evasionReturnStage='upkeep';
@@ -3105,7 +2815,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       add(`${p.name} reroll: ${p.effectDice.join(', ')}.`);
       break;
     }
-    case 'begin': startRoll(attacker);break;
+    case 'begin': startOffensiveRoll(state,roll);break;
     case 'endMain': state.stage='discard';break;
     case 'retryDie':
     case 'finishRetry': {
@@ -3476,7 +3186,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     case 'finishSpiderAfter': finishRoll();break;
     case 'spendCombo':
-      removeStatus(attacker,'combo');attacker.comboTurn=state.turn;startRoll(attacker);add('Combo starts an additional Offensive Roll Phase against the same opponent, without Income.');break;
+      removeStatus(attacker,'combo');attacker.comboTurn=state.turn;startOffensiveRoll(state,roll);add('Combo starts an additional Offensive Roll Phase against the same opponent, without Income.');break;
     case 'skipCombo': state.stage='main';break;
     case 'finishScarletAbility':
       continueOffence(state.pending);break;
@@ -3485,13 +3195,12 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'finishStrangeAbility':
       continueOffence(state.pending);break;
     case 'completePremonition':
-      state.premonitionTask=null;startRoll(attacker,false);state.stage='main1';break;
+      state.premonitionTask=null;prepareMainPhaseOne(state);break;
     case 'spendDejaVu':
       if(state.rogueRoll?.kind==='influence'){attacker.influence=0;delete state.rogueRoll;}
       state.response=null;
       removeStatus(attacker,'dejaVu');attacker.blind=false;if(attacker.blindingLight)removeStatus(attacker,'blindingLight');
-      finishRoll(false);
-      if(state.stage==='sideDamage')state.sideDamage.resume='tacticalRestart';else startRoll(attacker);
+      restartOffensiveRoll(false);
       add(`${names[state.active]} spends Déjà Vu to start a new Offensive Roll Phase.`);break;
     case 'resolveSantaRemoval': {const r=state.santaRemoval,options=santa.removalChoices(state),choice=options[action.choice??0];if(options.length&&!choice)return previous;delete state.santaRemoval;if(choice)applyCard(state,r.source,7,choice,roll,random,add,true);break;}
     case 'finishDeadpoolAbility': deadpool.printed(state,random);break;
@@ -3499,7 +3208,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'finishDeadpoolResolved': continueOffence(state.pending);break;
     case 'finishSantaAbility': santa.printed(state,random);break;
     case 'finishSantaPrepared': resolveAbility();break;
-    case 'startSantaRoll': startRoll(attacker);add('Comfort and Joy! starts an additional Offensive Roll Phase against the same opponent, without Income.');break;
+    case 'startSantaRoll': startOffensiveRoll(state,roll);add('Comfort and Joy! starts an additional Offensive Roll Phase against the same opponent, without Income.');break;
     case 'finishMysticAbility': mysticBrawler.printed(state,random);break;
     case 'finishMysticPrepared': resolveAbility();break;
     case 'finishMysticResolved': continueOffence(state.pending);break;
@@ -3521,7 +3230,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'finishIcemanResolved': continueOffence(state.pending);break;
     case 'finishIcemanAfter': finishRoll();break;
     case 'skipGlide': state.stage='main';break;
-    case 'spendGlide': {const target=iceman.path(state);removeStatus(attacker,'glide');attacker.glideTurn=state.turn;startRoll(attacker);state.iceGlideTarget=target;if(!attacker.knockdown)state.stage='iceGlideReady';break;}
+    case 'spendGlide': {const target=iceman.path(state);removeStatus(attacker,'glide');attacker.glideTurn=state.turn;startOffensiveRoll(state,roll);state.iceGlideTarget=target;if(!attacker.knockdown)state.stage='iceGlideReady';break;}
     case 'activateIcemanGlide': return transitionCore({...state,stage:'iceGlideDeclare'},{type:'declare',ability:state.iceGlideTarget},roll,random,true);
     case 'finishGambitAbility':
       resolveAbility();break;
@@ -3637,9 +3346,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       } else if(p.harvest){
         if(counts.Soul){
           necromancer.gain(attacker,1);
-          finishRoll(true);
-          if(state.stage==='sideDamage')state.sideDamage.resume='tacticalRestart';
-          else startRoll(attacker);
+          restartOffensiveRoll(true);
           add('Harvest starts an additional Offensive Roll Phase.');
           break;
         }
@@ -3648,9 +3355,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       } else if(p.profiteer){
         if(counts.Medal){
           if(state.cards)drawCards(attacker,1,random);
-          finishRoll(true);
-          if(state.stage==='sideDamage')state.sideDamage.resume='tacticalRestart';
-          else startRoll(attacker);
+          restartOffensiveRoll(true);
           add(`${names[state.active]} starts an additional Offensive Roll Phase from Profiteer.`);
           break;
         }
@@ -3880,11 +3585,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         attacker.hp=bounded(attacker.hp+attackDamage,60);
         add(`${names[state.active]} heals ${attacker.hp-before} with Blood Power.`);
       }
-      if (!attacker.hp || !defender.hp) {
-        state.stage='finished';
-        state.winner=!attacker.hp && !defender.hp ? 'Draw' : `${names[attacker.hp ? state.active : 1-state.active]} wins`;
-        add(state.winner);
-      } else {
+      if (!finishMatchIfDefeated(state)) {
         if(p.pirateRemove&&(attacker.pirateCoins?.[state.active]??0)>0){
           cursedPirate.choose(state,state.active,'remove',{after:'finishRoll'});break;
         }
@@ -3895,7 +3596,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         finishRoll();
         if (p.stun) {
           add(`Stun clears. ${names[state.active]} starts another Offensive Roll Phase.`);
-          startRoll(attacker);
+          startOffensiveRoll(state,roll);
         }
       }
       break;
@@ -3928,11 +3629,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
           }
         });
         state.artDetonation=null;
-        if(!attacker.hp||!defender.hp){
-          state.stage='finished';
-          state.winner=!attacker.hp&&!defender.hp?'Draw':`${names[attacker.hp?state.active:1-state.active]} wins`;
-          add(state.winner);
-        }
+        finishMatchIfDefeated(state);
         break;
       }
       const saved=takeDamage(receiver,damage,!event.suppressPassives);
@@ -3943,7 +3640,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         state.stage='finished';
         state.winner=`${names[1-event.seat]} wins`;
         add(state.winner);
-      } else if(event.endTurn)advanceTurn();
+      } else if(event.endTurn)advanceTurn(state,roll,random);
       else {
         state.stage=event.resume;
         if(event.lokiBagResume)state.lokiBag=event.lokiBagResume;
@@ -3967,7 +3664,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         const amount=3*attacker.delayedPoison;
         attacker.delayedPoison=0;
         startSideDamage(state,state.active,amount,'Delayed Poison',true);
-      } else advanceTurn();
+      } else advanceTurn(state,roll,random);
       break;
   }
   if(state.stage==='finished')state.players.forEach((p,seat)=>{

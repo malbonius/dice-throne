@@ -52,7 +52,10 @@ const sunElf=(()=>{
     if(!['defence','defenceResponse','damage','locked'].includes(s.stage))return [];
     return (seat===s.active?returnDamageFor(s):incomingDamage(s))>0?[{kind:seat===s.active?'return':'attack',label:'Prevent 3 damage'}]:[];
   }
-  return {id,board,upgrades,cards,promoId:34,initialize(s,seat){Object.assign(s.players[seat],{sunDial:0,sunDawn:false});},
+  return {
+    turnStartUpkeep: 'every-turn',
+    leafletPositives: {chargedGem: true},
+   id,board,upgrades,cards,promoId:34,initialize(s,seat){Object.assign(s.players[seat],{sunDial:0,sunDawn:false});},
     heal,increase,setDial,canDawn,canGem,
     defenceDiceCount(){return 3;},
     resolveDefence({defender,counts,grantStatus}){

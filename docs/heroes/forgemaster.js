@@ -60,7 +60,9 @@ const forgemaster=(()=>{
     return [...(optional?[{slots:[],label:'Skip'}]:[]),...slots.map(slot=>({slots:[slot],label:slot==='helm'?'Helmet':'Shield'})),
       ...(both&&slots.length===2?[{slots,label:'Helmet and shield'}]:[])];
   }
-  return {id,board,upgrades:[],cards,promoId:35,oreType,materialName,armorName,beginMine,choices,eligibleArmor,selections,
+  return {
+    turnStartUpkeep: 'every-turn',
+    id,board,upgrades:[],cards,promoId:35,oreType,materialName,armorName,beginMine,choices,eligibleArmor,selections,
     initialize(s,seat){Object.assign(s.players[seat],{forgeOre:[],armor:{helm:0,shield:0}});},
     defenceDiceCount(){return 1;},
     resolveDefence({state,seat,defender,counts}){

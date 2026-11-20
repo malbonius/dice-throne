@@ -32,6 +32,7 @@ const moonElf = (() => {
   };
 
   return {
+    leafletPositives: {evasive: true},
     board,
     upgrades,
     cards,

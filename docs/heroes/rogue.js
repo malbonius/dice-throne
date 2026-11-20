@@ -43,7 +43,9 @@ const rogue=(()=>{
  function cloudy(s,seat){const r=s.pending?.skywardResult;return !!(r&&r.seat===seat&&r.amount&&!r.doubled&&!busy(s)&&['defence','defenceResponse','damage'].includes(s.stage));}
  function sugah(s){const r=s.rogueRoll;return r&&!s.cardRoll&&!s.retry?rollContext(s):null;}
  function boostLeach(s,seat){return seat===s.active&&s.stage==='effectResponse'&&s.pending?.effect==='rogueLeach'&&!s.cardRoll&&!s.retry&&!s.response&&s.players[seat].cp>0&&s.pending.effectDice[0]<6;}
- return {id,board,upgrades,cards,promoId:33,total,cap,rawGain,gain,collectChoices,usage,expanded,ionicChoices,canExpand,canSkyward,start,ability,leach,cloudy,sugah,boostLeach,
+ return {
+  leafletPositives: {ionicEnergy: true, ionicEnergy2: true, skyward: true},
+  id,board,upgrades,cards,promoId:33,total,cap,rawGain,gain,collectChoices,usage,expanded,ionicChoices,canExpand,canSkyward,start,ability,leach,cloudy,sugah,boostLeach,
   initialize(s,seat){Object.assign(s.players[seat],{ionicEnergy:0,ionicEnergy2:0,skyward:0,influence:0});},
   defenceDiceCount:p=>p.upgrades?.defence?5:4,
   resolveDefence({state:s,defender:p,counts:c}){s.pending.returnDamage+=Math.floor((c.Touch??0)/2);s.pending.prevention=(s.pending.prevention??0)+2*Math.floor((c.Soar??0)/2);const n=Math.floor((c.Ion??0)/2);grantStatus(p,'skyward',n);s.stage='damage';gain(s,1-s.active,n);updateDamage(s.pending);return 'damage';},

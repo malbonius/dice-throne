@@ -26,6 +26,7 @@ const samurai = (() => {
   const cards = [['Gishi!',1,'roll'],['Honorable!',1,'main'],['Follow Through!',1,'roll'],
     ['Shame on You!',1,'main'],['Don’t Back Down!',1,'main'],['Kensei!',0,'main']];
   return {
+    leafletPositives: {honor: true, backStrike: true},
     id,board,upgrades,cards,promoId:33,
     effects:{
       masamune(hit,counts){

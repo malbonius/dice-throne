@@ -45,6 +45,7 @@ const huntress = (() => {
     return 'Nyra heals 1 and remains Downed.';
   }
   return {
+    leafletPositives: {nyraBond: true},
     id,board,upgrades,cards,promoId:33,active,upkeep,changeHealth,
     initialize(s,seat){s.players[seat].nyra={hp:5,downed:false};},
     effects:{

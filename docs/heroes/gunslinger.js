@@ -27,6 +27,8 @@ const gunslinger = (() => {
   const cards = [['Wild West!',1,'roll'],['Wanted!',2,'main'],['Spin the Chamber!',1,'main'],
     ['Roulette!',1,'main'],['Eat Lead!',1,'roll'],null,['Run and Gun!',0,'main']];
   return {
+    turnStartUpkeep: 'every-turn',
+    leafletPositives: {evasive: true, reload: true},
     id,board,upgrades,extraUpgrades,cards,promoId:33,
     cardChoices(card,{s,seat,one}) {
       if(card===30)return heroNames(s).map((label,target)=>({label,target}));

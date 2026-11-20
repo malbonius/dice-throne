@@ -45,7 +45,9 @@ const druid=(()=>{
     if(seat!==s.active&&s.pending&&!['offence','announce','defenceResponse','preventStatus','damage','main1','main','discard'].includes(s.stage))return [];
     return ['druid','bear','cat'].filter(form=>p.druidForm!==form);
   }
-  return {id,board,upgrades,cards,promoId:33,formName,regenTotal,heal,regenerate,gainShifts,shiftChoices,
+  return {
+    leafletPositives: {regenerate: true},
+   id,board,upgrades,cards,promoId:33,formName,regenTotal,heal,regenerate,gainShifts,shiftChoices,
     initialize(s,seat){Object.assign(s.players[seat],{druidForm:'druid',shapeShift:0});},
     defenceDiceCount(p){return p.druidForm==='bear'?4:2;},
     resolveDefence({state,defender,counts,updateDamage}){

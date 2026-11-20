@@ -29,6 +29,10 @@ const tactician = (() => {
   const cards = [['Bunker Up!',2,'main'],['War Room!',1,'main'],['Feigned Retreat!',2,'roll'],
     ['Disengage!',0,'roll'],['Ambush!',1,'instant'],['Upper Hand!',0,'main']];
   return {
+    leafletPositives: {
+    tactical: (state, seat) => gainTactical(state, seat, 1),
+    protect: true
+   },
     id,board,upgrades,cards,promoId:33,
     initialize(s,seat){s.players[seat].tactical=2;},
     cardChoices(card,{s,seat,one}) {

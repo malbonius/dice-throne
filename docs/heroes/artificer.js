@@ -47,6 +47,8 @@ const artificer = (() => {
   }
 
   return {
+    turnStartUpkeep: 'every-turn',
+    leafletPositives: {synth: true},
     id, board, upgrades, cards, promoId:33, bots, buildChoices, cost, detonate, freeChoices, upkeep,
     initialize(state,seat) {
       state.players[seat].synth=3;

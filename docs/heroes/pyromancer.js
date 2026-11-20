@@ -34,6 +34,7 @@ const pyromancer = (() => {
   };
 
   return {
+    leafletPositives: {fireMastery: true},
     board,
     upgrades,
     cards,

@@ -91,7 +91,12 @@ const cyclops=(()=>{
  }
  function incoming(s,target){return blackPanther.incoming(s,target);}
  const attack=(s,seat)=>seat===s.active&&s.pending&&(s.pending.attack??s.pending.damage>0)&&!s.pending.pure&&!s.pending.evaded&&!s.pending.parlayBlocked&&['targeting','defence','defenceResponse','damage','locked','cyclopsAbility','cyclopsSequence','thorAbility'].includes(s.stage);
- return {id,board,upgrades,cards,promoId:34,leadershipIds,isLeadership,count,other,onCardPlayed,stage,begin,gain,focus,pump,ability,refresh,supportChoices,battleChoices,canRecourse,choosing,
+ return {
+  leafletPositives: {
+   battlePlan: (state, seat) => gain(state, seat, 'battlePlan'),
+   support: (state, seat) => gain(state, seat, 'support')
+  },
+  id,board,upgrades,cards,promoId:34,leadershipIds,isLeadership,count,other,onCardPlayed,stage,begin,gain,focus,pump,ability,refresh,supportChoices,battleChoices,canRecourse,choosing,
   initialize(s,seat){Object.assign(s.players[seat],{support:0,battlePlan:0});},
   defenceDiceCount:()=>3,
   resolveDefence({state:s,seat,defender:p,counts:c}){

@@ -31,6 +31,10 @@ const vampireLord = (() => {
     ['Blood Flow!',1,'instant'],['Blood Boil!',0,'roll'],['Limb from Limb!',1,'roll'],['Blood Tide!',0,'main']];
   const usage = (s,seat)=>s.players[seat].bloodSpent?.turn===s.turn?s.players[seat].bloodSpent:{turn:s.turn};
   return {
+    leafletPositives: {
+    bloodPower: (state, seat) => gainBloodPower(state, seat, 1),
+    mesmerize: true
+   },
     id,board,upgrades,cards,promoId:34,usage,
     effects:{
       vampireRend(hit,counts) {
