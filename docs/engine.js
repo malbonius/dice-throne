@@ -141,6 +141,10 @@ function discardRandom(p,random){
  if(p.hand.length)p.discard.push(p.hand.splice(Math.floor(random()*p.hand.length),1)[0]);
 }
 const attackLocked=s=>s.deadpoolTask?.locked||s.deadpoolFourthResume?.locked||s.santaTask?.locked||s.santaNogRoll?.locked||s.mysticTask?.locked||s.krampusTask?.locked||s.krampusActivation?.locked||s.jeanTask?.locked||s.pending?.ultimate&&['jeanAbility','jeanResolved','psyAbility','paralyzeAfter','rogueAbility','rogueInfluence','rogueSkyward','stormCharge','stormAbility','stormResolved','stormChoices','deadpoolAbility','deadpoolPrepared','deadpoolResolved','santaAbility','santaTarget','santaRoll','santaPrepared','mysticAbility','mysticStrongTarget','mysticContest','mysticPrepared','mysticResolved','krampusAbility','krampusPrepared','krampusResolved','alchemistAbility','alchemistChoices','alchemistPotions','alchemistDefence','wolverineAbility','wolverineResolved','wolverineBarrage','wolverineRemove','wolverineSevere','alphaRoll'].includes(s.stage)||s.iceTask?.locked||s.pending?.ultimate&&['iceAbility','iceResolved'].includes(s.stage)||s.gambitTask?.locked||s.pending?.ultimate&&s.stage==='gambitAbility'||s.cyclopsTask?.locked||s.pending?.ultimate&&s.stage==='cyclopsAbility'||s.thorTask?.locked||s.pending?.ultimate&&s.stage==='thorAbility'||s.lokiBag?.locked||s.pending?.ultimate&&['lokiChoices','lokiAbility'].includes(s.stage)||s.pending?.ultimate&&['strangeSpells','strangeAbility'].includes(s.stage)||s.cosmicRayRoll?.locked||s.pending?.ultimate&&['widowAbility','widowSearch'].includes(s.stage)||s.sideDamage?.pantherLocked||s.pending?.ultimate&&s.stage==='pantherAbility'||s.pending?.ultimate&&s.stage==='sunMarked'||s.pending?.ultimate&&['forgeSearch','forgeAbility'].includes(s.stage)||s.pending?.ultimate&&s.stage==='duelMove'||s.ravenActivation?.locked||s.pending?.ultimate&&['ravenAbility','prey','druidReady'].includes(s.stage)||s.undeadRoll?.resume==='locked'||s.stage==='undeadRemove'&&s.undeadResume==='locked'||s.stage==='locked'||s.horseRoll?.resume==='locked'||s.gunReload?.resume==='locked'||s.artRoll?.resume==='locked'||s.seraphRoll?.resume==='locked'||s.stage==='sideDamage'&&s.sideDamage.resume==='locked'||s.ninjutsuReturnStage==='locked'||s.pending?.ultimate&&['sneakOffer','growSpirits','evasion'].includes(s.stage);
+function canPlayFromHand(state, seat) {
+  return [0,1].includes(seat) && (!state.response || state.response.seat === seat);
+}
+
 function cardChoices(s,seat,id) {
  if(s.deadpoolRps||s.deadpoolRemoval||s.deadpoolTask&&s.stage==='deadpoolChoices')return [];
  if((s.deadpoolDonutRoll||s.deadpoolLucky)&&![8,9,11,12,13,14,16,18].includes(id))return [];
@@ -568,13 +572,14 @@ function necroActions(s,seat){
 }
 const unearthChoices=p=>Object.keys(necromancer.unearth).filter(name=>name!==p.covered);
 const decrepCanRoll=s=>!s.players[s.active].decrepify||!s.attempts||s.held.filter(Boolean).length>=3;
-const hasResponse=(s,seat)=>{
+const hasEffectResponse=(s,seat)=>{
  const tokens=tokenChoices(s,seat);
  const tithe=titheChoices(s,seat);
- return !!(deadpool.onomChoices(s,seat).length||deadpool.canRps(s,seat)||deadpool.canDonut(s,seat)||santa.cheerChoices(s,seat).length||santa.canNog(s,seat)||mysticBrawler.oceanChoices(s,seat).length||krampus.options(s,seat).length||krampus.canGift(s,seat)||alchemist.labChoices(s,seat).length||wolverine.rageChoices(s,seat).length||storm.canTornado(s,seat)||storm.canWind(s,seat)||rogue.ionicChoices(s,seat).length||rogue.canExpand(s,seat)||rogue.canSkyward(s,seat)||psylocke.swaps(s,seat).length||psylocke.canBoost(s,seat)||psylocke.infiltrationChoices(s,seat).length||jeanGrey.acuityChoices(s,seat).length||jeanGrey.flameChoices(s,seat).length||jeanGrey.fieldChoices(s,seat).length||iceman.canConvert(s,seat)||iceman.canFreezerConvert(s,seat)||gambit.canExplode(s,seat).length||gambit.dissolveChoices(s,seat).length||cyclops.supportChoices(s,seat).length||cyclops.battleChoices(s,seat).length||cyclops.canRecourse(s,seat)||thor.canMove(s,seat)||spiderMan.canInvisibility(s,seat)||spiderMan.canSenseReroll(s,seat)||scarletWitch.probabilityChoices(s,seat).length||scarletWitch.defenceChanges(s,seat).length||scarletWitch.canCrackle(s,seat)||loki.canIllusion(s,seat)||doctorStrange.canDeja(s,seat)||captainMarvel.canRay(s,seat)||captainMarvel.radianceDice(s,seat).length||s.players[seat].agility&&blackWidow.incoming(s,seat)||s.players[seat].vibraniumSuit&&blackPanther.incoming(s,seat)||sunElf.canDawn(s,seat)||forgemaster.choices(s,seat).some(option=>!['craft','deposit'].includes(option.kind))||druid.shiftChoices(s,seat).length||necroActions(s,seat).length||grimChoices(s,seat).length||raveness.featherChoices(s,seat).some(option=>option.kind==='activate')||canHealNyra(s,seat)||nyraRerolls(s,seat).length||tacticalChoices(s,seat).length||honorChoices(s,seat)||canBackStrike(s,seat)||canReload(s,seat)||canMesmerize(s,seat)||bloodPowerChoices(s,seat).length||artificerActions(s,seat).length||handPlays(s,seat).length||tokens.flight||tokens.cleanse.length||tokens.boost||tokens.prevent||tokens.crit||
+ return !!(deadpool.onomChoices(s,seat).length||deadpool.canRps(s,seat)||deadpool.canDonut(s,seat)||santa.cheerChoices(s,seat).length||santa.canNog(s,seat)||mysticBrawler.oceanChoices(s,seat).length||krampus.options(s,seat).length||krampus.canGift(s,seat)||alchemist.labChoices(s,seat).length||wolverine.rageChoices(s,seat).length||storm.canTornado(s,seat)||storm.canWind(s,seat)||rogue.ionicChoices(s,seat).length||rogue.canExpand(s,seat)||rogue.canSkyward(s,seat)||psylocke.swaps(s,seat).length||psylocke.canBoost(s,seat)||psylocke.infiltrationChoices(s,seat).length||jeanGrey.acuityChoices(s,seat).length||jeanGrey.flameChoices(s,seat).length||jeanGrey.fieldChoices(s,seat).length||iceman.canConvert(s,seat)||iceman.canFreezerConvert(s,seat)||gambit.canExplode(s,seat).length||gambit.dissolveChoices(s,seat).length||cyclops.supportChoices(s,seat).length||cyclops.battleChoices(s,seat).length||cyclops.canRecourse(s,seat)||thor.canMove(s,seat)||spiderMan.canInvisibility(s,seat)||spiderMan.canSenseReroll(s,seat)||scarletWitch.probabilityChoices(s,seat).length||scarletWitch.defenceChanges(s,seat).length||scarletWitch.canCrackle(s,seat)||loki.canIllusion(s,seat)||doctorStrange.canDeja(s,seat)||captainMarvel.canRay(s,seat)||captainMarvel.radianceDice(s,seat).length||s.players[seat].agility&&blackWidow.incoming(s,seat)||s.players[seat].vibraniumSuit&&blackPanther.incoming(s,seat)||sunElf.canDawn(s,seat)||forgemaster.choices(s,seat).some(option=>!['craft','deposit'].includes(option.kind))||druid.shiftChoices(s,seat).length||necroActions(s,seat).length||grimChoices(s,seat).length||raveness.featherChoices(s,seat).some(option=>option.kind==='activate')||canHealNyra(s,seat)||nyraRerolls(s,seat).length||tacticalChoices(s,seat).length||honorChoices(s,seat)||canBackStrike(s,seat)||canReload(s,seat)||canMesmerize(s,seat)||bloodPowerChoices(s,seat).length||artificerActions(s,seat).length||tokens.flight||tokens.cleanse.length||tokens.boost||tokens.prevent||tokens.crit||
    tokens.accuracy||tokens.protect||tokens.retribution||tokens.smoke||tokens.ninjutsu||tokens.evadeSide||tokens.seedling.length||tokens.sapling||tokens.dryad||tokens.dryadPrevent.length||tokens.wellspring||tithe.draw||tithe.dice?.length||
    s.stage==='damage'&&s.players[seat].evasive&&(seat===s.active?returnDamageFor(s):incomingDamage(s))>0&&!s.cardRoll);
 };
+const hasResponse=(s,seat)=>hasEffectResponse(s,seat)||!!handPlays(s,seat).length;
 const isSelling=s=>s.cards&&!s.deadpoolTask&&!s.deadpoolRps&&!s.deadpoolDonutRoll&&!s.deadpoolLucky&&!s.santaRemoval&&!s.santaTask&&!s.santaRoll&&!s.santaNogRoll&&!s.santaGift&&!s.mysticTask&&!s.mysticContest&&!s.krampusTask&&!s.krampusActivation&&s.krampusOverflow===undefined&&!alchemist.busy(s)&&!s.wolverineGain&&!s.wolverineRageRoll&&!s.alphaRoll&&!s.wolverineIntimidate&&!s.stormTask&&!s.rogueGain&&!s.rogueRoll&&!s.psyReveal&&!s.jeanTask&&!s.jeanBurnRoll&&!s.iceTask&&!s.iceFreezeChoice&&!s.gambitTask&&!s.gambitRoll&&!s.cyclopsTask&&!s.thorTask&&!s.thorOverflow&&!s.conjureTask&&!s.scarletJinx&&!s.lokiTask&&!s.lokiBag&&!s.lokiIllusion&&!s.strangeTask&&!s.premonitionTask&&!s.cosmicRayRoll&&!s.cosmicRayOverflow&&!s.widowTask&&!s.widowReveal&&!s.widowAgility&&!s.widowBombRoll&&!s.forgeTask&&!s.shapeOverflow&&!s.ravenFeathers && (isMain(s)||s.stage==='discard')&&!s.mainAction&&!s.mainChoice&&!s.cardRoll&&!s.artRoll&&!s.bloodOverflow&&!s.honorOverflow&&!s.tacticalOverflow&&!s.tacticalRemoval&&!s.retry&&!s.response;
 function grantAttackStatus(s,defender,key,amount=1){
  if(psylocke.block(s,defender,key,amount))return;
@@ -1068,12 +1073,18 @@ function startArtRoll(s,seat,kind,count,roll) {
  s.artRoll={seat,kind,dice:rollBatch(roll,count),resume:s.stage};
  s.stage='artRoll';
 }
-function transition(previous, action, roll, random=Math.random, bypassResponse=false){
+function transition(previous, action, roll, random=Math.random, responseMode=false){
  const context=psylocke.enter(previous,action);
- try{return transitionStep(previous,action,roll,random,bypassResponse);}finally{psylocke.leave(context);}
+ try{return transitionStep(previous,action,roll,random,responseMode);}finally{psylocke.leave(context);}
 }
-function transitionStep(previous, action, roll, random, bypassResponse){
- const next=transitionCore(previous,action,roll,random,bypassResponse);
+function transitionStep(previous, action, roll, random, responseMode){
+ let next=transitionCore(previous,action,roll,random,responseMode===true);
+ // Card-only responses are available through both Hands on the current match screen.
+ // These response requests are returned before the action consumes dice or randomness.
+ if(responseMode==='inlineCards'&&!previous.response&&next.response?.action===action&&
+     !hasEffectResponse(previous,next.response.seat)){
+   next=transitionCore(previous,action,roll,random,true);
+ }
  psylocke.setState(next,true);if(next!==previous)psylocke.flush(next);
  if(next!==previous&&action.type!=='manifestSwap'&&!iceman.permitted(previous,next))return previous;
  if(next!==previous)next.players.forEach((player,seat)=>{
@@ -1589,11 +1600,13 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       return s;
     }
     if(action.type==='playCard'){
-      const choice=cardChoices(previous,seat,action.id)[action.choice];
+      const player=action.seat ?? seat;
+      if(!canPlayFromHand(previous,player))return previous;
+      const choice=cardChoices(previous,player,action.id)[action.choice];
       if(!choice)return previous;
       const state=structuredClone(previous);
       state.response=null;
-      playOneCard(state,seat,action.id,choice,roll,random,message=>state.log.unshift(message));
+      playOneCard(state,player,action.id,choice,roll,random,message=>state.log.unshift(message));
       return flushPowderKegs(state);
     }
     if(action.type==='sell'){

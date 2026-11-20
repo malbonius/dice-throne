@@ -1,8 +1,26 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.52.0 · UI preview 2. Base: the merged architecture release.
+Version: Playtest 0.52.0 · UI preview 4.1. Base: the merged architecture release.
 
 ## Match interface preview
+
+### Preview 4.1 · Cumulative update
+
+Applying the incremental Preview 4 overlay to the 0.52.0 architecture release without the intermediate previews could leave `docs/rolls.js` out of date. The result was a missing `rollBatch` error during defence rolls and other effects. The cumulative Preview 4.1 overlay includes every changed file since the architecture release. The new cache version refreshes the app and its scripts together.
+
+### Preview 4 · Roll flow and card timing
+
+Offensive and Defensive Roll Phase dice, including Duel and rerolls of phase dice, update their usual tray immediately. The roll opens the existing hold, modifier or resolution controls. Initiative and standalone rolls keep their result reveal. A saved phase roll already revealed in Preview 3 resumes with its saved result.
+
+Both Hand buttons show the hero name and card count. The current screen reminds players when eligible Instant and Roll Phase cards can be played. Card-only prompts are handled through the Hands. The engine still offers distinct status or ability responses when needed and applies card eligibility to the current state before and after each roll.
+
+### Preview 3 · Dice results and hand access
+
+A roll fills the dice tray and holds the result until Continue. Initiative uses Start match for a winning roll and shows tied results before preparing two fresh slots. The result and queued transition survive a reload. Offensive rerolls show held dice, and opposed rolls show both faces under their owners.
+
+The engine can give the opponent a response before a defence or other roll. The preparation button makes that timing clear. After the response, Roll fills the blank tray and Continue opens the post-roll window. Resist Death, Duel and other defences use the same roll and reveal flow.
+
+Both Hand buttons stay available in the match. Each shows the selected player's cards and offers play only when that player has priority to act and the card is legal. During a pending or displayed roll, players can inspect their hands while the roll is paused.
 
 ### Preview 2 · Player-initiated rolls
 
@@ -92,7 +110,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.2.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.4.1.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
