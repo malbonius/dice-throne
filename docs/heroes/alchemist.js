@@ -18,7 +18,7 @@ const alchemist=(()=>{
   ['The Lab II',2,'The Lab',{}]
  ];
  const cards=[['Transmogrify!',1,'main'],['Potion Master!',2,'main'],['Potion Explosion!',1,'roll'],['Mutation!',0,'main'],['Girded!',1,'roll'],['Tonic!',1,'main'],['Concoction!',1,'main'],['Noxious!',1,'main'],['Life Extraction!',2,'roll'],['Chemistry!',2,'main'],['Refill!',0,'main']];
- function slots(p){return {'Transmute':p.upgrades?.Transmute?2:1,'Hermetics':p.upgrades?.Hermetics?0:1,'Potion Overload':p.upgrades?.['Potion Overload']?3:2,'Diffusion':2,'Catalyst':2,'Chain Reaction':p.upgrades?.['Chain Reaction']?2:1,defence:3};}
+ function slots(p){return {'Transmute':p.upgrades?.Transmute?2:1,'Hermetics':0,'Potion Overload':3,'Diffusion':0,'Catalyst':2,'Chain Reaction':p.upgrades?.['Chain Reaction']?2:1,defence:2};}
  function sync(p){for(const key of types)p[key]=(p.potions??[]).filter(t=>t.key===key).length;}
  function remove(p,key,tokenId){const at=(p.potions??[]).findIndex(t=>t.key===key&&(tokenId===undefined||t.id===tokenId));if(at<0)return;const [t]=p.potions.splice(at,1);sync(p);return t;}
  function tokenLabel(t){return `${statusLabel(t.key)} · ${t.slot==='defence'?'Passivation':t.slot} · slot ${t.index+1}`;}

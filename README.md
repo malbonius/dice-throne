@@ -1,15 +1,14 @@
-# Dice Throne Playtest 0.51.0 — Deadpool
+# Dice Throne Playtest 0.51.1 — pre-architecture fixes
 
-Deadpool completes Singles with all board abilities, six upgrades, eight standard action cards, optional The Sound of an Eclaire! promo, leaflets, dice, tokens and separate RPS/Shoot references. His replacement unique-card sheet is included, and he uses normal shared card artwork. The draw deck has 32 standard cards, or 33 with the promo. Shoot and RPS references stay outside the deck.
+This update fixes the four reported issues:
 
-To update from 0.50.0, extract this update and merge its `dice-throne-offline` folder into your existing project, replacing matching files and keeping the other files. Upload the updated `docs` contents to your existing hosting location. This is an update package containing changed and new files only. Existing hero/card IDs, schema-2 saves and local storage remain compatible.
+- Psylocke's Manifest icon shows its current face, defaulting visually to 1 before its first roll. Once inserted, its purple artwork follows the replaced offensive die through subsequent value changes and saved-game reloads.
+- Alchemist's base Potion slots are corrected: Transmute 1, Hermetics 0, Potion Overload 3, Diffusion 0, Chain Reaction 1, Catalyst 2, Passivation 2. Upgrade-dependent capacities continue to work.
+- Deadpool's Shoot starts collapsed. Its summary shows Active/Inactive, and an expanded reference stays open through ordinary rerenders.
+- Cyclops' hero panel shows Leadership cards played this turn, using the existing gameplay counter and resetting visually to 0 when the turn ends.
 
-Donut gains can be given to either player and provide modifiable healing rolls during the holder's Upkeep. Onomatopoeia changes owned dice during Roll Phases. RPS supports concealed choices, random opponent cards, tied rounds, transferred tokens, automatic Ultimate wins and the one-Shoot-only mirror-match rule. Finger Guns and Taco Truck expose their spoken bonuses; the optional Curmudgeon coin waives the speaking requirement.
+Merge this update's `dice-throne-offline` folder onto 0.51.0, replacing matching files and keeping the others. Upload the updated `docs` contents to your existing hosting location. This archive contains changed files only. Existing saves, hero/card IDs and offline operation remain compatible. Existing Potion attachments are retained. Pre-patch saves do not contain the position of an already-used Manifest swap; new swaps store that position.
 
-Fourth Wall can gain any registered Positive from the other player's leaflet, resumes foreign gain choices safely, and restores Shoot before dealing damage. He Who Smelt It… and …Dealt It! work in either order. Do You Feel Lucky?! lets the opponent choose a hope number before their owned die is rolled and modified.
+All 1,381 rules test groups passed, along with 490 simulated interface states, 45 artwork bundles, 96 JavaScript syntax checks, JSON save round-trips and offline file references. Six cropped Manifest faces were validated and visually inspected. Browser/touch layout and installed-PWA lifecycle still require manual playtesting.
 
-Validation: 90 Deadpool rules groups and all 1,287 previous groups passed (1,377 total), together with 471 simulated interface states, 45 artwork bundles, 96 JavaScript syntax checks, offline script references and saved-state JSON round-trips. Exact comparisons against 0.50.0 passed 6,237 checks across all 44 previous heroes (2,921 transitions). All fifteen unique-card crops, six dice faces, three RPS references and the Shoot sides were inspected; 33 new WebP payloads validate and all three supplied token images preserve their source bytes. Browser layout, touch controls and installed-PWA update/offline launch remain manual playtesting checks.
-
-SYSTEM.md is updated. All five Singles are complete and the agreed incremental architecture pass is ready as the next dedicated release. This hero update retains legacy timing, Income and primary-deck reshuffling; January 2027 global rules remain disabled.
-
-Run `node tests/deadpool.test.cjs` for Deadpool's rules checks, `node tests/ui-and-offline.test.cjs` for interface/offline checks, and the other hero test files under `tests` for the full regression suite.
+SYSTEM.md is updated for the architecture pass in the next conversation. Legacy timing, Income and primary-deck reshuffling remain enabled; January 2027 global rules remain disabled.

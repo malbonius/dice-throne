@@ -181,7 +181,7 @@ const token = (seat,key,label,suffix=key) => {
     hero===tactician.id&&key==='protect'?'tacticianProtect':
     hero===seraph.id&&key==='cleanse'?'seraphCleanse':
     hero===seraph.id&&key==='blessing'?'seraphBlessing':key;
-  const image=key==='sunDial'?(state.players[seat].sunDawn?art.dialSun:art.dialDusk):key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[state.players[seat].moonShard-1]:art[tokenArt];
+  const image=key==='manifestDie'?art.manifestDice[(state.players[seat].manifestDie||1)-1]:key==='sunDial'?(state.players[seat].sunDawn?art.dialSun:art.dialDusk):key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[state.players[seat].moonShard-1]:art[tokenArt];
   return `<span class="token-help">${button('status',`<span class="token"><img src="${image}" alt="">${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
@@ -189,6 +189,7 @@ function hero(seat) {
   const p=state.players[seat];
   return `<section class="hero" aria-label="${names[seat]}" style="--hero:${seat ? '#91ddff' : '#ffad86'}">
     <div class="hero-head"><h2>${names[seat]}</h2><span class="vitals"><strong>${p.hp} health</strong><strong>${p.cp} CP</strong></span>
+    ${heroId(state,seat)===cyclops.id?`<div class="leadership-counter" role="status">Leadership cards played this turn: <strong>${cyclops.count(state,seat)}</strong></div>`:''}
     ${p.nyra?`<div class="tokens"><span class="token"><img src="${art.nyraDials[Number(p.nyra.downed)]}" alt="">
       Nyra · ${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health</span></div>`:''}
     <div class="tokens">${[p.evasive && token(seat,'evasive',`Evasive ×${p.evasive}`),p.entangle && token(seat,'entangle','Entangle'),p.blind && token(seat,'blind','Blind'),p.targeted && token(seat,'targeted','Targeted'),
@@ -273,7 +274,7 @@ function hero(seat) {
     p.skyward&&token(seat,'skyward',`Skyward ${p.skyward}/2`),
     p.paralyze&&token(seat,'paralyze','Paralyze'),
     p.infiltration&&token(seat,'infiltration',`Infiltration ${p.infiltration}/2`),
-    heroId(state,seat)===psylocke.id&&token(seat,'manifestDie',`Manifest die · ${p.manifestDie||'not rolled'}${p.manifestUsedTurn===state.turn?' · used this turn':''}`),
+    heroId(state,seat)===psylocke.id&&token(seat,'manifestDie',`Manifest die · ${p.manifestDie||1}${!p.manifestDie?' · not rolled':''}${p.manifestUsedTurn===state.turn?' · used this turn':''}`),
     p.acuity&&token(seat,'acuity',`Acuity ${p.acuity}/4`),
     p.flameBlast&&token(seat,'flameBlast',`Flame Blast ${p.flameBlast}/5`),
     p.forceField&&token(seat,'forceField','Force Field'),
@@ -307,7 +308,7 @@ function hero(seat) {
     p.concussion && token(seat,'concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && token(seat,'stun','Stun')].filter(Boolean).join('') || 'No status effects'}</div></div>
     ${board(seat)}<div class="inventory"><span class="deck">${(p.deck.length??p.deck) ? `<img src="${art.back}" alt="">` : ''} Draw ${p.deck.length??p.deck} · Discard ${p.discard?.length??0}</span><span class="hand-tools"><span class="hand-count">${p.hand.length??p.hand} in hand</span>
       ${button('open-hand','Hand',`data-index="${seat}" aria-label="Open ${names[seat]}’s hand" aria-haspopup="dialog" ${seat===cardActor(state)&&!['finished','nyraDamage'].includes(state.stage)?'':'disabled'}`)}</span>${button('inspect-leaflet','Leaflet',`class="leaflet" data-index="${seat}" aria-label="${names[seat]} leaflet"`)}${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}</div>
-    ${heroId(state,seat)===deadpool.id?`<div class="token-actions"><strong>Shoot · ${p.shootActive?'Active':'Inactive'}</strong><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="Shoot ${p.shootActive?'Active':'Inactive'}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}${seat===cardActor(state)&&seat===state.active&&isMain(state)?button('toggleCurmudgeon',`Curmudgeon coin · ${p.curmudgeon?'On':'Off'}`):''}</div><p>The Shoot card is separate from the draw deck. Curmudgeon coin waives Deadpool’s spoken bonus requirements.</p></div>`:''}
+    ${heroId(state,seat)===deadpool.id?`<details class="token-actions deadpool-shoot" data-seat="${seat}"><summary>Shoot · ${p.shootActive?'Active':'Inactive'}</summary><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="Shoot ${p.shootActive?'Active':'Inactive'}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}${seat===cardActor(state)&&seat===state.active&&isMain(state)?button('toggleCurmudgeon',`Curmudgeon coin · ${p.curmudgeon?'On':'Off'}`):''}</div><p>The Shoot card is separate from the draw deck. Curmudgeon coin waives Deadpool’s spoken bonus requirements.</p></details>`:''}
     ${p.spellBook?`<div class="forge-inventory"><strong>Book of Vishanti · ${p.spellBook.length} prepared</strong><div class="controls">${p.spellBook.map(id=>button('inspect-card',doctorStrange.spells[id],`data-index="${id}" data-seat="${seat}"`)).join('')||'No prepared Spells'}</div></div>`:''}
     ${p.forgeOre?`<details class="forge-inventory" data-seat="${seat}"><summary>The Forge · ${p.forgeOre.length} Ore</summary>
       <div class="controls">${[19,28,34].map(id=>{
@@ -327,8 +328,9 @@ function tray(values,seat,editable,held=[]) {
     const borrowed=values===state.dice&&storm.borrowed(state,seat,i);
     const dieHero=values===state.santaNogRoll?.dice?santa.id:foreign?scarletWitch.id:values===state.dice?storm.dieHero(state,seat,i):heroId(state,seat);
     const label = blank?'Blank · Hex':borrowed?`${value} ${HEROES[dieHero].symbols[value-1]} · borrowed ${HEROES[dieHero].name} die${dieHero!==heroId(state,seat)?', symbol unavailable':''}`:foreign&&heroId(state,seat)!==scarletWitch.id?`${value} · Scarlet Witch die, symbol unavailable`:`${value} ${HEROES[dieHero].symbols[value-1]}`;
+    const manifest=values===state.dice&&heroId(state,seat)===psylocke.id&&state.players[seat].manifestIndex===i;
     const picture = blank?'<span aria-label="Blank due to Hex">—</span>':
-      `<img src="${art.dice[dieHero][value-1]}" alt="${label}">`;
+      `<img src="${manifest?art.manifestDice[value-1]:art.dice[dieHero][value-1]}" alt="${label}${manifest?' · Manifest die':''}">`;
     if(values===state.dice&&iceman.locked(state,seat,i))return `<span class="die frozen" style="outline:2px solid #b8f5ff" aria-label="Die ${i+1}, ${label}, frozen by Dice Cube">${picture}<small>Frozen</small></span>`;
     return editable ? button('hold',picture,`class="die" data-index="${i}" aria-pressed="${!!held[i]}" aria-label="Die ${i+1}, ${label}, ${held[i]?'held':'available to reroll'}"`)
       : `<span class="die">${picture}</span>`;
@@ -1424,12 +1426,14 @@ function arena() {
     </section>`;
 }
 function render() {
+  const openShoot=new Set([...match.querySelectorAll('.deadpool-shoot[open]')].map(el=>el.dataset.seat));
   const logOpen=match.querySelector('.action-log')?.open;
   const openForge=new Set([...match.querySelectorAll('.forge-inventory[open]')].map(el=>el.dataset.seat));
   const openUpgrades=new Set([...match.querySelectorAll('.board-upgrades[open]')].map(el=>el.dataset.seat));
   const selected=boardOverride ?? cardActor(state);
   match.innerHTML=hero(0)+arena()+hero(1)+`<section class="mobile-board" aria-label="Hero boards"><div class="tabs">${names.map((name,i)=>button('board',`${name} board`,`data-index="${i}" aria-pressed="${selected===i}"`)).join('')}</div>${board(selected)}</section>`;
   match.querySelector('.action-log').open=!!logOpen;
+  for(const details of match.querySelectorAll('.deadpool-shoot'))details.open=openShoot.has(details.dataset.seat);
   for(const details of match.querySelectorAll('.forge-inventory'))details.open=openForge.has(details.dataset.seat);
   for(const details of match.querySelectorAll('.board-upgrades'))details.open=openUpgrades.has(details.dataset.seat);
   if(handDialog.open)renderHand();
@@ -1666,6 +1670,7 @@ heroGroups.addEventListener('click',event=>{
 
 document.getElementById('reset').addEventListener('click',()=>{
   if ((state.attempts || state.turn>1) && state.stage!=='finished' && !confirm('Start a new match and replace the current one?')) return;
+  for(const details of match.querySelectorAll('.deadpool-shoot'))details.open=false;
   state=createMatch(roll,{promo:document.getElementById('promos').checked,heroes:setupHeroes});
   names=heroNames(state);
   selectedCard=null;boardOverride=null;render();

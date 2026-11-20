@@ -44,7 +44,7 @@ const psylocke=(()=>{
  function pendingPositives(){return runtime?.events.length>0;}
  function pauseEnd(s){if(!s.pending||s.pending.paralyzeOfferDone||s.pending.forcedUsed||!(pendingPositives()||s.pending.paralyzePrevented?.length))return false;s.pending.paralyzeOfferDone=true;s.stage='paralyzeAfter';return true;}
  function initialRoll(s,roll){const p=s.players[s.active];if(p.hero!==id)return;p.manifestDie=roll();p.manifestReady=true;}
- function start(s){const p=s.players[s.active];if(p.hero===id){p.manifestReady=false;p.manifestSwapped=false;}}
+ function start(s){const p=s.players[s.active];if(p.hero===id){p.manifestReady=false;p.manifestSwapped=false;delete p.manifestIndex;}}
  function available(s,seat){const p=s.players[seat];return !!(s.cards&&p.hero===id&&seat===s.active&&p.manifestReady&&p.manifestDie>0&&p.manifestUsedTurn!==s.turn&&!s.cardRoll&&!s.retry&&!s.sideDamage&&!s.iceFreezeChoice&&!s.psyReveal);}
  function swaps(s,seat){return available(s,seat)&&!attackLocked(s)&&['offence','announce'].includes(s.stage)?s.dice.map((value,index)=>({index,label:`Replace die ${index+1} (${value}) with Manifest ${s.players[seat].manifestDie}`})):[];}
  function canBoost(s,seat){const h=s.pending;return !!(available(s,seat)&&h&&(h.attack??h.damage>0)&&!h.pure&&!h.evaded&&!h.parlayBlocked&&['psyAbility','targeting','defence','defenceResponse','damage','locked'].includes(s.stage));}
@@ -90,7 +90,7 @@ const psylocke=(()=>{
    const choice=a.type==='spendInfiltration'?infiltrationChoices(previous,seat)[a.choice]:null;if(a.type==='spendInfiltration'&&!choice)return previous;
    const s=structuredClone(previous),p=s.players[seat];s.response=null;
    if(a.type==='manifestSwap'){
-    const before=s.dice.slice(),old=s.dice[a.index],value=p.manifestDie;s.dice[a.index]=value;if(s.stormDice)s.stormDice.indices=s.stormDice.indices.filter(i=>i!==a.index);p.manifestDie=old;p.manifestReady=false;p.manifestUsedTurn=s.turn;p.manifestSwapped=true;
+    const before=s.dice.slice(),old=s.dice[a.index],value=p.manifestDie;s.dice[a.index]=value;if(s.stormDice)s.stormDice.indices=s.stormDice.indices.filter(i=>i!==a.index);p.manifestDie=old;p.manifestReady=false;p.manifestUsedTurn=s.turn;p.manifestSwapped=true;p.manifestIndex=a.index;
     if(s.realityDie?.seat===seat&&s.realityDie.index===a.index)delete s.realityDie;
     if(s.iceFirstRoll){s.iceFirstRoll.values[a.index]=value;s.iceFirstRoll.selected=[];delete s.iceFreezeChoice;}
     releaseChangedAnnouncement(s,rollContext(s),before);
