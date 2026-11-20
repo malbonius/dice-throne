@@ -1,8 +1,14 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.52.0 · UI preview 4.4. Base: the merged architecture release.
+Version: Playtest 0.52.0 · UI preview 4.5. Base: the merged architecture release.
 
 ## Match interface preview
+
+### Preview 4.5 · Token choices and Potion slots
+
+Card targeting and removal choices pair token names with their game artwork. Deadpool's Curmudgeon control appears in his hero panel during his Main Phase, independently of Shoot.
+
+Alchemist's attached Potion list hides zero-capacity slot rows and displays the token beside its position. To attach, choose a Potion by its icon and effect, then choose an eligible slot. Each slot shows its ability name and roll requirement, including equipped upgrades.
 
 ### Preview 4.4 · Dice choices on the roll tray
 
@@ -124,7 +130,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.4.4.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.4.5.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
@@ -612,7 +618,7 @@ Update-only patch merging onto 0.51.0. All 45 heroes, card IDs, schema-2 saves a
 - Psylocke's separate Manifest icon now selects a single face from `art.manifestDice` using the current numeric value. Before the first roll it displays face 1 and retains the “not rolled” label; this is a display fallback, so Manifest's existing availability rules are preserved. Six faces are cropped from the supplied purple Manifest sheet, with faces 1 and 6 correctly oriented. The original sheet is retained as an asset but is no longer used for the icon.
 - A Manifest swap records `players[seat].manifestIndex`. The offensive dice tray uses Manifest artwork at that exact position, selecting its current face after a reroll or dice change. Other dice retain their normal artwork, including the existing foreign-die handling. The index survives JSON saves and is cleared by Psylocke's next Offensive Roll Phase start. Existing saves without the optional index continue to load; an already-used pre-patch swap has no stored position to recover, while subsequent swaps record it correctly.
 - Alchemist's corrected base slot capacities are Transmute 1, Hermetics 0, Potion Overload 3, Diffusion 0, Chain Reaction 1, Catalyst 2 and Passivation 2. The programmatic defence slot remains named `defence`. Transmute II and Chain Reaction II increase their capacities to 2; Hermetics remains 0 and Potion Overload remains 3 after upgrading. New attachment choices and the visible capacity list use this table. Existing attached Potions are retained in loaded saves, including placements permitted by the previous incorrect limits; no existing token is silently discarded. Legacy fixture checks retain coverage for using those older attachments.
-- Deadpool's Shoot reference is now a native collapsed disclosure with its Active/Inactive state visible in the summary. It can be expanded, retains that open state through ordinary rerenders, and starts closed on initial loading or a new match. The Shoot zoom reference and Curmudgeon control remain inside it.
+- Deadpool's Shoot reference is now a native collapsed disclosure with its Active/Inactive state visible in the summary. It can be expanded, retains that open state through ordinary rerenders, and starts closed on initial loading or a new match. The Shoot zoom reference remains available inside it.
 - Cyclops' hero panel now always displays “Leadership cards played this turn” using the existing `cyclops.count(state,seat)` function. It updates as cards are committed, works independently for mirror-match players, and shows 0 after the turn advances. No second counter or gameplay reset has been introduced.
 
 Validation: 1,381 rules groups (including the new Manifest position/save checks and exact base/upgraded Alchemist capacity checks); 490 simulated interface states; all 45 art bundles; 96 JavaScript syntax checks; JSON save round-trips; complete offline references. Display checks cover all six Manifest values plus default 1, the inserted face changing after a card and reroll, both player seats, save reload, next-phase reset, corrected potion capacities, collapsed Shoot/open-state preservation, and real turn advancement for Cyclops' counter. Six new Manifest face payloads validate and were visually inspected. Existing legacy timing, Income and primary-deck reshuffling remain in use; January 2027 global rules remain disabled. Browser/touch layout and installed-PWA update/offline launch remain manual playtesting checks.

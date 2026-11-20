@@ -172,6 +172,15 @@ main {
   font-size: .82rem;
 }
 
+.curmudgeon-toggle {
+  justify-self: start;
+  padding-inline: 8px;
+  font-size: .82rem;
+  text-align: start;
+}
+
+.curmudgeon-toggle[aria-pressed="true"] { border-color: var(--gold); }
+
 .hero-information > summary,
 .match-effects > summary {
   min-height: 44px;
@@ -339,6 +348,95 @@ main {
 }
 
 .card-option > :last-child { flex-shrink: 0; }
+
+.token-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  text-align: start;
+}
+
+.token-choice .token-icon {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.card-token-choices {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.card-token-choices legend { padding-inline: 5px; }
+
+.card-token-choices label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.card-token-choices input {
+  margin: 0;
+  accent-color: var(--gold);
+}
+
+.card-token-choices label:has(:checked) {
+  border-color: var(--gold);
+  background: #292922;
+}
+
+.potion-inventory {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.potion-inventory ul {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+}
+
+.potion-inventory small,
+.potion-type small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.potion-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 7px;
+}
+
+.potion-picker > strong,
+.potion-picker > .potion-back {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.potion-type {
+  padding: 9px 10px;
+  text-align: start;
+}
+
+.potion-type small {
+  font-size: .82rem;
+  line-height: 1.35;
+}
 
 .ability:disabled {
   opacity: 1;

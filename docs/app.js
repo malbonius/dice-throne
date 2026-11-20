@@ -24,6 +24,7 @@ let selectedCard=null;
 let handSeat;
 let diceEdit;
 let retryPick;
+let selectedPotion;
 const handDialog=document.getElementById('hand-dialog');
 const handTitle=document.getElementById('hand-title');
 const handContent=document.getElementById('hand-content');
@@ -46,7 +47,7 @@ function boardImage(state,seat,full=false) {
 }
 function heroEquipment(seat) {
   const upgrades=Object.values(state.players[seat].upgrades??{});
-  return `${heroId(state,seat)===alchemist.id?`<details class="board-upgrades" data-disclosure="potions-${seat}"><summary>Attached Potions (${alchemist.tokens(state,seat).length})</summary>${Object.entries(alchemist.slots(state.players[seat])).map(([slot,cap])=>`<p><strong>${slot==='defence'?'Passivation':slot}</strong> · ${alchemist.tokens(state,seat).filter(t=>t.slot===slot).length}/${cap} slots<br>${alchemist.tokens(state,seat).filter(t=>t.slot===slot).map(t=>alchemist.tokenLabel(t)).join('<br>')||'Empty'}</p>`).join('')}</details>`:''}
+  return `${heroId(state,seat)===alchemist.id?attachedPotions(seat):''}
     ${heroId(state,seat)===krampus.id?`<details class="board-upgrades" data-disclosure="rejects-${seat}"><summary>Rejects (${state.players[seat].rejects.length}/3)</summary><div class="controls">${state.players[seat].rejects.map(id=>button('inspect-reject',`<img src="${art.krampusRejects[id]}" alt="${krampus.names[id]}" style="width:100px;max-width:100%"><br>${krampus.names[id]}${state.players[seat].rejectUsed[id]===state.turn?' · used this turn':''}`,`data-index="${id}" data-seat="${seat}"`)).join('')||'No Rejects in play'}</div><p>Draw pile: ${state.players[seat].rejectDeck.length} · Discard: ${state.players[seat].rejectDiscard.map(id=>krampus.names[id]).join(', ')||'empty'}</p></details>`:''}
     ${upgrades.length?`<details class="board-upgrades" data-disclosure="upgrades-${seat}"><summary>Equipped upgrades (${upgrades.length})</summary>
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}`;
@@ -182,17 +183,27 @@ const statusNotes = {
   entangle: 'One fewer attempt in your next Offensive Roll Phase. Remove at the end of that Roll Phase. Stack limit 1.',
   blind: 'Check before resolving your next offensive ability. A 1 or 2 cancels it. Remove Blind if you end the phase without an ability. Stack limit 1.'
 };
-const token = (seat,key,label,suffix=key) => {
-  const id = `status-${seat}-${suffix}`;
-  const hero=heroId(state,seat);
+function tokenImage(view,seat,key) {
+  if (!key) return '';
+  const hero=heroId(view,seat), player=view.players[seat];
   const tokenArt=hero===mysticBrawler.id&&key==='concussion'?'mysticConcussion':hero===alchemist.id&&key==='poison'?'alchemistPoison':hero===psylocke.id&&key==='agility'?'psylockeAgility':hero===thor.id&&key==='guardBreak'?'thorGuardBreak':hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
     hero===gunslinger.id&&key==='knockdown'?'gunslingerKnockdown':
     hero===tactician.id&&key==='targeted'?'tacticianTargeted':
     hero===tactician.id&&key==='protect'?'tacticianProtect':
     hero===seraph.id&&key==='cleanse'?'seraphCleanse':
     hero===seraph.id&&key==='blessing'?'seraphBlessing':key;
-  const image=key==='manifestDie'?art.manifestDice[(state.players[seat].manifestDie||1)-1]:key==='sunDial'?(state.players[seat].sunDawn?art.dialSun:art.dialDusk):key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[state.players[seat].moonShard-1]:art[tokenArt];
-  return `<span class="token-help">${button('status',`<span class="token"><img src="${image}" alt="">${label}</span>`,
+  const image=key==='manifestDie'?art.manifestDice[(player.manifestDie||1)-1]:key==='sunDial'?(player.sunDawn?art.dialSun:art.dialDusk):key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[(player.moonShard||1)-1]:art[tokenArt];
+  return image?`<img class="token-icon" src="${image}" alt="">`:'';
+}
+
+function tokenChoiceLabel(view, choice, seat) {
+  const image = tokenImage(view,choice.target??seat,choice.status??choice.key);
+  return image?`<span class="token-choice">${image}<span>${choice.label}</span></span>`:choice.label;
+}
+
+const token = (seat,key,label,suffix=key) => {
+  const id = `status-${seat}-${suffix}`;
+  return `<span class="token-help">${button('status',`<span class="token">${tokenImage(state,seat,key)}${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
 function hero(seat, decisionSeat, responding) {
@@ -329,6 +340,8 @@ function hero(seat, decisionSeat, responding) {
         ${button('inspect-board','Board',`data-index="${seat}" aria-label="Open ${names[seat]}’s board" aria-haspopup="dialog"`)}
         ${button('inspect-leaflet','Leaflet',`data-index="${seat}" aria-label="Open ${names[seat]}’s leaflet" aria-haspopup="dialog"`)}
       </div>
+      ${heroId(state,seat)===deadpool.id&&seat===responding&&seat===state.active&&isMain(state)&&!state.cardRoll&&!state.mainAction&&!rollRequest?
+        button('toggleCurmudgeon',`Curmudgeon coin · ${p.curmudgeon?'On':'Off'}`,`class="curmudgeon-toggle" aria-pressed="${!!p.curmudgeon}" title="Waive Deadpool’s spoken bonus requirements"`):''}
     </div>
     <details class="hero-information" data-disclosure="hero-${seat}">
       <summary>${statusSummary}</summary>
@@ -342,7 +355,7 @@ function hero(seat, decisionSeat, responding) {
           ${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}
         </div>
         ${heroEquipment(seat)}
-    ${heroId(state,seat)===deadpool.id?`<details class="token-actions deadpool-shoot" data-disclosure="shoot-${seat}"><summary>Shoot · ${p.shootActive?'Active':'Inactive'}</summary><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="Shoot ${p.shootActive?'Active':'Inactive'}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}${seat===responding&&seat===state.active&&isMain(state)?button('toggleCurmudgeon',`Curmudgeon coin · ${p.curmudgeon?'On':'Off'}`):''}</div><p>The Shoot card is separate from the draw deck. Curmudgeon coin waives Deadpool’s spoken bonus requirements.</p></details>`:''}
+    ${heroId(state,seat)===deadpool.id?`<details class="token-actions deadpool-shoot" data-disclosure="shoot-${seat}"><summary>Shoot · ${p.shootActive?'Active':'Inactive'}</summary><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="Shoot ${p.shootActive?'Active':'Inactive'}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}</div><p>The Shoot card is separate from the draw deck.</p></details>`:''}
     ${p.spellBook?`<div class="forge-inventory"><strong>Book of Vishanti · ${p.spellBook.length} prepared</strong><div class="controls">${p.spellBook.map(id=>button('inspect-card',doctorStrange.spells[id],`data-index="${id}" data-seat="${seat}"`)).join('')||'No prepared Spells'}</div></div>`:''}
     ${p.forgeOre?`<details class="forge-inventory" data-disclosure="forge-${seat}"><summary>The Forge · ${p.forgeOre.length} Ore</summary>
       <div class="controls">${[19,28,34].map(id=>{
@@ -384,6 +397,17 @@ function tray(values,seat,editable,held=[],view=state) {
       : `<span class="die${held[i]?' kept':''}"${held[i]?` aria-label="Die ${i+1}, ${label}, held"`:''}>${picture}</span>`;
   }).join('')}</div>`;
 }
+function handCardChoices(choices, seat) {
+  if (!choices.length || (choices.length===1 && choices[0].label==='Play')) return '';
+  const labels=choices.map(choice=>tokenChoiceLabel(state,choice,seat));
+  if (labels.some((label,index)=>label!==choices[index].label)) {
+    return `<fieldset class="card-token-choices"><legend>Choose effect</legend>
+      ${labels.map((label,index)=>`<label><input type="radio" name="card-choice" value="${index}" ${index===0?'checked':''}>${label}</label>`).join('')}
+    </fieldset>`;
+  }
+  return `<label>Choose effect <select id="card-choice">${labels.map((label,index)=>`<option value="${index}">${label}</option>`).join('')}</select></label>`;
+}
+
 function handPanel() {
   if(!state.cards || state.stage==='finished')return '';
   const seat=handSeat, player=state.players[seat];
@@ -393,9 +417,7 @@ function handPanel() {
   for(const id of player.hand){
     const c=seatCard(state,seat,id), choices=canPlay ? cardChoices(state,seat,id) : [];
     const chosen=selectedCard===id;
-    const dicePlan=chosen && cardDicePlan(seat,id,choices);
-    const detail=dicePlan || (choices.length===1&&choices[0].label==='Play') ? '' :
-      choices.length ? `<label>Choose effect <select id="card-choice">${choices.map((choice,i)=>`<option value="${i}">${choice.label}</option>`).join('')}</select></label>` : '';
+    const detail=chosen&&!cardDicePlan(seat,id,choices)?handCardChoices(choices,seat):'';
     const entry=`<div class="hand-card">
       ${button('select-card',`<strong>${c.name}</strong><small>${price(state,seat,id)} CP · ${c.phase}</small>`,`data-index="${id}" aria-expanded="${chosen}"`)}
       ${previewCard(state,seat,id)}
@@ -591,6 +613,56 @@ function abilityRequirement(ability) {
     return `${label} (${ranges.length > 1 ? ranges.slice(0, -1).join(', ') + ' or ' + ranges.at(-1) : ranges[0]})`;
   }
   return Object.entries(ability.symbols).map(([symbol, count]) => `${count} × ${symbol}`).join(' + ');
+}
+
+function potionSlotName(seat, slot, abilities) {
+  if (slot==='defence') return defenceName(state,seat);
+  const ability=abilities.find(ability=>(ability.upgradeSlot??ability.name)===slot);
+  return ability?.label??slot;
+}
+
+function attachedPotions(seat) {
+  const potions=alchemist.tokens(state,seat);
+  const abilities=abilitiesFor(state,seat);
+  const capacities=alchemist.slots(state.players[seat]);
+  const slots=Object.entries(capacities).filter(([,capacity])=>capacity>0);
+  const legacy=potions.filter(potion=>!capacities[potion.slot]);
+  return `<details class="board-upgrades" data-disclosure="potions-${seat}">
+    <summary>Attached Potions (${potions.length})</summary>
+    <div class="potion-inventory">${slots.map(([slot,capacity])=>{
+      const attached=potions.filter(potion=>potion.slot===slot);
+      return `<div><strong>${potionSlotName(seat,slot,abilities)}</strong> · ${attached.length}/${capacity} slots
+        ${attached.length?`<ul>${attached.map(potion=>`<li>${tokenChoiceLabel(state,{
+          key:potion.key,label:`Slot ${potion.index+1} · ${statusLabel(potion.key)}`
+        },seat)}</li>`).join('')}</ul>`:'<small>Empty</small>'}</div>`;
+    }).join('')}${legacy.map(potion=>tokenChoiceLabel(state,{key:potion.key,label:alchemist.tokenLabel(potion)},seat)).join('')}</div></details>`;
+}
+
+function potionAttachmentChoices(seat, choices) {
+  const slots=choices.map((choice,index)=>({...choice,choiceIndex:index})).filter(choice=>choice.key===selectedPotion);
+  if (!slots.length) {
+    return `<div class="potion-picker" role="group" aria-label="Potion types">${alchemist.types.map(key=>{
+      const available=choices.some(choice=>choice.key===key);
+      return button('select-potion',`${tokenChoiceLabel(state,{key,label:`<strong>${statusLabel(key)}</strong>`},seat)}
+        <small>${statusNotes[key]}</small>${available?'':'<small>Unavailable for this attachment</small>'}`,
+        `class="potion-type" data-status="${key}" ${available?'':'disabled'}`);
+    }).join('')}</div>`;
+  }
+  const abilities=abilitiesFor(state,seat);
+  const defensiveRequirement=`Defensive roll · ${alchemist.defenceDiceCount(state.players[seat])} dice · 1 attachment per Crucible (6)`;
+  return `<div class="potion-picker" role="group" aria-label="Open Potion slots">
+    <strong>${tokenChoiceLabel(state,{key:selectedPotion,label:statusLabel(selectedPotion)},seat)}</strong>
+    ${slots.map(({slot,index,choiceIndex})=>{
+      const ability=abilities.find(ability=>(ability.upgradeSlot??ability.name)===slot)
+        ?? boardFor(state,seat).abilities.find(ability=>ability.name===slot);
+      const requirement=slot==='defence'?defensiveRequirement:abilityRequirement(ability);
+      const name=slot==='defence'?defenceName(state,seat):ability.label??ability.name;
+      return button('alchemistChoice',`<strong>${name} · slot ${index+1}</strong>
+        <small class="ability-requirement">${requirement}</small>`,
+        `class="ability potion-slot" data-choice="${choiceIndex}"`);
+    }).join('')}
+    ${button('back-to-potions','Choose a different Potion','class="potion-back"')}
+  </div>`;
 }
 
 function offenceAbilities(seat, available = []) {
@@ -794,7 +866,8 @@ function arena(seat, responding, decisionSeat) {
     if(h.kind==='donuts'){heading=`Give Donut · ${h.left} remaining`;detail='Choose any player for each token. The whole batch is allocated before tokens are gained; excess is lost at each player’s limit of 2.';content=names.map((name,target)=>button('deadpoolDonutTarget',`${name} · ${(state.players[target].donut??0)+h.allocation[target]}/2`,`data-target="${target}"`)).join('');}
     if(h.kind==='gain'){heading=`Gain ${h.amount} ${statusLabel(h.key)}`;detail='Spend existing eligible tokens before collecting the whole batch if desired. Excess is lost.';content=button('deadpoolCollect','Collect the whole batch','class="primary"');}
     if(h.kind==='speechCP'||h.kind==='speechTaco'){heading=h.kind==='speechCP'?'Finger Guns · spoken bonus':'Taco Truck · spoken bonus';detail=h.kind==='speechCP'?'Say “Pew, Pew” while pointing finger guns to gain 1 CP, or skip the bonus.':'The straight can use a 1 or 6. Shout “Taco Tuesday!” to add 1 damage, or skip the bonus.';content=button('deadpoolSpeech','Claim the spoken bonus','data-status="yes"')+button('deadpoolSpeech','Skip the spoken bonus','data-status="no"');}
-    if(h.kind==='fourth'){heading='Fourth Wall! · choose a Positive status';content=`<label>Gain <select id="deadpool-fourth">${deadpool.fourthChoices(state,t.seat).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('deadpoolFourth','Gain the chosen status','class="primary"');}
+    if(h.kind==='fourth'){heading='Fourth Wall! · choose a Positive status';content=`<div class="controls">${deadpool.fourthChoices(state,t.seat).map((choice,i)=>
+      button('deadpoolFourth',tokenChoiceLabel(state,choice,choice.key==='donut'?t.seat:1-t.seat),`data-choice="${i}"`)).join('')}</div>`;}
   } else if(state.deadpoolDonutRoll&&!state.response&&!state.retry){
     phase='Donut';heading='Roll for Donut healing';detail='Heal half the final die value, rounded up. Healing is accumulated with the existing end-of-Upkeep effects.';content=rollDisplay(rollContext(state))+button('resolveDonut','Resolve Donut healing','class="primary"');
   } else if(state.deadpoolLucky&&!state.response&&!state.retry){
@@ -803,7 +876,12 @@ function arena(seat, responding, decisionSeat) {
     if(r.step==='ready'){detail=`Hope: ${r.hope}. Match it to heal 3; otherwise receive 3 isolated damage.`;content=blankRoll(1)+button('deadpoolLuckyRoll','Roll the opponent’s die','class="primary"');}
     if(r.step==='roll'){detail=`Hope: ${r.hope}. The final die belongs to ${names[r.target]} and can be altered before resolution.`;content=rollDisplay(rollContext(state))+button('deadpoolLuckyResolve','Resolve the hoped-for roll','class="primary"');}
   } else if(state.santaRemoval&&!state.santaNogRoll&&!state.sideDamage&&!state.retry){
-    phase='Status effect response';heading=state.santaRemoval.choosing?`${names[state.santaRemoval.source]} resolves the removal`:`${names[state.santaRemoval.seat]} may spend tokens first`;detail='Resolve the committed removal after spending eligible existing tokens if desired. If the chosen effect has gone, another available status effect must be selected.';content=state.santaRemoval.choosing?`<label>Remove <select id="santa-removal-choice">${santa.removalChoices(state).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('resolveSantaRemoval','Resolve status removal','class="primary"'):button('santaRemovalReady','Finish token response','class="primary"');
+    const removal=state.santaRemoval;
+    phase='Status effect response';heading=removal.choosing?`${names[removal.source]} resolves the removal`:`${names[removal.seat]} may spend tokens first`;
+    detail='If the chosen token has gone, select another available token.';
+    content=removal.choosing?`<div class="controls">${santa.removalChoices(state).map((choice,i)=>
+      button('resolveSantaRemoval',tokenChoiceLabel(state,choice,removal.seat),`data-choice="${i}"`)).join('')}</div>`
+      :button('santaRemovalReady','Finish token response','class="primary"');
   } else if(state.santaGift){
     const g=state.santaGift;phase='White Elephant Gift';heading=g.stage==='hide'?'Santa · conceal the gift':'Opponent · choose a hand';detail=g.stage==='hide'?'Privately choose which hand holds Cheer and 3 Egg Nog from the supply, then let the opponent guess.':'Choose a hand. If it is empty, Santa gains the gift; otherwise no tokens are gained.';content=['left','right'].map(hand=>button(g.stage==='hide'?'santaGiftHide':'santaGiftGuess',`${hand==='left'?'Left':'Right'} hand`,`data-status="${hand}"`)).join('');
   } else if(state.santaTask&&state.stage==='santaChoices'){
@@ -832,9 +910,19 @@ function arena(seat, responding, decisionSeat) {
     if(h.kind==='free'){heading='Optional free Reject activation';detail='Activate one eligible Reject without discarding it. The once-per-turn limit still applies.';content=krampus.options(state,responding,true).map((c,i)=>button('krampusFree',c.label,`data-choice="${i}"`)).join('')+button('krampusFreeSkip','Keep the Rejects without activating','class="primary"');}
     if(h.kind==='rejection'){heading='Rejection · choose the benefit';content=button('krampusRejection','Draw 1 Reject','data-status="draw"')+button('krampusRejection','Activate a Reject without discarding','data-status="free"');}
   } else if(!state.response&&state.alchemistTask&&state.stage==='alchemistChoices'){
-    const h=state.alchemistTask.queue[0];phase='Alchemist';heading=h.kind==='attach'?`Attach Potions · ${h.left} remaining`:h.kind==='remove'?`Remove Potions · up to ${h.left}`:h.kind==='target'?'Tonic! · choose a player':'Transmogrify! · choose a status';
-    detail=h.kind==='attach'?'Choose an open slot and an available potion. All attachments resolve before potions can be spent.':h.kind==='remove'?'Removing a potion does not activate its potion effect.':'';
-    content=`<label>Choose <select id="alchemist-choice">${alchemist.taskChoices(state).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('alchemistChoice','Confirm choice','class="primary"')+(allowed.alchemistDone?button('alchemistDone','Finish removing Potions'):'');
+    const task=state.alchemistTask, h=task.queue[0], choices=alchemist.taskChoices(state);
+    phase='Alchemist';
+    if (h.kind==='attach') {
+      const choosingSlot=choices.some(choice=>choice.key===selectedPotion);
+      heading=choosingSlot?`Choose a slot · ${h.left} remaining`:`Choose a Potion · ${h.left} remaining`;
+      content=potionAttachmentChoices(task.seat,choices);
+    } else {
+      heading=h.kind==='remove'?`Remove Potions · up to ${h.left}`:h.kind==='target'?'Tonic! · choose a player':'Transmogrify! · choose a status';
+      if(h.kind==='remove')detail='Removing a Potion leaves its effect unused.';
+      content=`<div class="controls">${choices.map((choice,i)=>button('alchemistChoice',
+        tokenChoiceLabel(state,choice,task.seat),`data-choice="${i}"`)).join('')}
+        ${allowed.alchemistDone?button('alchemistDone','Finish removing Potions'):''}</div>`;
+    }
   } else if(!state.response&&state.alchemistRoll&&!state.cardRoll&&!state.retry){
     phase='Upkeep · The Lab II';heading=names[state.alchemistRoll.seat];detail='Solution attaches 1 Potion. Composition or Crucible attaches 2. A blank attaches none.';content=tray(state.alchemistRoll.dice,state.alchemistRoll.seat,false)+button('resolveAlchemistLab','Resolve The Lab roll','class="primary"');
   } else if(state.iceFreezeChoice){
@@ -990,7 +1078,7 @@ function arena(seat, responding, decisionSeat) {
     if(t.kind==='prepare'||t.kind==='cast')detail=`${t.left} remaining · ${t.zone==='peek'?'among the top five cards':t.zone==='book'?'from the Book of Vishanti':'from your discard pile'}. Resolve this effect completely before choosing another Spell.`;
     if(t.kind==='order')detail='Choose from top to bottom. The remaining cards stay in the order you choose.';
     content=doctorStrange.options(state).map((choice,i)=>{
-      const select=button('strangeChoose',choice.label,`data-choice="${i}"`);
+      const select=button('strangeChoose',tokenChoiceLabel(state,choice,task.seat),`data-choice="${i}"`);
       return choice.card===undefined?select:previewableOption(state,task.seat,choice.card,select);
     }).join('')+(t.optional?button('strangeSkip','Continue without this effect','class="primary"'):'');
   } else if(!state.response&&state.cosmicRayRoll&&!state.cardRoll&&!state.retry){
@@ -1096,7 +1184,8 @@ function arena(seat, responding, decisionSeat) {
     const {seat,id}=state.mainChoice;
     phase='Main Phase action'; heading=seatCard(state,seat,id).name;
     detail='Choose the target after the response.';
-    content=`<div class="controls">${mainTargets(state,seat,id).map(({label},i)=>button('resolveMainChoice',label,`data-choice="${i}"`)).join('')}</div>`;
+    content=`<div class="controls">${mainTargets(state,seat,id).map((choice,i)=>
+      button('resolveMainChoice',tokenChoiceLabel(state,choice,seat),`data-choice="${i}"`)).join('')}</div>`;
   } else if(state.response) {
     phase=state.stage==='offence'?'Offensive Roll':
       ['defence','defenceResponse'].includes(state.stage)||state.gunContest?.kind==='duel'&&state.stage==='gunContest'?'Defensive Roll':'Response';
@@ -1208,7 +1297,8 @@ function arena(seat, responding, decisionSeat) {
     case 'purify':
       phase='Ability choice'; heading=p.name;
       detail=`Choose a status to remove from ${names[p.seraphTarget]}.`;
-      content=statusKeys.filter(key=>state.players[p.seraphTarget][key]).map(status=>button('resolvePurify',`Remove ${statusLabel(status)}`,`data-status="${status}"`)).join('')+
+      content=statusKeys.filter(key=>state.players[p.seraphTarget][key]).map(status=>button('resolvePurify',
+        tokenChoiceLabel(state,{status,label:`Remove ${statusLabel(status)}`},p.seraphTarget),`data-status="${status}"`)).join('')+
         button('resolvePurify','Continue without removing a status','class="primary"');
       break;
     case 'undeadRoll': {
@@ -1452,6 +1542,7 @@ function arena(seat, responding, decisionSeat) {
         content=cards.map(id=>previewCard(state,1-chooser,id,seatCard(state,1-chooser,id).name)).join('');
       }
       content+=cursedPirate.choices(state).map((label,i)=>{
+        if(kind==='remove')label=tokenChoiceLabel(state,{key:'doubloon',label},chooser);
         const select=button('resolvePirateChoice',label,`data-choice="${i}"`);
         const card=state.players[chooser].hand[i];
         return kind==='discard'&&card!==undefined?previewableOption(state,chooser,card,select):select;
@@ -1549,7 +1640,8 @@ function arena(seat, responding, decisionSeat) {
       content=p.ninjaTarget?names.map((name,target)=>button('chooseEffect',`Give Smoke Bomb and Ninjutsu to ${name}`,`data-target="${target}"`)).join('')
         :p.retributionTarget?names.map((name,target)=>button('chooseEffect',`Give Retribution to ${name}`,`data-target="${target}"`)).join('')
         :p.grantEvasive?names.map((name,target)=>button('chooseEffect',`Give Evasive to ${name}`,`data-target="${target}"`)).join('')
-        :statusKeys.filter(k=>state.players[state.active][k]).map(k=>button('chooseEffect',`Remove ${statusLabel(k)}`,`data-status="${k}"`)).join('')+button('chooseEffect','Keep status effects');
+        :statusKeys.filter(k=>state.players[state.active][k]).map(k=>button('chooseEffect',
+          tokenChoiceLabel(state,{key:k,label:`Remove ${statusLabel(k)}`},state.active),`data-status="${k}"`)).join('')+button('chooseEffect','Keep status effects');
       break;
     case 'preventStatus':
       phase='Defensive Roll'; heading='Thick Skin II';
@@ -1638,7 +1730,10 @@ function arena(seat, responding, decisionSeat) {
     case 'alchemistAbility':
       phase='Alchemist';heading=p.name;detail='Resolve the printed attachments and other effects before spending Potions.';content=button('finishAlchemistAbility','Resolve ability effects','class="primary"');break;
     case 'alchemistPotions':
-      phase=state.alchemistSpend.defensive?'Defensive Potions':'End of Offensive Roll Phase';heading='Spend attached Potions';detail='Spend eligible Potions, or keep them for later. Potions removed for The Lab or a card do not activate their effects.';content=alchemist.spendChoices(state,responding).map((c,i)=>button('spendPotion',c.label,`data-choice="${i}"`)).join('')+button('finishAlchemistPotions','Finish spending Potions','class="primary"');break;
+      phase=state.alchemistSpend.defensive?'Defensive Potions':'End of Offensive Roll Phase';heading='Spend attached Potions';detail='Spend eligible Potions, or keep them for later. Potions removed for The Lab or a card do not activate their effects.';
+      content=alchemist.spendChoices(state,responding).map((choice,i)=>
+        button('spendPotion',tokenChoiceLabel(state,{key:choice.key,label:choice.label},responding),`data-choice="${i}"`)).join('')+
+        button('finishAlchemistPotions','Finish spending Potions','class="primary"');break;
     case 'wolverineAbility':
       phase='Wolverine';heading=p.name;detail='Resolve healing, card draws and Rage before the Attack continues.';content=button('finishWolverineAbility','Continue ability','class="primary"');break;
     case 'wolverineResolved':
@@ -1648,7 +1743,9 @@ function arena(seat, responding, decisionSeat) {
     case 'wolverineSevere':
       phase='Severe Threat II';heading='Mask result';content=button('wolverineSevere','Gain Rage','data-status="rage"')+button('wolverineSevere','Add 3 damage','data-status="damage"');break;
     case 'wolverineRemove':
-      phase='Regenerate';heading='Optional status removal';content=wolverine.removalChoices(state).map((c,i)=>button('wolverineRemove',`Remove ${c.label}`,`data-choice="${i}"`)).join('')+button('wolverineRemove','Keep current status effects','data-choice="-1"');break;
+      phase='Regenerate';heading='Optional status removal';content=wolverine.removalChoices(state).map((choice,i)=>
+        button('wolverineRemove',tokenChoiceLabel(state,{...choice,label:`Remove ${choice.label}`},state.active),`data-choice="${i}"`)).join('')+
+        button('wolverineRemove','Keep current status effects','data-choice="-1"');break;
     case 'stormCharge':
       phase='Charged Effect';heading=p.name;detail='The ability was Charged before activation. Remove its Lightning for the Charged Effect, or keep it.';content=button('stormUseCharge','Remove Lightning · use Charged Effect','class="primary"')+button('stormKeepCharge','Keep the Lightning');break;
     case 'stormAbility':
@@ -1998,6 +2095,15 @@ function handleAction(event) {
     return;
   }
   if (rollRequest) return;
+  if (type==='select-potion'||type==='back-to-potions') {
+    const potion=target.dataset.status, task=state.alchemistTask;
+    if (state.stage!=='alchemistChoices'||task?.queue[0]?.kind!=='attach'||
+        type==='select-potion'&&!alchemist.taskChoices(state).some(choice=>choice.key===potion)) return;
+    selectedPotion=type==='select-potion'?potion:undefined;
+    render();
+    focusRollAction();
+    return;
+  }
   if (type==='pick-retry-die') {
     if (!state.retry || !diceOwnedBy(rollContext(state),state.retry.seat,state)[index]) return;
     retryPick=retryPick===index?undefined:index;
@@ -2009,11 +2115,13 @@ function handleAction(event) {
   if (type==='sell' && (handSeat!==state.active || !canPlayFromHand(state, handSeat))) return;
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
-    choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
+    choice:Number(target.dataset.choice??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
   if(target.dataset.attackerEffect)action.attackerEffect=true;
   if(type==='playCard') {
     if(!canPlayFromHand(state, handSeat))return;
     action.seat=handSeat;
+    action.choice=Number(handContent.querySelector('input[name="card-choice"]:checked')?.value
+      ?? document.getElementById('card-choice')?.value ?? 0);
     const plan=cardDicePlan(handSeat,index,cardChoices(state,handSeat,index));
     if(plan){
       diceEdit={...plan,picks:new Map()};
@@ -2025,9 +2133,6 @@ function handleAction(event) {
   }
   if(type==='mysticWildReroll')action.indices=[...match.querySelectorAll('input[name="mystic-wild-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='deadpoolLuckyHope')action.amount=Number(document.getElementById('deadpool-lucky-hope').value);
-  if(type==='deadpoolFourth')action.choice=Number(document.getElementById('deadpool-fourth').value);
-  if(type==='resolveSantaRemoval')action.choice=Number(document.getElementById('santa-removal-choice').value);
-  if(type==='alchemistChoice')action.choice=Number(document.getElementById('alchemist-choice').value);
   if(type==='alchemistLab')action.choice=Number(document.getElementById(`alchemist-lab-${action.attackerEffect?state.active:oldSeat}`).value);
   if(type==='stormOppReroll')action.indices=action.status==='both'?[0,1]:action.status==='first'?[0]:[1];
   if(type==='spiderSenseReroll')action.indices=[...match.querySelectorAll('input[name="spider-sense-reroll"]:checked')].map(input=>Number(input.value));
@@ -2037,6 +2142,7 @@ function handleAction(event) {
   const rollTitle = type === 'playCard' ? seatCard(state, handSeat, action.id).name : target.textContent?.trim();
   const safeTitle = rollTitle?.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   state = applyMatchAction(action, safeTitle || 'Roll dice');
+  if(state!==oldState)selectedPotion=undefined;
   if (rollRequest) {
     if (handDialog.open) handDialog.close();
     selectedCard = null;
@@ -2047,7 +2153,8 @@ function handleAction(event) {
   if(oldStage!==state.stage || oldSeat!==cardActor(state) || type==='playCard' || type==='sell')selectedCard=null;
   if(handDialog.open && (oldStage!==state.stage || oldSeat!==cardActor(state) || (!oldState.retry&&state.retry) || (!oldState.cardRoll&&state.cardRoll) || (!oldState.mainAction&&state.mainAction)))handDialog.close();
   render();
-  const decisionChanged = oldStage!==state.stage || oldState.response?.seat!==state.response?.seat;
+  const decisionChanged = oldStage!==state.stage || oldState.response?.seat!==state.response?.seat
+    || type==='alchemistChoice'&&state!==oldState;
   const focus=decisionChanged ? document.getElementById('action-title')
     : type==='hold' ? match.querySelector(`button[data-index="${index}"][data-action="hold"]`) : match.querySelector('button[data-action="roll"]:enabled');
   if (focus && !handDialog.open) focus.focus({preventScroll:!decisionChanged||type==='defend'});
@@ -2208,6 +2315,7 @@ document.getElementById('reset').addEventListener('click',()=>{
   if (handDialog.open) handDialog.close();
   diceEdit=undefined;
   retryPick=undefined;
+  selectedPotion=undefined;
   rollRequest = {
     setup: {promo: document.getElementById('promos').checked, heroes: setupHeroes.slice()},
     description: 'Decide who starts', count: 2, owners: [0,1]
