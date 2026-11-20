@@ -878,28 +878,6 @@ function defenceName(s,seat,kind){
  return p.upgrades?.[slot]?seatCard(s,seat,p.upgrades[slot]).name:slot==='counterStrike'?'Counter Strike':boardFor(s,seat).defence;
 }
 
-function needsTurnStartUpkeep(state, opening = false) {
-  const cadence = heroRoster[heroId(state, state.active)].turnStartUpkeep;
-  if (cadence === 'every-turn') return true;
-  if (opening) return false;
-  if (cadence === 'after-opening') return true;
-
-  const player = state.players[state.active];
-  return player.donut || player.strengthOcean || player.phoenixBurn || player.disruption ||
-    player.bagOfTricks || player.cosmicFlare || player.timeBomb || player.disarm ||
-    player.wound || druid.regenTotal(player) || nevermoreOwner(state) !== null ||
-    upkeepDamage(player, state.active) || player.fireMastery || player.cursed ||
-    player.powderKeg || player.nanite || player.holyPresence || player.bleed || player.nyra?.downed;
-}
-
-function resetUpkeepDamage(state) {
-  state.upkeepEvaded = false;
-  state.upkeepPrevention = 0;
-  delete state.upkeepInvulnerability;
-  delete state.upkeepDisruptionDamage;
-  state.upkeepProtect = 0;
-}
-
 function createMatch(roll, options) {
   let startRolls;
   do { startRolls = [roll(), roll()]; } while (startRolls[0] === startRolls[1]);
@@ -1863,20 +1841,6 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     state.effectDie=null;
     state.ninjutsuReturnStage=null;
   }
-  function startRoll(player,enter=true) {
-    delete state.stormDice;
-    iceman.onStart(state);psylocke.start(state);alchemist.start(state);
-    scarletWitch.start(state,state.active,enter);
-    Object.assign(state,{stage:player.knockdown?'knockdown':'offence',dice:[],held:[],defenceDice:[],attempts:0,defenceKind:null,
-      budget:player.entangle?2:3,wasEntangled:!!player.entangle,extraDefence:0,pending:null,vineAttempts:0});
-    if(player.boundAbilities?.length)state.spellboundExpires=player.boundAbilities.map(b=>b.id);else delete state.spellboundExpires;
-    if(player.crimsonBands)state.bandsTurn=state.turn;else delete state.bandsTurn;
-    if(player.decrepify)state.wasDecrepified=true;
-    else delete state.wasDecrepified;
-    if(enter)rogue.start(state,roll);
-    if(player.constrict)state.wasConstricted=true;
-    else delete state.wasConstricted;
-  }
   function consumeVine(){
     const damage=vineDamage(state);
     state.vinePaid=(state.vinePaid??0)+damage;
@@ -1885,6 +1849,12 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     return damage;
   }
   function finishRoll(attack=state.pending?.attack) {return psylocke.withoutAbility(state,()=>finishRollBody(attack));}
+  function restartOffensiveRoll(attack) {
+    finishRoll(attack);
+    // Use the existing resume stage so saved side-damage responses remain valid.
+    if (state.stage === 'sideDamage') state.sideDamage.resume = 'tacticalRestart';
+    else startOffensiveRoll(state, roll);
+  }
   function finishRollBody(attack) {
     if(psylocke.pauseEnd(state))return;
     const hit=state.pending;
@@ -2307,122 +2277,6 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     state.pending=null;
     finishRoll(Boolean(wouldAttack)&&!defender.cursed);
   }
-  function income(player) {
-    if(player.alpha){
-      removeStatus(player,'alpha');player.concussion=false;delete state.disarmSkip;state.income={skipped:'alpha'};
-      add(`Turn ${state.turn}. ${names[state.active]} skips Income due to Alpha.`);
-    } else if(player.hero===jeanGrey.id&&player.darkPhoenix){
-      player.concussion=false;delete state.disarmSkip;state.income={skipped:'dark-phoenix'};
-      add(`Turn ${state.turn}. ${names[state.active]} skips Income while Dark Phoenix is Active.`);
-    } else if (player.concussion||state.disarmSkip) {
-      player.concussion=false;
-      const reason=state.disarmSkip?'Disarm':'Concussion';
-      state.income={skipped:reason.toLowerCase()};
-      delete state.disarmSkip;
-      add(`Turn ${state.turn}. ${names[state.active]} skips income due to ${reason}.`);
-    } else {
-      if(state.cards&&player.premonition&&!player.resurrected){state.premonitionTask={seat:state.active,kind:'choose'};state.stage='incomePremonition';return;}
-      const previousCP=player.cp,coalBlocked=player.coal===4&&player.cp<15&&!player.resurrected;
-      if(!player.resurrected)gainCP(player,1);
-      const previousHand=state.cards?player.hand.length:player.hand;
-      if(state.cards)drawCards(player,1,random);
-      else if(player.deck){player.deck--;player.hand=Math.min(6,player.hand+1);}
-      const drawn=(state.cards?player.hand.length:player.hand)-previousHand;
-      state.income={cp:player.cp-previousCP,drawn,...(coalBlocked?{coal:true}:{})};
-      add(`Turn ${state.turn}. ${names[state.active]} gains ${state.income.cp} CP and draws ${drawn} ${drawn===1?'card':'cards'} in the Income Phase.`);
-    }
-    if(player.entangle)add(`${names[state.active]} has one fewer Roll Attempt due to Entangle.`);
-    startRoll(player,!state.cards);
-    if(state.cards)state.stage='main1';
-  }
-  function advanceTurn(){
-    if(attacker.werewolf){
-      if(!attacker.keepMoonShard)attacker.moonShard=Math.max(0,attacker.moonShard-1);
-      if(!attacker.moonShard){attacker.werewolf=false;add('Twilight returns Werewolf to Pale Lady.');}
-    }
-    delete attacker.keepMoonShard;
-    if(attacker.druidForm==='druid')druid.regenerate(attacker);
-    delete state.regenerateChecked;
-    delete state.repositioned;
-    delete state.minesChecked;
-    delete state.sunUpkeep;
-    delete state.disarmSkip;
-    delete state.woundsResolved;
-    delete state.woundsRemoved;
-    delete state.woundsAtStart;
-    if(attacker.hex)removeStatus(attacker,'hex');
-    delete state.nevermoreChecked;
-    if(heroId(state,state.active)===headlessHorseman.id&&attacker.hauntedHeadSeat===1-state.active){
-      grantStatus(attacker,'dreadful');
-      add('The Haunted Head grants Dreadful at the end of the turn.');
-    }
-    if(state.horseUpkeep)delete state.horseUpkeep;
-    if(state.necroUpkeep)delete state.necroUpkeep;
-    if(heroId(state,state.active)===samurai.id&&state.attempts>0&&state.attempts<3){
-      const before=attacker.honor??0;
-      grantStatus(attacker,'honor');
-      if(attacker.honor>before)add(`${names[state.active]} gains Honor from Bushido.`);
-    }
-    if(state.bloodReward){
-      delete state.bloodReward;
-      grantStatus(attacker,'bloodPower');
-      add(`${names[state.active]} gains Blood Power for damaging an opponent with 2 Bleed.`);
-    }
-    if(attacker.shadowsStarted)removeStatus(attacker,'shadows');
-    for(const player of state.players){player.chiFresh=0;player.spentSpirits=[];}
-    state.vineAttempts=0;
-    state.vinePaid=0;
-    state.fertilized=false;
-    if(heroId(state,state.active)===cursedPirate.id)cursedPirate.endTurn(state,state.active,add);
-    state.active=1-state.active;
-    state.turn++;
-    delete state.widowBombChecked;
-    delete state.cosmicFlareChecked;delete state.upkeepFlareDamage;delete state.upkeepBagDamage;delete state.upkeepBagHeal;
-    const player=state.players[state.active];
-    jeanGrey.startTurn(state,state.active);delete state.jeanBurnChecked;
-    player.shadowsStarted=!!player.shadows;
-    if(state.pirateKegChecked)delete state.pirateKegChecked;
-    if(state.holyPresenceChecked)delete state.holyPresenceChecked;
-    if(state.bleedChecked)delete state.bleedChecked;
-    if(state.quickDrawChecked)delete state.quickDrawChecked;
-    if(needsTurnStartUpkeep(state)){
-      state.pending=null;
-      state.stage='upkeep';
-      resetUpkeepDamage(state);
-    } else income(player);
-  }
-  function finishUpkeep(){
-    if(state.upkeepBagHeal){attacker.hp+=state.upkeepBagHeal;add(`${names[state.active]} heals ${state.upkeepBagHeal} from Bag of Tricks at the end of Upkeep.`);}
-    delete state.upkeepBagHeal;
-    if(state.upkeepDonutHeal){attacker.hp+=state.upkeepDonutHeal;add(`${names[state.active]} heals ${state.upkeepDonutHeal} from Donut at the end of Upkeep.`);delete state.upkeepDonutHeal;}
-    if(state.upkeepOceanHeal){attacker.hp+=state.upkeepOceanHeal;add(`${names[state.active]} heals ${state.upkeepOceanHeal} from Strength of the Ocean at the end of Upkeep.`);delete state.upkeepOceanHeal;}
-    const nyraUpdate=huntress.upkeep(attacker);
-    if(nyraUpdate)add(nyraUpdate);
-    if(attacker.cursed){
-      const saved=takeDamage(attacker,4);
-      add(`${names[state.active]} takes 4 unpreventable damage from Cursed.`);
-      if(saved)add(`${names[state.active]} survives through Blessing of Divinity.`);
-    }
-    if(attacker.fireMastery){
-      removeStatus(attacker,'fireMastery');add(`${names[state.active]} cools off and loses 1 Fire Mastery.`);
-    }
-    const damage=upkeepIncoming(state);
-    if(attacker.hp&&damage&&!state.upkeepEvaded){
-      if(takeDamage(attacker,damage))add(`${names[state.active]} survives through Blessing of Divinity.`);
-      add(`${names[state.active]} takes ${damage} upkeep damage from ${[(state.upkeepBagDamage??0)?'Bag of Tricks':'',attacker.burn?'Burn':'',attacker.poison?'Poison':'',state.upkeepDisruptionDamage?'Disruption':'',cursedPirate.foreignCoins(state,state.active)?'Cursed Doubloon':''].filter(Boolean).join(' and ')}.`);
-    }
-    attacker.hp=bounded(attacker.hp,60);delete state.upkeepBagDamage;
-    resetUpkeepDamage(state);
-    if(state.upkeepFlareDamage){
-      takeDamage(defender,state.upkeepFlareDamage);
-      add(`${names[1-state.active]} takes ${state.upkeepFlareDamage} damage from Cosmic Flare.`);
-    }
-    delete state.upkeepFlareDamage;
-    if(!attacker.hp||!defender.hp){
-      state.stage='finished';state.winner=!attacker.hp&&!defender.hp?'Draw':`${names[attacker.hp?state.active:1-state.active]} wins`;add(state.winner);
-    } else if(state.turn===1&&state.income?.skipped==='first-turn')state.stage='main1';
-    else income(attacker);
-  }
   function addOverflowPrey(p){
     if(p.preyOverflow){
       grantStatus(defender,'prey',p.preyOverflow);
@@ -2444,7 +2298,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     state.growth=null;
     state.stage=g.resume;
     if(g.after==='offence')continueOffence(state.pending);
-    else if(g.after==='upkeep')finishUpkeep();
+    else if(g.after==='upkeep')finishUpkeep(state,roll,random);
     else if(g.collateral)startSideDamage(state,1-g.seat,g.collateral,g.source);
   }
   switch (action.type) {
@@ -2803,7 +2657,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       if(state.pending.ultimate||state.pending.stun)activate();
       else enterTargeting(state.pending);
       break;
-    case 'payKnockdown': attacker.cp-=2;attacker.knockdown=false;startRoll(attacker);break;
+    case 'payKnockdown': attacker.cp-=2;attacker.knockdown=false;startOffensiveRoll(state,roll);break;
     case 'skipKnockdown':
       attacker.knockdown=false;
       delete state.iceGlideTarget;
@@ -2919,7 +2773,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     }
     case 'restartTacticalOffence':
-      startRoll(attacker);
+      startOffensiveRoll(state,roll);
       break;
     case 'collectHonor': {
       const {seat,amount}=state.honorOverflow;
@@ -3129,7 +2983,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         state.fertilized=true;
         if(queueGrowth(state,state.active,1,'Fertilize','upkeep'))break;
       }
-      finishUpkeep();
+      finishUpkeep(state,roll,random);
       break;
     case 'evadeUpkeep':
       state.evasionSeat=state.active;state.evasionReturnStage='upkeep';
@@ -3154,7 +3008,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       add(`${p.name} reroll: ${p.effectDice.join(', ')}.`);
       break;
     }
-    case 'begin': startRoll(attacker);break;
+    case 'begin': startOffensiveRoll(state,roll);break;
     case 'endMain': state.stage='discard';break;
     case 'retryDie':
     case 'finishRetry': {
@@ -3525,7 +3379,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     case 'finishSpiderAfter': finishRoll();break;
     case 'spendCombo':
-      removeStatus(attacker,'combo');attacker.comboTurn=state.turn;startRoll(attacker);add('Combo starts an additional Offensive Roll Phase against the same opponent, without Income.');break;
+      removeStatus(attacker,'combo');attacker.comboTurn=state.turn;startOffensiveRoll(state,roll);add('Combo starts an additional Offensive Roll Phase against the same opponent, without Income.');break;
     case 'skipCombo': state.stage='main';break;
     case 'finishScarletAbility':
       continueOffence(state.pending);break;
@@ -3534,13 +3388,12 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'finishStrangeAbility':
       continueOffence(state.pending);break;
     case 'completePremonition':
-      state.premonitionTask=null;startRoll(attacker,false);state.stage='main1';break;
+      state.premonitionTask=null;prepareMainPhaseOne(state);break;
     case 'spendDejaVu':
       if(state.rogueRoll?.kind==='influence'){attacker.influence=0;delete state.rogueRoll;}
       state.response=null;
       removeStatus(attacker,'dejaVu');attacker.blind=false;if(attacker.blindingLight)removeStatus(attacker,'blindingLight');
-      finishRoll(false);
-      if(state.stage==='sideDamage')state.sideDamage.resume='tacticalRestart';else startRoll(attacker);
+      restartOffensiveRoll(false);
       add(`${names[state.active]} spends Déjà Vu to start a new Offensive Roll Phase.`);break;
     case 'resolveSantaRemoval': {const r=state.santaRemoval,options=santa.removalChoices(state),choice=options[action.choice??0];if(options.length&&!choice)return previous;delete state.santaRemoval;if(choice)applyCard(state,r.source,7,choice,roll,random,add,true);break;}
     case 'finishDeadpoolAbility': deadpool.printed(state,random);break;
@@ -3548,7 +3401,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'finishDeadpoolResolved': continueOffence(state.pending);break;
     case 'finishSantaAbility': santa.printed(state,random);break;
     case 'finishSantaPrepared': resolveAbility();break;
-    case 'startSantaRoll': startRoll(attacker);add('Comfort and Joy! starts an additional Offensive Roll Phase against the same opponent, without Income.');break;
+    case 'startSantaRoll': startOffensiveRoll(state,roll);add('Comfort and Joy! starts an additional Offensive Roll Phase against the same opponent, without Income.');break;
     case 'finishMysticAbility': mysticBrawler.printed(state,random);break;
     case 'finishMysticPrepared': resolveAbility();break;
     case 'finishMysticResolved': continueOffence(state.pending);break;
@@ -3570,7 +3423,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'finishIcemanResolved': continueOffence(state.pending);break;
     case 'finishIcemanAfter': finishRoll();break;
     case 'skipGlide': state.stage='main';break;
-    case 'spendGlide': {const target=iceman.path(state);removeStatus(attacker,'glide');attacker.glideTurn=state.turn;startRoll(attacker);state.iceGlideTarget=target;if(!attacker.knockdown)state.stage='iceGlideReady';break;}
+    case 'spendGlide': {const target=iceman.path(state);removeStatus(attacker,'glide');attacker.glideTurn=state.turn;startOffensiveRoll(state,roll);state.iceGlideTarget=target;if(!attacker.knockdown)state.stage='iceGlideReady';break;}
     case 'activateIcemanGlide': return transitionCore({...state,stage:'iceGlideDeclare'},{type:'declare',ability:state.iceGlideTarget},roll,random,true);
     case 'finishGambitAbility':
       resolveAbility();break;
@@ -3686,9 +3539,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       } else if(p.harvest){
         if(counts.Soul){
           necromancer.gain(attacker,1);
-          finishRoll(true);
-          if(state.stage==='sideDamage')state.sideDamage.resume='tacticalRestart';
-          else startRoll(attacker);
+          restartOffensiveRoll(true);
           add('Harvest starts an additional Offensive Roll Phase.');
           break;
         }
@@ -3697,9 +3548,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       } else if(p.profiteer){
         if(counts.Medal){
           if(state.cards)drawCards(attacker,1,random);
-          finishRoll(true);
-          if(state.stage==='sideDamage')state.sideDamage.resume='tacticalRestart';
-          else startRoll(attacker);
+          restartOffensiveRoll(true);
           add(`${names[state.active]} starts an additional Offensive Roll Phase from Profiteer.`);
           break;
         }
@@ -3944,7 +3793,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         finishRoll();
         if (p.stun) {
           add(`Stun clears. ${names[state.active]} starts another Offensive Roll Phase.`);
-          startRoll(attacker);
+          startOffensiveRoll(state,roll);
         }
       }
       break;
@@ -3992,7 +3841,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         state.stage='finished';
         state.winner=`${names[1-event.seat]} wins`;
         add(state.winner);
-      } else if(event.endTurn)advanceTurn();
+      } else if(event.endTurn)advanceTurn(state,roll,random);
       else {
         state.stage=event.resume;
         if(event.lokiBagResume)state.lokiBag=event.lokiBagResume;
@@ -4016,7 +3865,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         const amount=3*attacker.delayedPoison;
         attacker.delayedPoison=0;
         startSideDamage(state,state.active,amount,'Delayed Poison',true);
-      } else advanceTurn();
+      } else advanceTurn(state,roll,random);
       break;
   }
   if(state.stage==='finished')state.players.forEach((p,seat)=>{
