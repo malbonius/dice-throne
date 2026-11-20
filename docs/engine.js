@@ -631,6 +631,7 @@ const hasResponse=(s,seat)=>{
    tokens.accuracy||tokens.protect||tokens.retribution||tokens.smoke||tokens.ninjutsu||tokens.evadeSide||tokens.seedling.length||tokens.sapling||tokens.dryad||tokens.dryadPrevent.length||tokens.wellspring||tithe.draw||tithe.dice?.length||
    s.stage==='damage'&&s.players[seat].evasive&&(seat===s.active?returnDamageFor(s):incomingDamage(s))>0&&!s.cardRoll);
 };
+const isSelling=s=>s.cards&&!s.deadpoolTask&&!s.deadpoolRps&&!s.deadpoolDonutRoll&&!s.deadpoolLucky&&!s.santaRemoval&&!s.santaTask&&!s.santaRoll&&!s.santaNogRoll&&!s.santaGift&&!s.mysticTask&&!s.mysticContest&&!s.krampusTask&&!s.krampusActivation&&s.krampusOverflow===undefined&&!alchemist.busy(s)&&!s.wolverineGain&&!s.wolverineRageRoll&&!s.alphaRoll&&!s.wolverineIntimidate&&!s.stormTask&&!s.rogueGain&&!s.rogueRoll&&!s.psyReveal&&!s.jeanTask&&!s.jeanBurnRoll&&!s.iceTask&&!s.iceFreezeChoice&&!s.gambitTask&&!s.gambitRoll&&!s.cyclopsTask&&!s.thorTask&&!s.thorOverflow&&!s.conjureTask&&!s.scarletJinx&&!s.lokiTask&&!s.lokiBag&&!s.lokiIllusion&&!s.strangeTask&&!s.premonitionTask&&!s.cosmicRayRoll&&!s.cosmicRayOverflow&&!s.widowTask&&!s.widowReveal&&!s.widowAgility&&!s.widowBombRoll&&!s.forgeTask&&!s.shapeOverflow&&!s.ravenFeathers && (isMain(s)||s.stage==='discard')&&!s.mainAction&&!s.mainChoice&&!s.cardRoll&&!s.artRoll&&!s.bloodOverflow&&!s.honorOverflow&&!s.tacticalOverflow&&!s.tacticalRemoval&&!s.retry&&!s.response;
 function grantAttackStatus(s,defender,key,amount=1){
  if(psylocke.block(s,defender,key,amount))return;
  const p=s.pending;

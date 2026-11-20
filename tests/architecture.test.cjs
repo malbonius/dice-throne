@@ -5,9 +5,8 @@ const vm = require('node:vm');
 
 const docs = path.join(__dirname, '../docs');
 const baseline = process.argv[2];
-const loadEngine = directory => {
+const loadEngine = (directory, context = vm.createContext({structuredClone})) => {
   const html = fs.readFileSync(path.join(directory, 'index.html'), 'utf8');
-  const context = vm.createContext({structuredClone});
   vm.runInContext('Math.random = () => 0.37', context);
   const scripts = html.matchAll(/<script src="\.\/((?:heroes\/[^"]+|turn|rolls|engine)\.js)"/g);
   for (const [, file] of scripts) {
@@ -15,7 +14,7 @@ const loadEngine = directory => {
   }
   return vm.runInContext(`({
     createMatch, transition, legal, actor, cardActor, cardChoices, tokenChoices, tacticalChoices,
-    rollContext, rollPhase, attackLocked, dieOwner, diceOwnedBy,
+    rollContext, rollPhase, attackLocked, dieOwner, diceOwnedBy, isSelling,
     names: HEROES.map(hero => hero.name),
     leafletKeys: typeof positiveStatusKeys === 'undefined' ? scarletWitch.positives : positiveStatusKeys,
     conjure: scarletWitch.conjureChoices, fourthWall: deadpool.fourthChoices
@@ -347,9 +346,78 @@ function rollTimingResults(rules) {
   return snapshots;
 }
 
+// Run the actual hand-panel click handler with only the DOM methods it needs.
+function checkHandControls() {
+  const elements = new Map();
+  const logDisclosure = {open: false};
+  const focusTarget = {focus() {}};
+  function element(id) {
+    if (!elements.has(id)) {
+      const listeners = new Map();
+      elements.set(id, {
+        innerHTML: '', open: false,
+        querySelector(selector) {
+          return selector === '.action-log' ? logDisclosure : focusTarget;
+        },
+        querySelectorAll() { return []; },
+        addEventListener(type, listener) { listeners.set(type, listener); },
+        showModal() { this.open = true; },
+        close() { this.open = false; },
+        click(action, index) {
+          const button = this.innerHTML.match(/<button[^>]*>/g)?.find(markup =>
+            markup.includes(`data-action="${action}"`) &&
+            markup.includes(`data-index="${index}"`) && !markup.includes(' disabled'));
+          assert.ok(button, `${action} for ${index} should be available`);
+          const target = {dataset: {action, index: String(index)}};
+          listeners.get('click')({target: {closest: () => target}});
+        }
+      });
+    }
+    return elements.get(id);
+  }
+
+  const fixture = start(engine, [0, 1]);
+  fixture.players[0].hand = [9, 18];
+  const storage = new Map([['dice-throne-card-pilot-v2', JSON.stringify(fixture)]]);
+  const context = vm.createContext({
+    structuredClone,
+    document: {
+      getElementById(id) { return id === 'card-choice' ? null : element(id); }
+    },
+    window: {
+      diceThroneArt: {boards: []},
+      addEventListener() {},
+      matchMedia() { return {matches: false}; }
+    },
+    localStorage: {
+      getItem(key) { return storage.get(key); },
+      setItem(key, value) { storage.set(key, value); }
+    }
+  });
+  loadEngine(docs, context);
+  vm.runInContext(fs.readFileSync(path.join(docs, 'app.js'), 'utf8'), context, {filename: 'app.js'});
+
+  const hand = element('hand-content');
+  element('match').click('open-hand', 0);
+  assert.ok(element('hand-dialog').open);
+  hand.click('select-card', 9);
+  hand.click('playCard', 9);
+  const saved = () => JSON.parse(storage.get('dice-throne-card-pilot-v2')).players[0];
+  assert.equal(saved().cp, 4);
+  assert.deepEqual(saved().discard, [9]);
+
+  hand.click('select-card', 18);
+  assert.match(hand.innerHTML, /Unavailable in this window/);
+  hand.click('sell', 18);
+  assert.equal(saved().cp, 5);
+  assert.deepEqual(saved().hand, []);
+  assert.deepEqual(saved().discard, [9, 18]);
+}
+
+checkHandControls();
 const turnBoundaries = turnBoundaryResults(engine);
 const rollTiming = rollTimingResults(engine);
-console.log('Positive-status, transfer, turn lifecycle and roll timing regression checks passed.');
+console.log('Hand controls, Positive statuses, transfers, turn lifecycle and roll timing checks passed.');
 
 if (baseline) {
   const old = loadEngine(path.resolve(baseline));
@@ -398,6 +466,7 @@ if (baseline) {
           compare(old.legal(state), legal, 'Legal actions');
           compare(old.rollContext(state), engine.rollContext(state), 'Visible roll context');
           compare(old.rollPhase(state), engine.rollPhase(state), 'Roll Phase eligibility');
+          compare(old.isSelling(state), engine.isSelling(state), 'Selling eligibility');
           compare(old.actor(state), engine.actor(state), 'Acting seat');
           const cardSeat = engine.cardActor(state);
           compare(old.cardActor(state), cardSeat, 'Responding seat');
