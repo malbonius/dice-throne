@@ -1,10 +1,18 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.51.1 · Architecture preview 2. Base: the supplied 0.51.1 full-roster archive.
+Version: Playtest 0.51.1 · Architecture preview 3. Base: the supplied 0.51.1 full-roster archive.
 
 ## Architecture review
 
 The preview starts from the supplied full-roster Playtest 0.51.1 archive. Its local Git baseline is tagged `playtest-0.51.1-baseline` and the work is on `architecture/refactor`. The previews contain incremental refactors and targeted regression checks. The planned UI work follows the architecture pass.
+
+### Changes in preview 3
+
+The user reported that the Preview 2 playtest passed. Preview 3 puts roll selection, die ownership and action-seat selection in `docs/rolls.js`. The player who must resolve a pending task and the player allowed to respond now share the task ordering, while keeping the existing priority differences for response windows, Krampus and Wolverine. Nested tasks use the same return-state helper when determining Roll Phase eligibility and locating the visible dice. Ownership stays with the roller of each die when a response window changes the acting player.
+
+Gunslinger's Showdown, Wolverine's Alpha and other opposed rolls use the same format to record both die owners. Card rolls take precedence in the same cases as before. Frozen dice are excluded from writable dice in their Offensive Roll Attempt and remain separate from subsidiary rolls. Activated Ultimates retain their existing locks. The v2.4.3 rulebook's dice alteration and Ultimate timing sections and the advanced clarifications provide the timing reference. The preview preserves the implemented legacy timing and existing saves.
+
+The preview passed 28,445 comparisons against each of Preview 2 and the original 0.51.1 across all 45 heroes. New checks cover opposed dice, the difference between a task's actor and its responding seat, frozen indices, nested card rolls, Evasive and activated Ultimates. The service-worker simulation served the shell and all 101 assets offline. Preview 3 still needs a real-browser playtest. The next pass covers shared damage and prevention, followed by the final save and offline checks before merging.
 
 ### Changes in preview 2
 
@@ -14,7 +22,7 @@ Déjà Vu, Harvest and Profiteer use one restart path that finishes the outgoing
 
 The user reported that the Preview 1 playtests passed. Preview 2 passed 23,477 comparisons including 3,254 transitions against each of Preview 1 and the original 0.51.1 across all 45 heroes. Added cases cover save and resume during Premonition and Déjà Vu side damage, prevention of a second Income on an additional Offensive Roll Phase, skipped Income, delayed end-of-turn damage, defeat during Upkeep and version 1 turn advancement. The service-worker simulation replaced the older preview cache and served all 100 assets offline. Preview 2 still needs a real-browser update and offline launch check.
 
-Merge `architecture/refactor` into the live branch once the remaining dice ownership, response timing and damage refactors pass parity checks and the final preview passes save and offline checks on the real devices. The UI work follows that merge.
+Merge `architecture/refactor` into the live branch once the remaining damage refactor passes parity checks and the final preview passes save and offline checks on the real devices. The UI work follows that merge.
 
 ### Changes in preview 1
 
@@ -29,7 +37,7 @@ Merge `architecture/refactor` into the live branch once the remaining dice owner
 | --- | --- | --- |
 | Statuses | Positive leaflet data now lives with each hero. Generic caps, negative ordering and collection still sit in the engine, with separate gain paths for direct gains, inflicted/received gains and transfers. For example, Transference! runs some overflow handlers that Tactical Advantage bypasses. | Record parity for a full recipient, mirrored heroes and status-specific overflow before deciding which differences are rule exceptions. Centralise shared token definitions and retain per-instance data and the order of choices. |
 | Phases | Turn boundaries and Upkeep settlement now live in one module. The reducer still dispatches individual Upkeep effects and resolves Offensive Roll Phase outcomes. | Use the established boundaries when extracting roll timing. Preserve saved response states, skips and additional rolls. |
-| Timing and dice | `legal`, `actor`, `cardActor`, `rollContext`, `rollPhase` and `attackLocked` each inspect pending tasks in their own order. Ownership can differ from the acting seat in opposed rolls and with borrowed dice. | Give pending rolls a shared read-only description of dice, owners, allowed actions and response seat. Preserve the current precedence for nested card rolls, subsidiary rolls, frozen dice and locked Ultimates. Migrate and compare one roll family at a time. |
+| Timing and dice | Pending roll selection, die ownership and task and response seats now share a module. Roll Phase eligibility uses a common return-state helper when inspecting nested tasks. | Preserve action priority and frozen-die handling when changing a hero's pending task. Keep checking opposed and subsidiary rolls independently. |
 | Damage | Attack damage, defensive return damage, Upkeep and isolated damage settle along different paths. Some sources also resume a parent roll or attack. | Extract common prevention arithmetic first. Compare flat and percentage prevention, evasion, simultaneous settlement and isolated damage before consolidating any settlement logic. |
 | Saves and presentation | The classic scripts and their order are part of the offline shell. The app renders from engine state and the hero modules contain serialisable pending tasks. | Keep the schema and storage key stable. Check a save during a response before moving code that changes task handling. Use real-device checks for service-worker updates and offline launch before release. |
 
@@ -47,11 +55,12 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/heroes/*.js`: hero boards, upgrades, action cards, defence rules and hero-specific helpers. Black Widow is in `black-widow.js`; Captain Marvel is in `captain-marvel.js`.
 - `docs/engine.js`: two-seat state machine, shared cards, hero registration, legal actions and common damage/status handling.
 - `docs/turn.js`: turn advancement, Upkeep entry and settlement, Income, Main Phase 1 preparation and Offensive Roll Phase entry.
+- `docs/rolls.js`: roll context, Roll Phase eligibility, die ownership and pending action and response seats.
 - `docs/app.js`: rendering, controls, hand viewer, board/leaflet zoom, local saves and hero picker.
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.51.1-architecture.2.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.51.1-architecture.3.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility

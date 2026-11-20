@@ -176,59 +176,6 @@ function stealNecroHealth(s,seat,amount){
  return true;
 }
 const attackLocked=s=>s.deadpoolTask?.locked||s.deadpoolFourthResume?.locked||s.santaTask?.locked||s.santaNogRoll?.locked||s.mysticTask?.locked||s.krampusTask?.locked||s.krampusActivation?.locked||s.jeanTask?.locked||s.pending?.ultimate&&['jeanAbility','jeanResolved','psyAbility','paralyzeAfter','rogueAbility','rogueInfluence','rogueSkyward','stormCharge','stormAbility','stormResolved','stormChoices','deadpoolAbility','deadpoolPrepared','deadpoolResolved','santaAbility','santaTarget','santaRoll','santaPrepared','mysticAbility','mysticStrongTarget','mysticContest','mysticPrepared','mysticResolved','krampusAbility','krampusPrepared','krampusResolved','alchemistAbility','alchemistChoices','alchemistPotions','alchemistDefence','wolverineAbility','wolverineResolved','wolverineBarrage','wolverineRemove','wolverineSevere','alphaRoll'].includes(s.stage)||s.iceTask?.locked||s.pending?.ultimate&&['iceAbility','iceResolved'].includes(s.stage)||s.gambitTask?.locked||s.pending?.ultimate&&s.stage==='gambitAbility'||s.cyclopsTask?.locked||s.pending?.ultimate&&s.stage==='cyclopsAbility'||s.thorTask?.locked||s.pending?.ultimate&&s.stage==='thorAbility'||s.lokiBag?.locked||s.pending?.ultimate&&['lokiChoices','lokiAbility'].includes(s.stage)||s.pending?.ultimate&&['strangeSpells','strangeAbility'].includes(s.stage)||s.cosmicRayRoll?.locked||s.pending?.ultimate&&['widowAbility','widowSearch'].includes(s.stage)||s.sideDamage?.pantherLocked||s.pending?.ultimate&&s.stage==='pantherAbility'||s.pending?.ultimate&&s.stage==='sunMarked'||s.pending?.ultimate&&['forgeSearch','forgeAbility'].includes(s.stage)||s.pending?.ultimate&&s.stage==='duelMove'||s.ravenActivation?.locked||s.pending?.ultimate&&['ravenAbility','prey','druidReady'].includes(s.stage)||s.undeadRoll?.resume==='locked'||s.stage==='undeadRemove'&&s.undeadResume==='locked'||s.stage==='locked'||s.horseRoll?.resume==='locked'||s.gunReload?.resume==='locked'||s.artRoll?.resume==='locked'||s.seraphRoll?.resume==='locked'||s.stage==='sideDamage'&&s.sideDamage.resume==='locked'||s.ninjutsuReturnStage==='locked'||s.pending?.ultimate&&['sneakOffer','growSpirits','evasion'].includes(s.stage);
-const rollPhase=s=>s.deadpoolTask&&s.stage==='deadpoolChoices'?rollPhase({...s,deadpoolTask:s.deadpoolTask.parent??null,stage:s.deadpoolTask.resume}):s.santaNogRoll?rollPhase({...s,santaNogRoll:null,stage:s.santaNogRoll.resume}):s.santaTask&&s.stage==='santaChoices'?rollPhase({...s,santaTask:s.santaTask.parent??null,stage:s.santaTask.resume}):s.mysticTask&&s.stage==='mysticChoices'?rollPhase({...s,mysticTask:s.mysticTask.parent??null,stage:s.mysticTask.resume}):s.krampusTask&&s.stage==='krampusChoices'?rollPhase({...s,krampusTask:s.krampusTask.parent??null,stage:s.krampusTask.resume}):s.jeanTask&&s.stage==='jeanChoices'?rollPhase({...s,jeanTask:s.jeanTask.parent??null,stage:s.jeanTask.resume}):s.iceTask&&s.stage==='iceChoices'?rollPhase({...s,iceTask:s.iceTask.parent??null,stage:s.iceTask.resume}):s.gambitRoll?s.gambitRoll.kind==='high'?false:rollPhase({...s,gambitRoll:null,stage:s.gambitRoll.resume}):s.gambitTask&&s.stage==='gambitSequence'?rollPhase({...s,gambitTask:s.gambitTask.parent??null,stage:s.gambitTask.resume}):s.cyclopsTask&&s.stage==='cyclopsSequence'?rollPhase({...s,cyclopsTask:s.cyclopsTask.parent??null,stage:s.cyclopsTask.resume}):s.thorTask?rollPhase({...s,thorTask:null,stage:s.thorTask.resume}):s.scarletJinx?true:s.lokiBag?rollPhase({...s,lokiBag:s.lokiBag.parent??null,stage:s.lokiBag.resume}):s.strangeTask?!['main','main1'].includes(s.strangeTask.resume):s.cosmicRayRoll?true:s.mesmerizeRoll?.resume!=='upkeep'&&s.artRoll?.resume!=='upkeep'&&s.evasionReturnStage!=='upkeep'&&(s.evasionReturnStage!=='sideDamage'||s.sideDamage?.source==='Barbed Vine')&&['offence','announce','blind','effect','effectResponse','defence','defenceResponse','damage','evasion','postHit','targeting','combustion','pickpocket','sneakOffer','sneakRoll','monkChoice','ninjaGain','ninjutsuRoll','ninjutsuChoice','pirateKegRoll','artRoll','seraphRoll','mesmerizeRoll','gunContest','gunReload','gunDuelChoice','horseRoll','undeadRoll','necroChoice','horrifyChoice','samuraiRoll','vampireChoice','seraphTarget','purify','dryadResponse','spiritPayment','overgrowthWells','prey','druidReady','guardBreakRoll','guardOffer','sunMarked','thorAbility','cyclopsAbility','gambitAbility','iceAbility','iceResolved','iceGlideReady','iceGlideDeclare','jeanAbility','jeanResolved','psyAbility','paralyzeAfter','rogueAbility','rogueInfluence','rogueSkyward','stormCharge','stormAbility','stormResolved','stormChoices','deadpoolAbility','deadpoolPrepared','deadpoolResolved','santaAbility','santaTarget','santaRoll','santaPrepared','mysticAbility','mysticStrongTarget','mysticContest','mysticPrepared','mysticResolved','krampusAbility','krampusPrepared','krampusResolved','krampusChoices','krampusActivation','alchemistAbility','alchemistChoices','alchemistPotions','alchemistDefence','wolverineAbility','wolverineResolved','wolverineBarrage','wolverineRemove','wolverineSevere','alphaRoll'].includes(s.stage);
-function rollContext(s) {
- if(s.deadpoolDonutRoll)return {dice:s.deadpoolDonutRoll.dice,seat:s.deadpoolDonutRoll.seat};
- if(s.deadpoolLucky?.dice&&!s.cardRoll)return {dice:s.deadpoolLucky.dice,seat:s.deadpoolLucky.target};
- if(s.santaNogRoll)return {dice:s.santaNogRoll.dice,seat:s.santaNogRoll.seat};
- if(s.santaRoll&&!s.cardRoll)return {dice:s.santaRoll.dice,seat:s.santaRoll.seat,owners:s.santaRoll.dice.length===2?[s.santaRoll.seat,1-s.santaRoll.seat]:undefined};
- if(s.mysticContest&&!s.cardRoll)return {dice:s.mysticContest.dice,seat:s.mysticContest.seat,owners:[s.mysticContest.seat,1-s.mysticContest.seat]};
- if(s.alchemistRoll&&!s.cardRoll)return {dice:s.alchemistRoll.dice,seat:s.alchemistRoll.seat};
- if(s.wolverineRageRoll&&!s.cardRoll)return {dice:s.wolverineRageRoll.dice,seat:s.wolverineRageRoll.seat};
- if(s.alphaRoll&&!s.cardRoll)return {dice:s.alphaRoll.dice,seat:s.alphaRoll.seat,owners:[s.alphaRoll.seat,s.alphaRoll.target]};
- if(s.rogueRoll&&!s.cardRoll)return {dice:s.rogueRoll.dice,seat:s.rogueRoll.seat,...(s.rogueRoll.kind==='skyward'?{owners:[s.rogueRoll.seat,1-s.rogueRoll.seat]}:{})};
- if(s.jeanBurnRoll&&!s.cardRoll)return {dice:s.jeanBurnRoll.dice,seat:s.jeanBurnRoll.seat};
- if(s.jeanTask&&s.stage==='jeanChoices'&&!s.cardRoll&&!s.retry)return rollContext({...s,jeanTask:s.jeanTask.parent??null,stage:s.jeanTask.resume});
- if(s.iceTask&&s.stage==='iceChoices'&&!s.cardRoll&&!s.retry)return rollContext({...s,iceTask:s.iceTask.parent??null,stage:s.iceTask.resume});
- if(s.gambitRoll&&!s.cardRoll)return {dice:s.gambitRoll.dice,seat:s.gambitRoll.seat};
- if(s.gambitTask&&s.stage==='gambitSequence'&&!s.cardRoll&&!s.retry)return gambit.forced(s)?null:rollContext({...s,gambitTask:s.gambitTask.parent??null,stage:s.gambitTask.resume});
- if(s.cyclopsTask&&s.stage==='cyclopsSequence'&&!s.cardRoll&&!s.retry)return cyclops.choosing(s)?null:rollContext({...s,cyclopsTask:s.cyclopsTask.parent??null,stage:s.cyclopsTask.resume});
- if(s.scarletJinx&&!s.cardRoll)return {dice:s.scarletJinx.dice,seat:s.scarletJinx.seat};
- if(s.lokiBag?.kind==='roll'&&!s.cardRoll)return {dice:s.lokiBag.dice,seat:s.lokiBag.seat};
- if(s.cosmicRayRoll&&!s.cardRoll)return {dice:s.cosmicRayRoll.dice,seat:s.cosmicRayRoll.seat};
- if(s.widowAgility&&!s.cardRoll)return {dice:s.widowAgility.dice,seat:s.widowAgility.seat};
- if(s.widowBombRoll&&!s.cardRoll)return {dice:s.widowBombRoll.dice,seat:s.active};
- if(s.sunGemRoll)return {dice:s.sunGemRoll.dice,seat:s.active};
- if(s.mesmerizeRoll&&!s.mesmerizeRoll.choosing)return {dice:s.mesmerizeRoll.dice,seat:s.mesmerizeRoll.seat};
- if(s.guardBreakRoll&&!s.cardRoll)return {dice:s.guardBreakRoll,seat:s.active};
- if(s.woundRoll&&!s.cardRoll)return {dice:s.woundRoll,seat:s.active};
- if(s.nevermoreRoll&&!s.cardRoll)return {dice:s.nevermoreRoll.dice,seat:s.nevermoreRoll.target};
- if(s.preyRoll&&!s.cardRoll)return {dice:s.preyRoll,seat:s.active};
- if(s.bleedRoll&&!s.cardRoll)return {dice:s.bleedRoll,seat:s.active};
- if(s.cardRoll) return {dice:s.cardRoll.dice,seat:s.cardRoll.roller??s.cardRoll.seat};
- if(s.stage==='gunReload')return {dice:s.gunReload.dice,seat:s.gunReload.seat};
- if(s.stage==='gunContest')return {dice:s.gunContest.dice,seat:s.gunContest.seat,owners:[s.gunContest.seat,1-s.gunContest.seat]};
- if(s.stage==='undeadRoll')return {dice:s.undeadRoll.dice,seat:s.undeadRoll.seat};
- if(s.stage==='horseRoll')return {dice:s.horseRoll.dice,seat:s.horseRoll.seat};
- if(s.stage==='samuraiRoll')return {dice:s.samuraiRoll.dice,seat:s.samuraiRoll.seat};
- if(s.seraphRoll)return {dice:s.seraphRoll.dice,seat:s.seraphRoll.seat};
- if(s.artRoll) return {dice:s.artRoll.dice,seat:s.artRoll.seat};
- if(['offence','announce'].includes(s.stage) && s.dice.length) return {dice:s.dice,seat:s.active};
- if(['blind','pirateKegRoll'].includes(s.stage)) return {dice:[s.effectDie],seat:s.active,scalar:true};
- if(s.stage==='sneakRoll'||s.stage==='ninjutsuRoll') return {dice:[s.effectDie],seat:s.active,scalar:true};
- if(s.stage==='evasion') return {dice:[s.effectDie],seat:s.evasionSeat??1-s.active,scalar:true};
- if(s.stage==='effectResponse') return {dice:s.pending.effectDice,seat:s.active};
- if(s.stage==='defenceResponse') return {dice:s.defenceDice,seat:1-s.active};
- return null;
-}
-const dieOwner=(ctx,index)=>ctx?.owners?.[index]??ctx?.seat;
-function diceOwnedBy(ctx,seat,s){
- if(!ctx)return [];
- if(!ctx.owners){if(ctx.seat!==seat)return [];if(!s||!ctx.dice.some((_,i)=>iceman.contextLocked(s,ctx,i)))return ctx.dice;const dice=ctx.dice.slice();dice.forEach((_,i)=>{if(iceman.contextLocked(s,ctx,i))delete dice[i];});return dice;}
- const dice=[];
- ctx.dice.forEach((value,index)=>{if(dieOwner(ctx,index)===seat&&(!s||!iceman.contextLocked(s,ctx,index)))dice[index]=value;});
- return dice;
-}
 function cardChoices(s,seat,id) {
  if(s.deadpoolRps||s.deadpoolRemoval||s.deadpoolTask&&s.stage==='deadpoolChoices')return [];
  if((s.deadpoolDonutRoll||s.deadpoolLucky)&&![8,9,11,12,13,14,16,18].includes(id))return [];
@@ -684,8 +631,6 @@ const hasResponse=(s,seat)=>{
    tokens.accuracy||tokens.protect||tokens.retribution||tokens.smoke||tokens.ninjutsu||tokens.evadeSide||tokens.seedling.length||tokens.sapling||tokens.dryad||tokens.dryadPrevent.length||tokens.wellspring||tithe.draw||tithe.dice?.length||
    s.stage==='damage'&&s.players[seat].evasive&&(seat===s.active?returnDamageFor(s):incomingDamage(s))>0&&!s.cardRoll);
 };
-const cardActor=s=>s.response?.seat??s.deadpoolDonutRoll?.seat??(s.deadpoolRps?deadpool.rpsActor(s):undefined)??(s.deadpoolLucky?s.deadpoolLucky.target:undefined)??(s.deadpoolTask&&s.stage==='deadpoolChoices'?s.deadpoolTask.seat:undefined)??(s.santaRemoval&&!s.santaNogRoll&&!s.sideDamage?(s.santaRemoval.choosing?s.santaRemoval.source:s.santaRemoval.seat):undefined)??(s.santaGift?(s.santaGift.stage==='hide'?s.santaGift.seat:1-s.santaGift.seat):undefined)??s.santaNogRoll?.seat??(s.santaTask&&s.stage==='santaChoices'?(s.santaTask.queue[0]?.kind==='apology'?1-s.santaTask.seat:s.santaTask.queue[0]?.target??s.santaTask.seat):undefined)??(!s.cardRoll&&!s.retry?s.santaRoll?.seat:undefined)??(s.mysticTask&&s.stage==='mysticChoices'?s.mysticTask.seat:undefined)??(!s.cardRoll&&!s.retry?s.mysticContest?.seat:undefined)??s.krampusActivation?.seat??s.krampusOverflow??(s.krampusTask&&s.stage==='krampusChoices'?s.krampusTask.seat:undefined)??(s.alchemistTask&&s.stage==='alchemistChoices'?s.alchemistTask.seat:undefined)??(!s.cardRoll&&!s.retry?s.alchemistRoll?.seat:undefined)??(s.stage==='alchemistPotions'?s.alchemistSpend?.seat:undefined)??(!s.cardRoll&&!s.retry?s.wolverineRageRoll?.seat:undefined)??(!s.cardRoll&&!s.retry?s.alphaRoll?.seat:undefined)??s.wolverineIntimidate?.target??s.wolverineGain?.seat??(s.stormTask&&s.stage==='stormChoices'?s.stormTask.seat:undefined)??s.rogueGain?.seat??(!s.cardRoll&&!s.retry?s.rogueRoll?.seat:undefined)??s.psyReveal?.seat??(!s.cardRoll&&!s.retry?s.jeanBurnRoll?.seat:undefined)??(s.jeanTask&&s.stage==='jeanChoices'&&!s.cardRoll&&!s.retry?s.jeanTask.seat:undefined)??s.iceFreezeChoice?.seat??(s.iceTask&&s.stage==='iceChoices'&&!s.cardRoll&&!s.retry?s.iceTask.seat:undefined)??(!s.cardRoll&&!s.retry?s.gambitRoll?.seat:undefined)??(s.gambitTask&&s.stage==='gambitSequence'&&!s.cardRoll&&!s.retry?s.gambitTask.seat:undefined)??(s.cyclopsTask&&s.stage==='cyclopsSequence'&&!s.cardRoll&&!s.retry?s.cyclopsTask.seat:undefined)??s.thorOverflow?.seat??(s.thorTask&&s.stage==='thorSequence'?s.thorTask.seat:undefined)??(s.conjureTask?1-s.conjureTask.seat:undefined)??(s.scarletJinx&&!s.cardRoll&&!s.retry?s.scarletJinx.seat:undefined)??lokiActor(s)??s.premonitionTask?.seat??(s.strangeTask&&s.stage!=='sideDamage'?s.strangeTask.seat:undefined)??s.cosmicRayRoll?.seat??s.cosmicRayOverflow?.seat??s.widowTask?.seat??s.widowReveal?.seat??s.widowAgility?.seat??(s.widowBombRoll?s.active:undefined)??s.grimOverflow?.seat??(s.stage==='nyraDamage'?1-s.active:s.tacticalOverflow?.seat??s.tacticalRemoval?.seat??s.honorOverflow?.seat??s.bloodOverflow?.seat??s.response?.seat??(s.cards&&s.stage==='damage'&&!s.cardRoll&&!s.retry&&hasResponse(s,s.active)?s.active:actor(s)));
-const isSelling=s=>s.cards&&!s.deadpoolTask&&!s.deadpoolRps&&!s.deadpoolDonutRoll&&!s.deadpoolLucky&&!s.santaRemoval&&!s.santaTask&&!s.santaRoll&&!s.santaNogRoll&&!s.santaGift&&!s.mysticTask&&!s.mysticContest&&!s.krampusTask&&!s.krampusActivation&&s.krampusOverflow===undefined&&!alchemist.busy(s)&&!s.wolverineGain&&!s.wolverineRageRoll&&!s.alphaRoll&&!s.wolverineIntimidate&&!s.stormTask&&!s.rogueGain&&!s.rogueRoll&&!s.psyReveal&&!s.jeanTask&&!s.jeanBurnRoll&&!s.iceTask&&!s.iceFreezeChoice&&!s.gambitTask&&!s.gambitRoll&&!s.cyclopsTask&&!s.thorTask&&!s.thorOverflow&&!s.conjureTask&&!s.scarletJinx&&!s.lokiTask&&!s.lokiBag&&!s.lokiIllusion&&!s.strangeTask&&!s.premonitionTask&&!s.cosmicRayRoll&&!s.cosmicRayOverflow&&!s.widowTask&&!s.widowReveal&&!s.widowAgility&&!s.widowBombRoll&&!s.forgeTask&&!s.shapeOverflow&&!s.ravenFeathers && (isMain(s)||s.stage==='discard')&&!s.mainAction&&!s.mainChoice&&!s.cardRoll&&!s.artRoll&&!s.bloodOverflow&&!s.honorOverflow&&!s.tacticalOverflow&&!s.tacticalRemoval&&!s.retry&&!s.response;
 function grantAttackStatus(s,defender,key,amount=1){
  if(psylocke.block(s,defender,key,amount))return;
  const p=s.pending;
@@ -933,7 +878,6 @@ const ninjutsuLabel=outcome=>({one:'+1 damage',two:'+2 damage',delayedPoison:'In
 const ninjutsuOutcomes=s=>['two','delayedPoison',...(!s.pending.undefendable&&!s.pending.ultimate&&!s.defenceDice.length&&
   ['ninjaGain','targeting','sneakOffer','defence'].includes(s.ninjutsuReturnStage)?['undefendable']:[])];
 const canRerollMaul=s=>s.pending?.effect==='druidMaul'&&!s.pending.maulRerolled&&s.players[s.active].druidForm==='bear';
-function lokiActor(s){if(s.lokiTask)return s.lokiTask.seat;if(s.lokiIllusion)return s.lokiIllusion.kind==='pick'?s.active:s.lokiIllusion.seat;if(s.lokiBag)return s.cardRoll?.seat??s.retry?.seat??(s.lokiBag.kind==='choose'?s.lokiBag.owner:s.lokiBag.seat);}
 function legal(state) {
  if(state.deadpoolRps){const r=state.deadpoolRps;return {deadpoolRpsPick:['first','second'].includes(r.step),deadpoolRpsRandom:r.step==='second',deadpoolRpsReveal:r.step==='reveal',deadpoolShoot:r.step==='shoot'};}
  if(state.deadpoolTask&&state.stage==='deadpoolChoices'){const h=state.deadpoolTask.queue[0];return {deadpoolDonutTarget:h?.kind==='donuts',deadpoolCollect:h?.kind==='gain'&&h.window,deadpoolSpeech:['speechCP','speechTaco'].includes(h?.kind),deadpoolFourth:h?.kind==='fourth'};}
@@ -1170,88 +1114,6 @@ function legal(state) {
     case 'main': return state.cards?{endMain:true}:{next:true};
     default: return {};
   }
-}
-function actor(state) {
-  if(state.deadpoolDonutRoll)return state.deadpoolDonutRoll.seat;
-  if(state.deadpoolRps)return deadpool.rpsActor(state);
-  if(state.deadpoolLucky)return state.deadpoolLucky.target;
-  if(state.deadpoolTask&&state.stage==='deadpoolChoices')return state.deadpoolTask.seat;
-  if(state.santaRemoval&&!state.santaNogRoll&&!state.deadpoolDonutRoll&&!state.sideDamage)return state.santaRemoval.choosing?state.santaRemoval.source:state.santaRemoval.seat;
-  if(state.santaGift)return state.santaGift.stage==='hide'?state.santaGift.seat:1-state.santaGift.seat;
-  if(state.santaNogRoll)return state.santaNogRoll.seat;
-  if(state.santaTask&&state.stage==='santaChoices')return state.santaTask.queue[0]?.kind==='apology'?1-state.santaTask.seat:state.santaTask.queue[0]?.target??state.santaTask.seat;
-  if(state.santaRoll&&!state.cardRoll&&!state.retry)return state.santaRoll.seat;
-  if(state.mysticTask&&state.stage==='mysticChoices')return state.mysticTask.seat;
-  if(state.mysticContest&&!state.cardRoll&&!state.retry)return state.mysticContest.seat;
-  if(state.krampusOverflow!==undefined)return state.krampusOverflow;
-  if(state.krampusActivation)return state.krampusActivation.seat;
-  if(state.krampusTask&&state.stage==='krampusChoices')return state.krampusTask.seat;
-  if(state.alchemistTask&&state.stage==='alchemistChoices')return state.alchemistTask.seat;
-  if(state.alchemistRoll&&!state.cardRoll&&!state.retry)return state.alchemistRoll.seat;
-  if(state.stage==='alchemistPotions'&&state.alchemistSpend)return state.alchemistSpend.seat;
-  if(state.wolverineIntimidate)return state.wolverineIntimidate.target;
-  if(state.wolverineGain&&!state.wolverineRageRoll)return state.wolverineGain.seat;
-  if(state.wolverineRageRoll&&!state.cardRoll&&!state.retry)return state.wolverineRageRoll.seat;
-  if(state.alphaRoll&&!state.cardRoll&&!state.retry)return state.alphaRoll.seat;
-  if(state.stormTask&&state.stage==='stormChoices')return state.stormTask.seat;
-  if(state.rogueGain)return state.rogueGain.seat;
-  if(state.rogueRoll&&!state.cardRoll&&!state.retry)return state.rogueRoll.seat;
-  if(state.psyReveal)return state.psyReveal.seat;
-  if(state.jeanBurnRoll&&!state.cardRoll)return state.jeanBurnRoll.seat;
-  if(state.jeanTask&&state.stage==='jeanChoices'&&!state.cardRoll&&!state.retry)return state.jeanTask.seat;
-  if(state.iceFreezeChoice)return state.iceFreezeChoice.seat;
-  if(state.iceTask&&state.stage==='iceChoices'&&!state.cardRoll&&!state.retry)return state.iceTask.seat;
-  if(state.gambitRoll&&!state.cardRoll&&!state.retry)return state.gambitRoll.seat;
-  if(state.gambitTask&&state.stage==='gambitSequence'&&!state.cardRoll&&!state.retry)return state.gambitTask.seat;
-  if(state.cyclopsTask&&state.stage==='cyclopsSequence'&&!state.cardRoll&&!state.retry)return state.cyclopsTask.seat;
-  if(state.thorOverflow)return state.thorOverflow.seat;
-  if(state.thorTask&&state.stage==='thorSequence')return state.thorTask.seat;
-  if(state.conjureTask)return 1-state.conjureTask.seat;
-  if(state.scarletJinx&&!state.cardRoll&&!state.retry)return state.scarletJinx.seat;
-  const lokiSeat=lokiActor(state);if(lokiSeat!==undefined)return lokiSeat;
-  if(state.premonitionTask)return state.premonitionTask.seat;
-  if(state.strangeTask&&state.stage!=='sideDamage')return state.strangeTask.seat;
-  if(state.cosmicRayRoll)return state.cosmicRayRoll.seat;
-  if(state.cosmicRayOverflow)return state.cosmicRayOverflow.seat;
-  if(state.widowTask)return state.widowTask.seat;
-  if(state.widowReveal)return state.widowReveal.seat;
-  if(state.widowAgility)return state.widowAgility.seat;
-  if(state.widowBombRoll)return state.active;
-  if(state.stage==='sunMarked'&&!state.pending.ultimate)return 1-state.active;
-  if(state.forgeTask)return state.forgeTask.seat;
-  if(['forgeMasterwork','forgeArmor'].includes(state.stage))return 1-state.active;
-  if(state.stage==='duelMove')return state.duelMovement.seat;
-  if(legal(state).collectShapeShift)return state.shapeOverflow.seat;
-  if(legal(state).collectFeathers)return state.ravenFeathers.seat;
-  if(state.stage==='ravenActivate')return state.ravenActivation.owner;
-  if(state.stage==='ravenNevermoreRoll'||state.stage==='ravenDiscard')return state.active;
-  if(state.stage==='ravenAttackChoice')return state.ravenAttackChoice.owner;
-  if(state.grimOverflow)return state.grimOverflow.seat;
-  if(state.stage==='undeadRoll')return state.undeadRoll.seat;
-  if(state.stage==='horseRoll')return state.horseRoll.seat;
-  if(state.growth)return state.growth.seat;
-  if(state.retry)return state.retry.seat;
-  if(state.petulant)return 1-state.petulant.seat;
-  if(state.mainChoice)return state.mainChoice.seat;
-  if(state.pirateChoice)return state.pirateChoice.seat;
-  if(state.monkChoice)return state.monkChoice.seat;
-  if(state.tacticalOverflow)return state.tacticalOverflow.seat;
-  if(state.tacticalRemoval)return state.tacticalRemoval.seat;
-  if(state.honorOverflow)return state.honorOverflow.seat;
-  if(state.bloodOverflow)return state.bloodOverflow.seat;
-  if(state.mesmerizeRoll)return state.mesmerizeRoll.seat;
-  if(state.bleedRoll&&!state.cardRoll)return state.active;
-  if(state.cardRoll)return state.cardRoll.seat;
-  if(state.stage==='samuraiRoll')return state.samuraiRoll.seat;
-  if(state.stage==='gunReload')return state.gunReload.seat;
-  if(state.stage==='gunContest')return state.gunContest.seat;
-  if(state.stage==='gunDuelChoice')return 1-state.active;
-  if(state.seraphRoll)return state.seraphRoll.seat;
-  if(state.artRoll)return state.artRoll.seat;
-  if(state.mainAction)return 1-state.mainAction.seat;
-  if(state.stage==='evasion')return state.evasionSeat??1-state.active;
-  if(state.stage==='sideDamage')return state.sideDamage.seat;
-  return ['announce','defence','defenceResponse','damage','nyraDamage','preventStatus','dryadResponse','defenceWells'].includes(state.stage) ? 1-state.active : state.active;
 }
 function startSeraphRoll(s,seat,kind,count,roll){
  s.seraphRoll={seat,kind,dice:Array.from({length:count},()=>roll()),resume:s.stage};

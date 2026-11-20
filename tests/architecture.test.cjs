@@ -9,12 +9,13 @@ const loadEngine = directory => {
   const html = fs.readFileSync(path.join(directory, 'index.html'), 'utf8');
   const context = vm.createContext({structuredClone});
   vm.runInContext('Math.random = () => 0.37', context);
-  const scripts = html.matchAll(/<script src="\.\/((?:heroes\/[^"]+|engine)\.js)"/g);
+  const scripts = html.matchAll(/<script src="\.\/((?:heroes\/[^"]+|turn|rolls|engine)\.js)"/g);
   for (const [, file] of scripts) {
     vm.runInContext(fs.readFileSync(path.join(directory, file), 'utf8'), context, {filename: file});
   }
   return vm.runInContext(`({
     createMatch, transition, legal, actor, cardActor, cardChoices, tokenChoices, tacticalChoices,
+    rollContext, rollPhase, attackLocked, dieOwner, diceOwnedBy,
     names: HEROES.map(hero => hero.name),
     leafletKeys: typeof positiveStatusKeys === 'undefined' ? scarletWitch.positives : positiveStatusKeys,
     conjure: scarletWitch.conjureChoices, fourthWall: deadpool.fourthChoices
@@ -46,8 +47,8 @@ const spendConjure = (rules, state, key) => {
   assert.ok(choice >= 0, `Conjure must offer ${key}`);
   return step(rules, state, 'spendConjure', {choice});
 };
-const stepPassing = (rules, state, type) => {
-  const next = step(rules, state, type);
+const stepPassing = (rules, state, type, extra) => {
+  const next = step(rules, state, type, extra);
   return next.response ? step(rules, next, 'passResponse') : next;
 };
 const finishMain = (rules, state) => {
@@ -167,7 +168,188 @@ const transfers = transferResults(engine);
   assert.equal(extra.players[0].cp, extraRoll.players[0].cp);
 }
 
-console.log('Positive-status, transfer and Upkeep regression checks passed.');
+function turnBoundaryResults(rules) {
+  const results = [];
+  const record = state => {
+    results.push(state);
+    return plain(state);
+  };
+  const act = (state, type, extra) => record(stepPassing(rules, state, type, extra));
+
+  const opening = start(rules, [0, 27]);
+  Object.assign(opening.players[1], {premonition: 1, realityWarp: true});
+  const incomeChoice = record(finishMain(rules, opening));
+  assert.equal(incomeChoice.stage, 'incomePremonition');
+  const drawn = act(incomeChoice, 'choosePremonition', {amount: 1});
+  const returned = drawn.premonitionTask.drawn[0];
+  const returnedState = act(drawn, 'returnPremonition', {index: returned, status: 'top'});
+  const mainOne = act(returnedState, 'completePremonition');
+  assert.equal(mainOne.stage, 'main1');
+  assert.equal(mainOne.players[1].cp, 3);
+  assert.equal(mainOne.players[1].hand.length, 5);
+  assert.equal(mainOne.players[1].deck.at(-1), returned);
+  assert.equal(mainOne.players[1].realityWarp, true);
+  assert.equal(mainOne.realityDie, undefined);
+  const offence = act(mainOne, 'begin');
+  assert.equal(offence.players[1].realityWarp, false);
+  assert.deepEqual(offence.realityDie, {seat: 1, index: 4});
+
+  const dejaVu = start(rules, [27, 7]);
+  dejaVu.stage = 'offence';
+  dejaVu.vineAttempts = 1;
+  Object.assign(dejaVu.players[0], {dejaVu: true, barbed: true});
+  const sideDamage = act(dejaVu, 'spendDejaVu');
+  assert.equal(sideDamage.stage, 'sideDamage');
+  assert.equal(sideDamage.sideDamage.source, 'Barbed Vine');
+  assert.equal(sideDamage.sideDamage.resume, 'tacticalRestart');
+  const resumed = act(sideDamage, 'resolveSideDamage');
+  assert.equal(resumed.stage, 'tacticalRestart');
+  const restarted = act(resumed, 'restartTacticalOffence');
+  assert.equal(restarted.stage, 'offence');
+  assert.equal(restarted.turn, dejaVu.turn);
+  assert.equal(restarted.active, dejaVu.active);
+  assert.equal(restarted.players[0].hp, 49);
+  assert.equal(restarted.players[0].cp, dejaVu.players[0].cp);
+  assert.equal(restarted.players[0].hand.length, dejaVu.players[0].hand.length);
+
+  for (const [status, skipped] of [['alpha', 'alpha'], ['concussion', 'concussion']]) {
+    const match = start(rules, [0, 1]);
+    match.players[1][status] = true;
+    const after = record(finishMain(rules, match));
+    assert.equal(after.stage, 'main1');
+    assert.equal(after.income.skipped, skipped);
+    assert.equal(after.players[1][status], false);
+    assert.equal(after.players[1].cp, 2);
+    assert.equal(after.players[1].hand.length, 4);
+  }
+
+  const disarmed = start(rules, [0, 1]);
+  disarmed.players[1].disarm = true;
+  const disarmUpkeep = record(finishMain(rules, disarmed));
+  const choseSkip = act(disarmUpkeep, 'resolveDisarm', {status: 'skip'});
+  const skippedIncome = act(choseSkip, 'resolveUpkeep');
+  assert.equal(skippedIncome.income.skipped, 'disarm');
+  assert.equal(skippedIncome.players[1].cp, 2);
+  assert.equal(skippedIncome.players[1].hand.length, 4);
+
+  const delayedPoison = start(rules, [0, 1]);
+  delayedPoison.players[0].delayedPoison = 1;
+  const poisonDamage = record(finishMain(rules, delayedPoison));
+  assert.equal(poisonDamage.active, 0);
+  assert.equal(poisonDamage.sideDamage.endTurn, true);
+  const passedTurn = act(poisonDamage, 'resolveSideDamage');
+  assert.equal(passedTurn.active, 1);
+  assert.equal(passedTurn.players[0].hp, 47);
+  assert.equal(passedTurn.players[1].cp, 3);
+
+  const fatal = start(rules, [0, 1]);
+  Object.assign(fatal.players[1], {hp: 1, poison: 2});
+  const upkeep = record(finishMain(rules, fatal));
+  const finished = act(upkeep, 'resolveUpkeep');
+  assert.equal(finished.stage, 'finished');
+  assert.equal(finished.winner, 'Barbarian wins');
+  assert.equal(finished.players[1].hand.length, 4);
+
+  const legacy = rules.createMatch(rolls(0));
+  legacy.stage = 'main';
+  const legacyNext = act(legacy, 'next');
+  assert.equal(legacyNext.stage, 'offence');
+  assert.equal(legacyNext.players[1].hand, 5);
+  assert.equal(legacyNext.players[1].deck, 27);
+  return results;
+}
+
+function rollTimingResults(rules) {
+  const snapshots = [];
+  const snapshot = state => {
+    const context = rules.rollContext(state);
+    const view = plain({
+      context, phase: rules.rollPhase(state), locked: !!rules.attackLocked(state),
+      actor: rules.actor(state), responder: rules.cardActor(state),
+      owners: context?.dice.map((_, index) => rules.dieOwner(context, index)),
+      writableDice: [0, 1].map(seat => rules.diceOwnedBy(context, seat, state))
+    });
+    snapshots.push(view);
+    return view;
+  };
+
+  const show = start(rules, [12, 0]);
+  show.players[0].hand = [16, 18];
+  show.players[1].hand = [16, 18];
+  Object.assign(show, {stage: 'gunContest', gunContest: {seat: 0, kind: 'showdown', dice: [2, 5]}});
+  assert.deepEqual(snapshot(show).owners, [0, 1]);
+  assert.deepEqual(Array.from(rules.cardChoices(show, 0, 16), option => option.i), [1]);
+  assert.deepEqual(Array.from(rules.cardChoices(show, 0, 18), option => option.i), [0]);
+  const rerolled = step(rules, plain(show), 'playCard', {id: 16, choice: 0});
+  assert.deepEqual(plain(rerolled.gunContest.dice), [2, 3]);
+  snapshots.push(plain(rerolled));
+
+  const response = {...plain(show), response: {seat: 1, action: {type: 'resolveGunContest'}}};
+  const during = snapshot(response);
+  assert.equal(during.actor, 0);
+  assert.equal(during.responder, 1);
+  assert.deepEqual(during.owners, [0, 1]);
+
+  const frozen = start(rules, [0, 34]);
+  frozen.players[0].hand = [13, 18];
+  frozen.players[0].diceCube = 1;
+  Object.assign(frozen, {
+    stage: 'offence', dice: [1, 2, 3, 4, 5], attempts: 1,
+    iceFirstRoll: {seat: 0, values: [1, 2, 3, 4, 5], selected: [0]}
+  });
+  assert.deepEqual(snapshot(frozen).writableDice, [[null, 2, 3, 4, 5], []]);
+  assert.ok(Array.from(rules.cardChoices(frozen, 0, 18)).every(option => option.i !== 0));
+  const nested = {
+    ...plain(frozen), stage: 'iceChoices',
+    iceTask: {seat: 1, resume: 'offence', queue: [{kind: 'gain', amount: 1}]}
+  };
+  const throughChoice = snapshot(nested);
+  assert.equal(throughChoice.phase, true);
+  assert.equal(throughChoice.actor, 1);
+  assert.deepEqual(throughChoice.owners, [0, 0, 0, 0, 0]);
+  assert.deepEqual(throughChoice.writableDice, [[null, 2, 3, 4, 5], []]);
+  const cardDice = snapshot({...nested, cardRoll: {seat: 1, roller: 0, dice: [6], id: 3}});
+  assert.equal(cardDice.actor, 1);
+  assert.deepEqual(cardDice.owners, [0]);
+  assert.deepEqual(cardDice.writableDice, [[6], []]);
+
+  const discardWindow = start(rules, [41, 0]);
+  discardWindow.krampusOverflow = 1;
+  discardWindow.krampusActivation = {seat: 0};
+  const choosing = snapshot(discardWindow);
+  assert.equal(choosing.actor, 1);
+  assert.equal(choosing.responder, 0);
+  const rage = start(rules, [0, 39]);
+  rage.wolverineIntimidate = {target: 1};
+  rage.wolverineRageRoll = {seat: 0, dice: [4]};
+  const rageWindow = snapshot(rage);
+  assert.equal(rageWindow.actor, 1);
+  assert.equal(rageWindow.responder, 0);
+  assert.deepEqual(rageWindow.owners, [0]);
+
+  const ultimate = start(rules, [0, 1]);
+  ultimate.players[1].hand = [8, 13];
+  Object.assign(ultimate, {stage: 'locked', pending: {ultimate: true, attack: true, damage: 15}});
+  assert.equal(snapshot(ultimate).locked, true);
+  const forbidden = [8, 13].map(id => plain(rules.cardChoices(ultimate, 1, id)));
+  assert.deepEqual(forbidden, [[], []]);
+  snapshots.push(forbidden);
+
+  const scalar = start(rules, [0, 1]);
+  scalar.players[1].hand = [8];
+  Object.assign(scalar, {stage: 'evasion', effectDie: 3, evasionSeat: 1, evasionReturnStage: 'damage'});
+  assert.deepEqual(snapshot(scalar).context, {seat: 1, dice: [3], scalar: true});
+  const tip = rules.cardChoices(scalar, 1, 8).findIndex(option => option.v === 4);
+  assert.ok(tip >= 0);
+  const tipped = step(rules, plain(scalar), 'playCard', {id: 8, choice: tip});
+  assert.equal(tipped.effectDie, 4);
+  snapshots.push(plain(tipped));
+  return snapshots;
+}
+
+const turnBoundaries = turnBoundaryResults(engine);
+const rollTiming = rollTimingResults(engine);
+console.log('Positive-status, transfer, turn lifecycle and roll timing regression checks passed.');
 
 if (baseline) {
   const old = loadEngine(path.resolve(baseline));
@@ -186,6 +368,15 @@ if (baseline) {
   };
   compare(transferResults(old), transfers, 'Resolved transfers preserve source and countdown');
   transitions += transfers.length;
+  const previousBoundaries = turnBoundaryResults(old);
+  for (const [index, state] of turnBoundaries.entries()) {
+    compare(previousBoundaries[index], state, `Turn boundary ${index + 1}`);
+  }
+  transitions += turnBoundaries.length;
+  const previousRollTiming = rollTimingResults(old);
+  for (const [index, snapshot] of rollTiming.entries()) {
+    compare(previousRollTiming[index], snapshot, `Roll timing scenario ${index + 1}`);
+  }
   compare(old.names, engine.names, 'Hero identities and order');
   compare(old.leafletKeys, engine.leafletKeys, 'Positive status catalogue and order');
 
@@ -205,6 +396,8 @@ if (baseline) {
         for (let index = 0; index < 32 && state.turn === 1; index++) {
           const legal = engine.legal(state);
           compare(old.legal(state), legal, 'Legal actions');
+          compare(old.rollContext(state), engine.rollContext(state), 'Visible roll context');
+          compare(old.rollPhase(state), engine.rollPhase(state), 'Roll Phase eligibility');
           compare(old.actor(state), engine.actor(state), 'Acting seat');
           const cardSeat = engine.cardActor(state);
           compare(old.cardActor(state), cardSeat, 'Responding seat');
