@@ -29,8 +29,9 @@ header {
 }
 
 header > div {
+  --header-gutter: clamp(12px, 2.5vw, 36px);
   max-width: 1440px;
-  padding: 12px clamp(12px, 2.5vw, 36px);
+  padding: 12px var(--header-gutter);
   align-items: flex-start;
   flex-direction: row;
 }
@@ -66,18 +67,15 @@ header small {
   position: absolute;
   inset: calc(100% + 8px) 0 auto auto;
   z-index: 3;
-  width: min(34rem, calc(100vw - 24px));
+  width: min(34rem, calc(100vw - 2 * var(--header-gutter)));
   padding: 13px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 11px;
   box-shadow: 0 14px 30px #05090c8c;
-}
-
-@media (width > 800px) {
-  .match-setup { justify-content: stretch; }
 }
 
 .setup-seats,
@@ -88,6 +86,14 @@ header small {
 .setup-seat {
   align-items: start;
   flex-direction: column;
+}
+
+@media (max-width: 560px) {
+  .setup-seat {
+    align-items: stretch;
+    justify-content: space-between;
+  }
+  .setup-seat button { white-space: normal; }
 }
 
 .setup-seat strong {
