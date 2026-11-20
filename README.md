@@ -1,14 +1,31 @@
-# Dice Throne Playtest 0.51.1 — pre-architecture fixes
+# Dice Throne Offline Engine
 
-This update fixes the four reported issues:
+**Playtest 0.52.0 · Architecture release**
 
-- Psylocke's Manifest icon shows its current face, defaulting visually to 1 before its first roll. Once inserted, its purple artwork follows the replaced offensive die through subsequent value changes and saved-game reloads.
-- Alchemist's base Potion slots are corrected: Transmute 1, Hermetics 0, Potion Overload 3, Diffusion 0, Chain Reaction 1, Catalyst 2, Passivation 2. Upgrade-dependent capacities continue to work.
-- Deadpool's Shoot starts collapsed. Its summary shows Active/Inactive, and an expanded reference stays open through ordinary rerenders.
-- Cyclops' hero panel shows Leadership cards played this turn, using the existing gameplay counter and resetting visually to 0 when the turn ends.
+An offline Dice Throne engine for playing and testing two-hero matches. The current build includes 45 heroes from Season One Rerolled, Season Two, Outcasts, Vanguard, Marvel, X-Men and Singles. It runs in a browser and can be installed as a web app on supported Windows and Android browsers.
 
-Merge this update's `dice-throne-offline` folder onto 0.51.0, replacing matching files and keeping the others. Upload the updated `docs` contents to your existing hosting location. This archive contains changed files only. Existing saves, hero/card IDs and offline operation remain compatible. Existing Potion attachments are retained. Pre-patch saves do not contain the position of an already-used Manifest swap; new swaps store that position.
+## Play locally
 
-All 1,381 rules test groups passed, along with 490 simulated interface states, 45 artwork bundles, 96 JavaScript syntax checks, JSON save round-trips and offline file references. Six cropped Manifest faces were validated and visually inspected. Browser/touch layout and installed-PWA lifecycle still require manual playtesting.
+From the repository root, start a local server for the `docs` folder.
 
-SYSTEM.md is updated for the architecture pass in the next conversation. Legacy timing, Income and primary-deck reshuffling remain enabled; January 2027 global rules remain disabled.
+```sh
+python -m http.server 8000 --directory docs
+```
+
+Open [http://localhost:8000/](http://localhost:8000/), choose two heroes and start a match. Wait for **Ready for offline play** before closing the app or disconnecting. At an HTTPS deployment or on localhost, use your browser's **Install app** option if available. The game stores the current match in the browser, and existing 0.51.1 saves carry forward when you use the same address and browser profile.
+
+## What changed in 0.52.0
+
+- Hero modules declare their own Positive statuses and recurring Upkeep. Shared effects such as Conjure use those declarations.
+- Turn flow, dice ownership and response timing, and damage calculation now have dedicated modules. Additional Offensive Roll Phases share the same restart path, and attacks, return damage, Upkeep and isolated damage share the same prevention arithmetic.
+- The regression suite covers turn transitions, nested responses, prevention and the hand controls for playing and selling cards. The final refactor passed 30,932 comparisons against the original 0.51.1 across all 45 heroes. The merged preview also passed the Windows and Android save and offline checks.
+
+## Development
+
+Run the regression suite from the repository root.
+
+```sh
+node tests/architecture.test.cjs
+```
+
+Pass the path to an original 0.51.1 `docs` folder as the first argument to repeat the baseline comparisons. See [SYSTEM.md](SYSTEM.md) for the engine layout, compatibility details and rules decisions.
