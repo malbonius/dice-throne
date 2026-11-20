@@ -1,8 +1,8 @@
 # Dice Throne Offline Engine
 
-**Playtest 0.52.0 · Architecture release**
+**Playtest 0.53.0**
 
-An offline Dice Throne engine for playing and testing two-hero matches. The current build includes 45 heroes from Season One Rerolled, Season Two, Outcasts, Vanguard, Marvel, X-Men and Singles. It runs in a browser and can be installed as a web app on supported Windows and Android browsers.
+An offline Dice Throne engine for playing and testing two-hero matches. Play both sides in a browser or install the game as a web app on supported Windows and Android browsers. The roster includes 45 heroes from Season One Rerolled, Season Two, Outcasts, Vanguard, Marvel, X-Men and Singles.
 
 ## Play locally
 
@@ -12,13 +12,16 @@ From the repository root, start a local server for the `docs` folder.
 python -m http.server 8000 --directory docs
 ```
 
-Open [http://localhost:8000/](http://localhost:8000/), choose two heroes and start a match. Wait for **Ready for offline play** before closing the app or disconnecting. At an HTTPS deployment or on localhost, use your browser's **Install app** option if available. The game stores the current match in the browser, and existing 0.51.1 saves carry forward when you use the same address and browser profile.
+Open [http://localhost:8000/](http://localhost:8000/), choose both heroes in **Match setup** and select **Set up initiative**. Wait for **Ready for offline play** before disconnecting. If your browser offers **Install app**, you can install from an HTTPS deployment or localhost. The game saves your current match automatically. Open the same address with the same browser profile to resume it after an update.
 
-## What changed in 0.52.0
+## What changed in 0.53.0
 
-- Hero modules declare their own Positive statuses and recurring Upkeep. Shared effects such as Conjure use those declarations.
-- Turn flow, dice ownership and response timing, and damage calculation now have dedicated modules. Additional Offensive Roll Phases share the same restart path, and attacks, return damage, Upkeep and isolated damage share the same prevention arithmetic.
-- The regression suite covers turn transitions, nested responses, prevention and the hand controls for playing and selling cards. The final refactor passed 30,932 comparisons against the original 0.51.1 across all 45 heroes. The merged preview also passed the Windows and Android save and offline checks.
+- **Match view** shows both heroes’ Health, CP and status summaries alongside the current decision. Both hands are within reach, and the interface indicates who can act.
+- **Dice** appear in the tray as soon as you roll for offence or defence. When a card lets you change a die, you can preview eligible faces directly on the tray and confirm your choice.
+- **Rules and artwork** are easier to consult during play. Offensive abilities list their roll requirements, card selections can preview the artwork, and token choices show their icons.
+- **Hero controls** include a two-step Alchemist potion picker with leaflet descriptions and eligible slots. Deadpool’s Curmudgeon toggle is available with Shoot closed.
+
+The 0.52.0 architecture release introduced shared modules for turn flow, dice ownership and damage. [SYSTEM.md](SYSTEM.md) records the architecture and match interface changes in detail.
 
 ## Development
 
@@ -28,4 +31,4 @@ Run the regression suite from the repository root.
 node tests/architecture.test.cjs
 ```
 
-Pass the path to an original 0.51.1 `docs` folder as the first argument to repeat the baseline comparisons. See [SYSTEM.md](SYSTEM.md) for the engine layout, compatibility details and rules decisions.
+Pass the path to an original 0.51.1 `docs` folder as the first argument to repeat the baseline comparisons across all 45 heroes.

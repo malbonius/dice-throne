@@ -1,8 +1,16 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.52.0 · UI preview 4.6. Base: the merged architecture release.
+Current version is Playtest 0.53.0.
 
-## Match interface preview
+## Match interface
+
+### Playtest 0.53.0
+
+The project owner confirmed the device checks and merged the match interface through Preview 4.6 into `main`. The game header and offline cache identify the release as Playtest 0.53.0.
+
+The released interface keeps initiative and standalone rolls on their result screens until the player advances. Offensive and Defensive Roll Phase dice update in place, and card timing stays tied to the current decision. The preview history below records the interaction changes and the rules each control relies on.
+
+Save format 2 and the existing browser storage key carry forward. The offline cache for 0.53.0 replaces the architecture and preview caches for the same deployment. The release passed 30,932 baseline comparisons, including 3,254 transitions across all 45 heroes, and the service-worker simulation served all 103 cached files offline. Before merging, the project owner confirmed token removal, Alchemist potion attachment and offline match resume, then approved the final leaflet and desktop setup changes.
 
 ### Preview 4.6 · Leaflet wording and desktop setup
 
@@ -134,7 +142,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.4.6.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.0.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
