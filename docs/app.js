@@ -22,6 +22,8 @@ try {
 let names = state ? heroNames(state) : [];
 let selectedCard=null;
 let handSeat;
+let diceEdit;
+let retryPick;
 const handDialog=document.getElementById('hand-dialog');
 const handTitle=document.getElementById('hand-title');
 const handContent=document.getElementById('hand-content');
@@ -354,17 +356,29 @@ function hero(seat, decisionSeat, responding) {
     </details>
   </section>`;
 }
+function dieFace(values, seat, index, view, value = values[index], showFace = false) {
+  const primary = values === view.dice;
+  const blank = !dieValue(value,view.players[seat]);
+  const foreign = primary && view.realityDie?.seat===seat && view.realityDie.index===index;
+  const borrowed = primary && storm.borrowed(view,seat,index);
+  const ownerHero = heroId(view,seat);
+  const dieHero = values===view.santaNogRoll?.dice ? santa.id : foreign ? scarletWitch.id
+    : primary ? storm.dieHero(view,seat,index) : ownerHero;
+  const manifest = primary && ownerHero===psylocke.id && view.players[seat].manifestIndex===index;
+  const symbols = HEROES[dieHero].symbols[value-1];
+  const label = blank ? showFace ? `${value}, blank due to Hex` : 'Blank · Hex'
+    : borrowed ? `${value} ${symbols} · borrowed ${HEROES[dieHero].name} die${dieHero!==ownerHero?', symbol unavailable':''}`
+    : foreign && ownerHero!==scarletWitch.id ? `${value} · Scarlet Witch die, symbol unavailable`
+    : `${value} ${symbols}${manifest?' · Manifest die':''}`;
+  const image = manifest ? art.manifestDice[value-1] : art.dice[dieHero][value-1];
+  const picture = blank&&!showFace ? '<span aria-label="Blank due to Hex">—</span>' : `<img src="${image}" alt="${label}">`;
+  return {label,picture};
+}
+
 function tray(values,seat,editable,held=[],view=state) {
   return `<div class="dice" role="group" aria-label="${names[seat]} dice">${values.map((value,i) => {
-    if (!value) return '<span class="die empty" aria-hidden="true">·</span>';
-    const blank=!dieValue(value,view.players[seat]);
-    const foreign=values===view.dice&&view.realityDie?.seat===seat&&view.realityDie.index===i;
-    const borrowed=values===view.dice&&storm.borrowed(view,seat,i);
-    const dieHero=values===view.santaNogRoll?.dice?santa.id:foreign?scarletWitch.id:values===view.dice?storm.dieHero(view,seat,i):heroId(view,seat);
-    const label = blank?'Blank · Hex':borrowed?`${value} ${HEROES[dieHero].symbols[value-1]} · borrowed ${HEROES[dieHero].name} die${dieHero!==heroId(view,seat)?', symbol unavailable':''}`:foreign&&heroId(view,seat)!==scarletWitch.id?`${value} · Scarlet Witch die, symbol unavailable`:`${value} ${HEROES[dieHero].symbols[value-1]}`;
-    const manifest=values===view.dice&&heroId(view,seat)===psylocke.id&&view.players[seat].manifestIndex===i;
-    const picture = blank?'<span aria-label="Blank due to Hex">—</span>':
-      `<img src="${manifest?art.manifestDice[value-1]:art.dice[dieHero][value-1]}" alt="${label}${manifest?' · Manifest die':''}">`;
+    if (!value) return blankDie;
+    const {label,picture} = dieFace(values,seat,i,view);
     if(values===view.dice&&iceman.locked(view,seat,i))return `<span class="die frozen" style="outline:2px solid #b8f5ff" aria-label="Die ${i+1}, ${label}, frozen by Dice Cube">${picture}<small>Frozen</small></span>`;
     return editable ? button('hold',picture,`class="die" data-index="${i}" aria-pressed="${!!held[i]}" aria-label="Die ${i+1}, ${label}, ${held[i]?'held':'available to reroll'}"`)
       : `<span class="die${held[i]?' kept':''}"${held[i]?` aria-label="Die ${i+1}, ${label}, held"`:''}>${picture}</span>`;
@@ -379,7 +393,8 @@ function handPanel() {
   for(const id of player.hand){
     const c=seatCard(state,seat,id), choices=canPlay ? cardChoices(state,seat,id) : [];
     const chosen=selectedCard===id;
-    const detail=choices.length===1&&choices[0].label==='Play' ? '' :
+    const dicePlan=chosen && cardDicePlan(seat,id,choices);
+    const detail=dicePlan || (choices.length===1&&choices[0].label==='Play') ? '' :
       choices.length ? `<label>Choose effect <select id="card-choice">${choices.map((choice,i)=>`<option value="${i}">${choice.label}</option>`).join('')}</select></label>` : '';
     const entry=`<div class="hand-card">
       ${button('select-card',`<strong>${c.name}</strong><small>${price(state,seat,id)} CP · ${c.phase}</small>`,`data-index="${id}" aria-expanded="${chosen}"`)}
@@ -415,18 +430,139 @@ function rerollDice(dice,max,filter=()=>true){
     </div>${button('abilityReroll',`Reroll up to ${max}`)}`;
 }
 function orderedDice(dice, owners, first) {
-  return dice.map((value, index) => ({value, owner: owners[index]}))
+  return dice.map((value, index) => ({value, owner: owners[index], index}))
     .sort((left, right) => Number(right.owner === first) - Number(left.owner === first));
 }
 
 function opposedTray(dice, owners, first, playerNames, renderDie) {
   return `<div class="opposed-dice" role="group" aria-label="${dice[0] ? 'Opposed dice' : 'Unrolled dice'}">${orderedDice(dice, owners, first)
-    .map(({value, owner}) => `<div><strong>${playerNames[owner]}</strong>${renderDie(value, owner)}</div>`).join('')}</div>`;
+    .map(({value, owner, index}) => `<div><strong>${playerNames[owner]}</strong>${renderDie(value, owner, index)}</div>`).join('')}</div>`;
 }
 
 function rollDisplay(context, view = state, first = view.active) {
   if (!context.owners) return tray(context.dice, context.seat, false, context.held, view);
   return opposedTray(context.dice, context.owners, first, names, (value, owner) => tray([value], owner, false, [], view));
+}
+
+function cardDicePlan(seat, id, choices) {
+  const context = rollContext(state);
+  if (!context) return null;
+  const options = choices.map((choice, choiceIndex) => {
+    const index = choice.i ?? (Number.isInteger(choice.to) ? choice.index : undefined);
+    const dice = Number.isInteger(index) ? [[index, choice.v ?? choice.to ?? null]] : [];
+    if (Number.isInteger(choice.j)) dice.push([choice.j, choice.w ?? null]);
+    return {choiceIndex, label: choice.label, dice};
+  });
+  const diceOptions = options.filter(option => option.dice.length);
+  if (!diceOptions.length) return null;
+  const hero = heroId(state,seat);
+  const mode = diceOptions[0].dice[0][1] !== null ? 'change'
+    : hero===cursedPirate.id && id===29 ? 'target' : 'reroll';
+  const cost = hero===cyclops.id && id===27 ? 'Changing a die spends 1 Support and 1 Battle Plan.' : '';
+  return {seat,id,context,options,mode,cost,limit:Math.max(...diceOptions.map(option=>option.dice.length))};
+}
+
+function activeDiceOptions(editor, except) {
+  return editor.options.filter(option => option.dice.length && [...editor.picks].every(([index, face]) =>
+    index === except || option.dice.some(([candidate, value]) => candidate === index && value === face)));
+}
+
+function selectableRoll(context, renderDie) {
+  if (!context.owners) {
+    return `<div class="dice" role="group" aria-label="${names[context.seat]} dice">${context.dice.map((_,i)=>renderDie(i,context.seat)).join('')}</div>`;
+  }
+  return opposedTray(context.dice,context.owners,state.active,names,(_,owner,index)=>
+    `<div class="dice">${renderDie(index,owner)}</div>`);
+}
+
+function selectableDie(context, index, seat, action, enabled, selected, face, open = false) {
+  const {label,picture} = dieFace(context.dice,seat,index,state,face);
+  const frozen = iceman.contextLocked(state,context,index);
+  const classes = `class="die${selected?' kept':''}${open?' face-picker-open':''}${enabled?'':' unavailable-die'}${frozen?' frozen':''}"`;
+  const description = `aria-label="Die ${index+1}, ${label}${frozen?', frozen':''}"`;
+  if (!enabled) return `<span ${classes} ${description}>${picture}${frozen?'<small>Frozen</small>':''}</span>`;
+  const expanded = action==='pick-card-die' && diceEdit?.mode==='change' ? ` aria-expanded="${open}"` : '';
+  return button(action,picture,`${classes} ${description} data-index="${index}" aria-pressed="${selected}"${expanded}`);
+}
+
+function faceChoices(editor, index) {
+  return [...new Set(activeDiceOptions(editor,index).flatMap(option=>
+    option.dice.filter(([candidate])=>candidate===index).map(([,face])=>face)))].sort((a,b)=>a-b);
+}
+
+function diceEditorPanel(editor) {
+  const {context,mode,picks,open,seat,id,limit,cost} = editor;
+  const changing = mode==='change';
+  const dice = selectableRoll(context, (index,owner)=>{
+    const selected=picks.has(index);
+    const enabled=selected||activeDiceOptions(editor,index).some(option=>option.dice.some(([candidate])=>candidate===index));
+    return selectableDie(context,index,owner,'pick-card-die',enabled,selected,picks.get(index) ?? undefined,open===index);
+  });
+  const faces = open===undefined ? '' : `<div class="face-picker" role="group" aria-label="New face for die ${open+1}">
+    <strong>New face for die ${open+1}</strong>
+    <div class="face-picker-options">${faceChoices(editor,open).map(value=>{
+      const {label,picture}=dieFace(context.dice,dieOwner(context,open),open,state,value,true);
+      return button('pick-card-face',picture,`class="die" data-index="${value}" aria-label="${label}" aria-pressed="${picks.get(open)===value}"`);
+    }).join('')}
+    ${picks.has(open)?button('undo-card-face','Undo change'):''}</div></div>`;
+  const ready=activeDiceOptions(editor).find(option=>option.dice.length===picks.size);
+  const confirm=changing?'Confirm changes':mode==='reroll'?'Reroll selected dice':'Confirm target';
+  const instruction=changing?'Select a die, then choose its new face.':mode==='reroll'?'Tap the dice you want to reroll.':'Choose a die to target.';
+  return `<section class="arena dice-editor" aria-label="Choose dice">
+    <div class="phase"><span>${names[seat]} · ${picks.size} of ${limit} selected</span></div>
+    <h2 tabindex="-1" id="action-title">${seatCard(state,seat,id).name}</h2>
+    <p>${instruction}${cost?` ${cost}`:''}</p>
+    ${!context.owners&&context.seat!==seat?`<strong>${names[context.seat]}’s dice</strong>`:''}
+    ${dice}${faces}
+    <div class="controls">${button('confirm-card-dice',confirm,`class="primary" ${ready?'':'disabled'}`)}
+    ${editor.options.filter(option=>!option.dice.length).map(option=>button('confirm-card-dice',option.label,`data-choice="${option.choiceIndex}"`)).join('')}
+    ${button('cancel-card-dice','Cancel')}</div></section>`;
+}
+
+function handleDiceEditor(type, index, alternate) {
+  const editor = diceEdit;
+  const {picks,open,mode} = editor;
+  if (type==='cancel-card-dice') {
+    diceEdit = null;
+    handSeat = editor.seat;
+    selectedCard = editor.id;
+    render();
+    renderHand();
+    handDialog.showModal();
+    return;
+  }
+  if (type==='confirm-card-dice') {
+    const option = alternate===undefined
+      ? activeDiceOptions(editor).find(option=>option.dice.length===picks.size)
+      : editor.options.find(option=>!option.dice.length && option.choiceIndex===Number(alternate));
+    if (!option) return;
+    const action = {type:'playCard',id:editor.id,seat:editor.seat,choice:option.choiceIndex};
+    diceEdit=null;
+    selectedCard=null;
+    state=mode==='reroll' ? transitionOnMatchScreen(state,action,roll,Math.random)
+      : applyMatchAction(action,seatCard(state,editor.seat,editor.id).name);
+    render();
+    focusRollAction();
+    return;
+  }
+  if (type==='pick-card-die') {
+    const selected=picks.has(index);
+    if (!selected && !activeDiceOptions(editor).some(option=>option.dice.some(([candidate])=>candidate===index))) return;
+    if (mode==='change') editor.open=open===index?undefined:index;
+    else if (selected) picks.delete(index);
+    else picks.set(index,null);
+  } else if (type==='pick-card-face' && open!==undefined && faceChoices(editor,open).includes(index)) {
+    picks.set(open,index);
+    editor.open=undefined;
+  } else if (type==='undo-card-face' && open!==undefined) {
+    picks.delete(open);
+    editor.open=undefined;
+  } else return;
+  render();
+  const die = type==='pick-card-die'?index:open;
+  const selector = editor.open===undefined
+    ? `button[data-action="pick-card-die"][data-index="${die}"]` : 'button[data-action="pick-card-face"]';
+  match.querySelector(selector)?.focus({preventScroll:true});
 }
 
 const blankDie = '<span class="die empty" aria-hidden="true">·</span>';
@@ -511,7 +647,7 @@ const manualRollActions = new Set([
 ]);
 
 function rollsOnCurrentScreen(view, type) {
-  if (type === 'roll' || type === 'defend') return true;
+  if (type === 'roll' || type === 'defend' || type === 'retryDie') return true;
   if (!rerollActions.has(type)) return false;
   const context = rollContext(view);
   return !!context && (context.dice === view.dice || context.dice === view.defenceDice ||
@@ -951,8 +1087,11 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.retry) {
     const context=rollContext(state);
     phase=state.retry.remaining?'Tsunami!':'Try, Try Again!'; heading=state.retry.remaining?`${actingName} may reroll up to ${state.retry.remaining} more ${state.retry.remaining===1?"time":"times"}`:`${actingName} can reroll once more`;
-    content=rollDisplay(context)+`<div class="controls">${diceOwnedBy(context,seat,state).map((value,i)=>button('retryDie',`Reroll die ${i+1} (${value})`,`data-index="${i}"`)).join('')}
-      ${button('finishRetry','Keep this roll','class="primary"')}</div>`;
+    detail='Select a die to reroll, or keep this roll.';
+    const eligible=diceOwnedBy(context,state.retry.seat,state);
+    content=selectableRoll(context,(index,owner)=>selectableDie(context,index,owner,'pick-retry-die',!!eligible[index],retryPick===index))+
+      `<div class="controls">${button('retryDie','Reroll selected die',`class="primary" data-index="${retryPick ?? ''}" ${retryPick===undefined?'disabled':''}`)}
+      ${button('finishRetry','Keep this roll')}</div>`;
   } else if(state.mainChoice) {
     const {seat,id}=state.mainChoice;
     phase='Main Phase action'; heading=seatCard(state,seat,id).name;
@@ -1758,9 +1897,9 @@ function render() {
   } else {
     const seat = actor(state);
     const responding = cardActor(state);
-    const decisionSeat = state.response ? responding : seat;
+    const decisionSeat = diceEdit?.seat ?? (state.response ? responding : seat);
     match.innerHTML = hero(0, decisionSeat, responding) + hero(1, decisionSeat, responding) +
-      (rollRequest ? rollRequestPanel(rollRequest) : arena(seat, responding, decisionSeat));
+      (rollRequest ? rollRequestPanel(rollRequest) : diceEdit ? diceEditorPanel(diceEdit) : arena(seat, responding, decisionSeat));
   }
   for (const detail of match.querySelectorAll('details[data-disclosure]')) {
     if (open.has(detail.dataset.disclosure)) detail.open = true;
@@ -1854,7 +1993,19 @@ function handleAction(event) {
     target.setAttribute('aria-expanded',String(!note.hidden));
     return;
   }
+  if (diceEdit) {
+    handleDiceEditor(type,index,target.dataset.choice);
+    return;
+  }
   if (rollRequest) return;
+  if (type==='pick-retry-die') {
+    if (!state.retry || !diceOwnedBy(rollContext(state),state.retry.seat,state)[index]) return;
+    retryPick=retryPick===index?undefined:index;
+    render();
+    match.querySelector(`button[data-action="pick-retry-die"][data-index="${index}"]`)?.focus({preventScroll:true});
+    return;
+  }
+  retryPick=undefined;
   if (type==='sell' && (handSeat!==state.active || !canPlayFromHand(state, handSeat))) return;
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
@@ -1863,6 +2014,14 @@ function handleAction(event) {
   if(type==='playCard') {
     if(!canPlayFromHand(state, handSeat))return;
     action.seat=handSeat;
+    const plan=cardDicePlan(handSeat,index,cardChoices(state,handSeat,index));
+    if(plan){
+      diceEdit={...plan,picks:new Map()};
+      handDialog.close();
+      render();
+      document.getElementById('action-title')?.focus();
+      return;
+    }
   }
   if(type==='mysticWildReroll')action.indices=[...match.querySelectorAll('input[name="mystic-wild-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='deadpoolLuckyHope')action.amount=Number(document.getElementById('deadpool-lucky-hope').value);
@@ -2047,6 +2206,8 @@ document.getElementById('reset').addEventListener('click',()=>{
   if (state && (state.attempts || state.turn>1) && state.stage!=='finished' &&
       !confirm('Start a new match and replace the current one?')) return;
   if (handDialog.open) handDialog.close();
+  diceEdit=undefined;
+  retryPick=undefined;
   rollRequest = {
     setup: {promo: document.getElementById('promos').checked, heroes: setupHeroes.slice()},
     description: 'Decide who starts', count: 2, owners: [0,1]

@@ -427,6 +427,39 @@ main {
 .match-tools button[data-responding="true"] { border-color: #a68652; }
 .die.kept { background: #665132; border-color: var(--gold); }
 
+.dice-editor .dice {
+  max-width: 400px;
+}
+
+.die.unavailable-die { opacity: .64; }
+
+.die.face-picker-open {
+  border-color: var(--gold);
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.face-picker {
+  margin: 0 0 14px;
+  padding: 10px;
+  max-width: 430px;
+  background: #182126;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.face-picker-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.face-picker-options .die {
+  width: clamp(44px, 11vw, 54px);
+}
+
 .arena .card-timing { font-size: .85rem; }
 
 @media (max-width: 840px) {

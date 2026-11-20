@@ -1,8 +1,12 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.52.0 · UI preview 4.3. Base: the merged architecture release.
+Version: Playtest 0.52.0 · UI preview 4.4. Base: the merged architecture release.
 
 ## Match interface preview
+
+### Preview 4.4 · Dice choices on the roll tray
+
+Playing a dice manipulation card closes the Hand and opens its controls on the current tray. Select a die to see the legal new faces, preview the changes, then confirm. Select dice on the tray to reroll them. Cancelling restores the selected card in the Hand and preserves the roll and resources. Sequential rerolls such as Try, Try Again! show the result before offering the next choice.
 
 ### Preview 4.3 · Ability and card references
 
@@ -120,7 +124,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.4.3.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.4.4.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
