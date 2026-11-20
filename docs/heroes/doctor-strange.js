@@ -83,7 +83,9 @@ const doctorStrange=(()=>{
   s.strangeTask=null;s.stage=st.resume;
  }
  function earlyBands(s){const h=s.pending;if(!h.strangeBandsApplied){h.strangeBandsPrior=!!s.players[1-s.active].crimsonBands;h.strangeBandsApplied=true;grantStatus(s.players[1-s.active],'crimsonBands');}}
- return {id,board,upgrades:[],cards,promoId:33,startingSpell:27,spells,isSpell,earlyBands,canPrepare,canDeja,bandsBlocks,begin,options,pump,
+ return {
+  leafletPositives: {premonition: true, dejaVu: true},
+  id,board,upgrades:[],cards,promoId:33,startingSpell:27,spells,isSpell,earlyBands,canPrepare,canDeja,bandsBlocks,begin,options,pump,
   initialize(s,seat){Object.assign(s.players[seat],{spellBook:[27],premonition:0,dejaVu:false});},
   defenceDiceCount(){return 2;},
   resolveDefence({state,defender,counts,grantStatus,updateDamage}){

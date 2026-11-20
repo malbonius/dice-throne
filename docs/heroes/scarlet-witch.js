@@ -22,11 +22,7 @@ const scarletWitch=(()=>{
   ['Double Trouble II',2,'defence',{}]
  ];
  const cards=[['Incantation!',1,'main'],['Hex Shield!',1,'roll'],['Warped!',1,'roll'],['No Dice!',1,'roll'],['Chaos Manipulation!',1,'roll'],['Snap Crackle!',1,'main'],['Hexellent!',0,'main']];
- // Positive status classifications read from the supplied hero leaflets. Companions,
- // dials and Unique effects (including Holy Presence and Vibranium Suit) are excluded.
- const leafletPositives=[[],['evasive'],['fireMastery'],['shadows','sneak'],['chi','evasive','cleanse'],['retribution','crit','protect','accuracy'],['smoke','ninjutsu'],['wellspring'],[],['synth'],['flight','cleanse'],['bloodPower','mesmerize'],['evasive','reload'],['honor','backStrike'],['tactical','protect'],['nyraBond'],['dreadful','grim'],[],[],['feather'],['regenerate'],['guardBreak'],[],['chargedGem'],['kineticEnergy'],['agility'],['cosmicFlare','radiance'],['premonition','dejaVu'],['bagOfTricks'],['probabilityManipulation','conjure','crackle'],[],['guardBreak','electrokinesis'],['battlePlan','support'],['dissolution'],['iceShard'],['forceField','acuity','flameBlast'],['agility','infiltration'],['ionicEnergy','ionicEnergy2','skyward'],['tornado','windShear'],['rage'],[],[],[],['cheer','eggNog'],['donut','rps']];
- const positives=[...new Set(leafletPositives.flat())];
- function countedStatuses(p){const keys=[...new Set([...positives,...negativeStatuses.filter(k=>k!=='hex'),'stun','regenerate1'])];return keys.reduce((n,k)=>n+Number(p[k]??0),0);}
+ function countedStatuses(p){const keys=[...new Set([...positiveStatusKeys,...negativeStatuses.filter(k=>k!=='hex'),'stun','regenerate1'])];return keys.reduce((n,k)=>n+Number(p[k]??0),0);}
  function busy(s){return !!(s.conjureTask||s.lokiTask||s.lokiIllusion||s.lokiBag?.kind==='choose'||s.strangeTask||s.premonitionTask||s.widowTask||s.widowReveal||s.growth||s.mainChoice||s.mainAction||s.retry);}
  function probabilityChoices(s,seat){
   if(!s.cards||!s.players[seat].probabilityManipulation||busy(s)||attackLocked(s)||s.stage==='finished')return [];
@@ -41,24 +37,7 @@ const scarletWitch=(()=>{
  function canConjure(s,seat){return !!(s.cards&&!busy(s)&&!s.cardRoll&&!s.scarletJinx&&!s.lokiBag&&!s.sideDamage&&!s.response&&seat===s.active&&isMain(s)&&s.players[seat].conjure&&s.players[seat].conjureTurn!==s.turn);}
  function conjureChoices(s,seat){
   if(!canConjure(s,seat))return [];
-  return [{kind:'warp',target:1-seat,label:`Inflict Reality Warp on ${heroNames(s)[1-seat]}`},...s.players.flatMap((p,source)=>(leafletPositives[heroId(s,source)]??[]).map(status=>({kind:'copy',source,status,label:`Gain ${statusLabel(status)} from ${heroNames(s)[source]}’s leaflet`})))];
- }
- function gain(s,seat,status,source=seat){
-  if(status==='donut'){deadpool.gainDonuts(s,seat);return;}
-  if(status==='rps'){deadpool.begin(s,seat,[{kind:'gain',key:'rps',amount:1}]);return;}
-  if(['cheer','eggNog'].includes(status)){santa.gain(s,seat,status);return;}
-  if(['acuity','flameBlast'].includes(status)){jeanGrey.gain(s,seat,status);return;}
-  if(status==='rage'){wolverine.gain(s,seat);return;}
-  if(status==='iceShard')iceman.gain(s,seat);
-  else if(status==='dissolution')gambit.gainDissolution(s,seat);
-  else if(['support','battlePlan'].includes(status))cyclops.gain(s,seat,status);
-  else if(status==='electrokinesis')thor.gain(s,seat);
-  else if(status==='bagOfTricks')loki.give(s,seat,source);
-  else if(status==='tactical')gainTactical(s,seat,1);
-  else if(status==='bloodPower')gainBloodPower(s,seat,1);
-  else if(status==='grim')gainGrim(s,seat,1);
-  else if(status==='feather')raveness.feathers(s,seat,1);
-  else grantStatus(s.players[seat],status);
+  return [{kind:'warp',target:1-seat,label:`Inflict Reality Warp on ${heroNames(s)[1-seat]}`},...s.players.flatMap((p,source)=>leafletPositiveStatuses(s,source).map(status=>({kind:'copy',source,status,label:`Gain ${statusLabel(status)} from ${heroNames(s)[source]}’s leaflet`})))];
  }
  function symbols(s,seat,dice){dice=storm.symbols(s,seat,dice);return s.realityDie?.seat===seat&&heroId(s,seat)!==id?dice.map((v,i)=>i===s.realityDie.index?0:v):dice;}
  function start(s,seat,enter){
@@ -79,7 +58,9 @@ const scarletWitch=(()=>{
   if(left){s.scarletJinx={seat:s.active,left,dice:[roll()]};s.stage='scarletJinx';return true;}
   s.scarletJinx=null;return false;
  }
- return {id,board,upgrades,cards,promoId:33,leafletPositives,positives,countedStatuses,probabilityChoices,defenceChanges,canCrackle,canConjure,conjureChoices,gain,symbols,start,resolveJinx,
+ return {
+  leafletPositives: {probabilityManipulation: true, conjure: true, crackle: true},
+  id,board,upgrades,cards,promoId:33,countedStatuses,probabilityChoices,defenceChanges,canCrackle,canConjure,conjureChoices,symbols,start,resolveJinx,
   initialize(s,seat){Object.assign(s.players[seat],{probabilityManipulation:0,conjure:false,crackle:0});},
   defenceDiceCount(){return 5;},
   resolveDefence({state,defender,counts,grantStatus}){
@@ -138,7 +119,7 @@ const scarletWitch=(()=>{
     p.conjure=false;p.conjureTurn=s.turn;
     if(option.kind==='warp'){grantStatus(s.players[option.target],'realityWarp');s.log.unshift(`${heroNames(s)[seat]} spends Conjure to inflict Reality Warp.`);}
     else if(s.players[1-seat].hand.length){s.conjureTask={seat,choice:option,resume:s.stage};s.stage='conjureResponse';}
-    else gain(s,seat,option.status,option.source);
+    else gainCopiedStatus(s,seat,option.status,option.source);
    }
    if(type==='conjureAllow'||type==='conjureDiscard'){
     const task=s.conjureTask,opponent=s.players[1-task.seat];
@@ -147,7 +128,7 @@ const scarletWitch=(()=>{
      opponent.discard.push(opponent.hand.splice(index,1)[0]);s.log.unshift(`${heroNames(s)[1-task.seat]} discards ${seatCard(s,1-task.seat,action.index).name} to block Conjure.`);
     }
     s.conjureTask=null;s.stage=task.resume;
-    if(type==='conjureAllow')gain(s,task.seat,task.choice.status,task.choice.source);
+    if(type==='conjureAllow')gainCopiedStatus(s,task.seat,task.choice.status,task.choice.source);
    }
    if(type==='resolveScarletJinx'){
     const dice=s.scarletJinx.dice.slice();s.scarletJinx.left--;

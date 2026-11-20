@@ -27,7 +27,7 @@ const deadpool=(()=>{
  function canDonut(s,seat){return !!(s.cards&&seat===s.active&&s.players[seat].donut&&s.stage==='upkeep'&&!s.deadpoolDonutRoll&&!s.retry&&!s.cardRoll&&!s.response&&!s.sideDamage&&!s.deadpoolTask&&!s.deadpoolRps&&!s.deadpoolLucky&&!s.santaNogRoll);}
  function begin(s,seat,queue,resume=s.stage,random=Math.random,offensive=false){const parent=s.deadpoolTask;s.deadpoolTask={seat,queue,resume,locked:!!attackLocked(s),...(parent?{parent}:{}),...(offensive?{offensiveSource:s.active}:{})};s.stage='deadpoolChoices';pump(s,random);}
  function gainDonuts(s,seat,n=1,random=Math.random){begin(s,seat,[{kind:'donuts',left:n,allocation:[0,0]}],s.stage,random);}
- function fourthChoices(s,seat){return [{key:'donut',label:'Gain Donut'},...(scarletWitch.leafletPositives[heroId(s,1-seat)]??[]).filter(k=>k!=='donut').map(key=>({key,label:`Gain ${statusLabel(key)} from ${heroNames(s)[1-seat]}’s leaflet`}))];}
+ function fourthChoices(s,seat){return [{key:'donut',label:'Gain Donut'},...leafletPositiveStatuses(s,1-seat).filter(k=>k!=='donut').map(key=>({key,label:`Gain ${statusLabel(key)} from ${heroNames(s)[1-seat]}’s leaflet`}))];}
  function externalBusy(s){return !!(s.jeanTask||s.iceTask||s.iceFreezeChoice||s.gambitTask||s.cyclopsTask||s.thorTask||s.thorOverflow||s.lokiTask||s.lokiBag||s.wolverineGain||s.rogueGain||s.stormTask||s.bloodOverflow||s.tacticalOverflow||s.grimOverflow||s.honorOverflow||s.ravenFeathers||s.santaTask||s.conjureTask||s.sideDamage);}
  function pump(s,random=Math.random){if(s.deadpoolFourthResume&&!s.deadpoolTask&&!externalBusy(s)){s.deadpoolTask=s.deadpoolFourthResume;delete s.deadpoolFourthResume;s.stage='deadpoolChoices';}const t=s.deadpoolTask;if(!t||s.stage!=='deadpoolChoices'||s.sideDamage||s.deadpoolRps||s.deadpoolDonutRoll)return;
   const body=()=>{for(let i=0;i<40;i++){
@@ -45,7 +45,12 @@ const deadpool=(()=>{
  function synergy(s,seat){const h=s.pending;if(h.deadpoolSmelt&&h.deadpoolDealt&&!h.deadpoolCombo){h.deadpoolCombo=true;damage(s,1);gainCP(s.players[seat],1);}}
  function finishRps(s,win){const r=s.deadpoolRps,p=s.players[r.seat];s.stage=r.resume;delete s.deadpoolRps;if(win){if(r.attacking)damage(s,p.shootActive?3:2);else{s.pending.prevention=(s.pending.prevention??0)+2;updateDamage(s.pending);}}}
  function revealRps(s){const r=s.deadpoolRps,[a,b]=r.picks;r.winner=a===b?null:(hands.indexOf(a)-hands.indexOf(b)+3)%3===1?r.seat:1-r.seat;r.step='reveal';}
- return {id,board,upgrades,cards,promoId:33,hands,view,busy,onomChoices,attack,canRps,canDonut,begin,gainDonuts,fourthChoices,pump,ability,printed,effect,damage,
+ return {
+  leafletPositives: {
+   donut: (state, seat) => gainDonuts(state, seat),
+   rps: (state, seat) => begin(state, seat, [{kind:'gain',key:'rps',amount:1}])
+  },
+  id,board,upgrades,cards,promoId:33,hands,view,busy,onomChoices,attack,canRps,canDonut,begin,gainDonuts,fourthChoices,pump,ability,printed,effect,damage,
   rpsActor(s){const r=s.deadpoolRps;return r.step==='second'?1-r.seat:r.step==='shoot'?1-r.winner:r.seat;},
   initialize(s,seat){Object.assign(s.players[seat],{donut:0,onomatopoeia:0,rps:0,shootActive:true,curmudgeon:false});},
   defenceDiceCount:()=>4,
@@ -87,7 +92,7 @@ const deadpool=(()=>{
    if(a.type==='deadpoolDonutTarget'){const q=s.deadpoolTask.queue[0];q.left--;q.allocation[a.target]++;}
    if(a.type==='deadpoolCollect'){const q=s.deadpoolTask.queue.shift();psylocke.withoutAbility(s,()=>grantStatus(p,q.key,q.amount));}
    if(a.type==='deadpoolSpeech'){s.deadpoolTask.queue.shift();if(a.status==='yes'||p.curmudgeon){if(h.kind==='speechCP')gainCP(p,1);else s.pending.damage++;}}
-   if(a.type==='deadpoolFourth'){s.deadpoolTask.queue.shift();if(c.key==='donut')s.deadpoolTask.queue.unshift({kind:'donuts',left:1,allocation:[0,0]});else{const task=s.deadpoolTask;delete s.deadpoolTask;s.deadpoolFourthResume=task;s.stage=task.resume;scarletWitch.gain(s,seat,c.key,1-seat);}}
+   if(a.type==='deadpoolFourth'){s.deadpoolTask.queue.shift();if(c.key==='donut')s.deadpoolTask.queue.unshift({kind:'donuts',left:1,allocation:[0,0]});else{const task=s.deadpoolTask;delete s.deadpoolTask;s.deadpoolFourthResume=task;s.stage=task.resume;gainCopiedStatus(s,seat,c.key,1-seat);}}
    if(a.type==='spendOnomatopoeia'){p.onomatopoeia--;const d=rollContext(view(s)),before=d.dice.slice();d.dice[c.index]=c.to;if(d.scalar)s.effectDie=c.to;releaseChangedAnnouncement(s,d,before);}
    if(a.type==='spendRps'){removeStatus(p,'rps');p.rpsUsedTurn=s.turn;if(s.pending.ultimate){damage(s,p.shootActive?3:2);}else{s.deadpoolRps={seat,attacking:seat===s.active,resume:s.stage,step:'first',picks:[null,null]};s.stage='deadpoolRps';}}
    if(a.type==='deadpoolRpsPick'){const q=s.deadpoolRps;q.picks[q.step==='first'?0:1]=a.status;if(q.step==='first')q.step='second';else revealRps(s);}

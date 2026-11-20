@@ -36,6 +36,8 @@ const treant = (() => {
   };
 
   return {
+    turnStartUpkeep: 'every-turn',
+    leafletPositives: {wellspring: true},
     board,
     upgrades,
     cards,

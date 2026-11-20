@@ -51,7 +51,11 @@ const wolverine=(()=>{
   if(f.step==='gain'){f.step='damage';startSideDamage(s,f.seat,2,'Fastball Special!',false,{keepPending:true,pantherLocked:f.locked});}
   else {damage(s,2);delete s.wolverineFastball;}
  }
- return {id,board,upgrades,cards,promoId:33,busy,attack,rageChoices,gain,inflictAlpha,ability,printed,effect,effectAlpha,removalChoices,pump,
+ return {
+  leafletPositives: {
+   rage: (state, seat) => gain(state, seat)
+  },
+  id,board,upgrades,cards,promoId:33,busy,attack,rageChoices,gain,inflictAlpha,ability,printed,effect,effectAlpha,removalChoices,pump,
   initialize(s,seat){Object.assign(s.players[seat],{rage:0,alpha:false});},
   defenceDiceCount:p=>p.upgrades?.defence?4:3,
   resolveDefence({state:s,seat,counts:c}){s.pending.returnDamage+=c.Claw??0;s.stage='damage';if(c.Mask)gain(s,seat);return 'damage';},

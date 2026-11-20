@@ -97,7 +97,12 @@ const thor=(()=>{
  function canMove(s,seat){return !!(s.cards&&heroId(s,seat)===id&&s.players[seat].hand.length&&!busy(s)&&s.stage!=='finished'&&(!s.thorTask||s.thorTask.queue[0]?.kind==='repeat')&&(!attackLocked(s)||seat===s.active));}
  function incoming(s,seat){if(seat!==s.active&&attackLocked(s))return null;return blackPanther.incoming(s,seat);}
  function will(s,seat){return !!(seat!==s.active&&!s.sideDamage&&s.pending?.attack&&!s.pending.ultimate&&!s.pending.stun&&['defence','defenceResponse','damage'].includes(s.stage)&&incomingDamage(s)>=s.players[seat].hp&&s.players[seat].hp>0);}
- return {id,board,upgrades,cards,promoId:34,isolated,isolatedCard,holder,begin,gain,move,pump,ability,odin,refresh,canDraw,canMove,incoming,
+ return {
+  leafletPositives: {
+   guardBreak: true,
+   electrokinesis: (state, seat) => gain(state, seat)
+  },
+  id,board,upgrades,cards,promoId:34,isolated,isolatedCard,holder,begin,gain,move,pump,ability,odin,refresh,canDraw,canMove,incoming,
   initialize(s,seat){Object.assign(s.players[seat],{mjolnirSeat:seat,electrokinesis:0});},
   defenceDiceCount:p=>p.upgrades?.defence?4:3,
   resolveDefence({state:s,seat,defender:p,counts:c}){

@@ -36,7 +36,7 @@ const psylocke=(()=>{
  function block(s,p,key,amount=1){
   if(!amount||!suppressed(s))return false;
   const seat=source(s),target=s.players.indexOf(p);
-  if((target===seat||target<0&&p.hero===s.players[seat].hero)&&scarletWitch.positives.includes(key))runtime.events.push({key,amount});
+  if((target===seat||target<0&&p.hero===s.players[seat].hero)&&positiveStatusKeys.includes(key))runtime.events.push({key,amount});
   return true;
  }
  function blockDirect(p,key,amount=1){return !!(runtime&&block(runtime.state,p,key,amount));}
@@ -56,7 +56,9 @@ const psylocke=(()=>{
  function forcedChoices(s,seat){return seat!==s.active&&!s.pending?.forcedUsed?(s.pending?.paralyzePrevented??[]).map(key=>({key,label:`Gain 1 ${statusLabel(key)} prevented by Paralyze`})):[];}
  function damage(s,n){const h=s.pending;if(h.grossDamage===undefined){h.damage+=n;h.psyModifiers=(h.psyModifiers??0)+n;}else {h.grossDamage+=n;updateDamage(h);}}
  function ability(s){const h=s.pending;if(!h.psy||h.psyPrepared)return false;h.psyPrepared=true;const p=s.players[s.active],i=h.psy;if(i.devise&&!i.swapped)gainCP(p,1);if(i.agility)grantStatus(p,'agility',i.agility);if(i.infiltration)grantStatus(p,'infiltration',i.infiltration);if(!i.agility&&!i.infiltration&&!i.devise)return false;s.stage='psyAbility';return true;}
- return {id,board,upgrades,cards,promoId:33,enter,leave,setState,withAbility,withoutAbility,useAbility,suppressed,tag,block,blockDirect,flush,pendingPositives,pauseEnd,initialRoll,start,swaps,canBoost,infiltrationChoices,forcedChoices,ability,
+ return {
+  leafletPositives: {agility: true, infiltration: true},
+  id,board,upgrades,cards,promoId:33,enter,leave,setState,withAbility,withoutAbility,useAbility,suppressed,tag,block,blockDirect,flush,pendingPositives,pauseEnd,initialRoll,start,swaps,canBoost,infiltrationChoices,forcedChoices,ability,
   initialize(s,seat){Object.assign(s.players[seat],{agility:0,infiltration:0,manifestDie:0,manifestReady:false,manifestSwapped:false});},
   defenceDiceCount:()=>3,
   resolveDefence({state:s,defender:p,counts:c,random}){s.pending.returnDamage+=(p.upgrades?.defence?2:1)*(c.Blade??0);if(c.Blade&&c.Mind)drawCards(p,1,random);if(c.Blade&&c.Starlight)grantStatus(p,'agility');return 'damage';},
@@ -75,7 +77,7 @@ const psylocke=(()=>{
    if(card===27){p.manifestDie=roll();return true;}
    if(card===29){removeStatus(p,'agility');blackWidow.half(s,'attack');return true;}
    if(card===30){if(s.pending.manifestBonus)p.hp=bounded(p.hp+s.pending.manifestBonus,60);else s.pending.manifestHeal=true;return true;}
-   if(card===31){s.pending.forcedUsed=true;scarletWitch.gain(s,seat,choice.key,s.active);return true;}
+   if(card===31){s.pending.forcedUsed=true;gainCopiedStatus(s,seat,choice.key,s.active);return true;}
    if(card===32){grantStatus(p,'agility');return false;}return false;
   },
   cardRollSize:card=>({28:3,32:1,33:1})[card]??0,

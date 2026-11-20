@@ -49,7 +49,9 @@ const blackPanther=(()=>{
       updateDamage(s.pending);
     }
   }
-  return {id,board,upgrades,cards,promoId:33,gain,incoming,prevent,
+  return {
+    leafletPositives: {kineticEnergy: true},
+   id,board,upgrades,cards,promoId:33,gain,incoming,prevent,
     initialize(s,seat){s.players[seat].kineticEnergy=0;},
     defenceDiceCount(p){return p.upgrades?.defence?4:3;},
     resolveDefence({state,counts}){state.pending.returnDamage+=counts.Slash??0;return 'damage';},

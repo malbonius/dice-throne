@@ -61,7 +61,11 @@ const raveness = (() => {
     if(s.ravenFeathers&&(s.ravenFeathers.spending||s.ravenFeathers.seat!==seat))return [];
     return [{cost:3,kind:'activate',label:'Activate Nevermore'}];
   }
-  return {id,board,upgrades,cards,promoId:33,move,activate,feathers,featherChoices,
+  return {
+    leafletPositives: {
+    feather: (state, seat) => feathers(state, seat, 1)
+   },
+   id,board,upgrades,cards,promoId:33,move,activate,feathers,featherChoices,
     initialize(s,seat){Object.assign(s.players[seat],{nevermoreSeat:seat,nevermoreVitality:0,feather:0,featherCap:5});},
     defenceDiceCount(){return 5;},
     resolveDefence({state,seat,defender,counts,updateDamage}){

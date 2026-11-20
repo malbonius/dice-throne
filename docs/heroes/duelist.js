@@ -42,7 +42,10 @@ const duelist=(()=>{
     if(hit.ultimate||hit.undefendable)return '';
     return p.footwork===-1?'draw':p.footwork===-2?'prevent':'';
   }
-  return {id,board,upgrades,cards,promoId:33,positions,move,steps,offerSteps,bonus,
+  return {
+    turnStartUpkeep: 'every-turn',
+    leafletPositives: {guardBreak: true},
+   id,board,upgrades,cards,promoId:33,positions,move,steps,offerSteps,bonus,
     initialize(s,seat){s.players[seat].footwork=0;},
     defenceDiceCount(){return 4;},
     resolveDefence({state,defender,counts}){

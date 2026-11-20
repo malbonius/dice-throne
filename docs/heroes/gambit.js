@@ -110,7 +110,12 @@ const gambit=(()=>{
   }
   q.push({kind:'flip',suit});begin(s,seat,q,s.stage,{exploding:suit});
  }
- return {id,board,upgrades,cards,promoId:33,suits,caps,red,black,superCharge,phase,available,regainChoices,forced,canExplode,dissolveChoices,gainDissolution,pump,ability,
+ return {
+  turnStartUpkeep: 'every-turn',
+  leafletPositives: {
+   dissolution: (state, seat) => gainDissolution(state, seat)
+  },
+  id,board,upgrades,cards,promoId:33,suits,caps,red,black,superCharge,phase,available,regainChoices,forced,canExplode,dissolveChoices,gainDissolution,pump,ability,
   initialize(s,seat){s.players[seat].aces=Object.fromEntries(suits.map(k=>[k,{up:true,charge:0}]));s.players[seat].dissolution=0;},
   defenceDiceCount:p=>p.upgrades?.defence?4:3,
   resolveDefence({state:s,seat,defender:p,counts:c}){

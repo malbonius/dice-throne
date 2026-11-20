@@ -1,6 +1,35 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.51.1, 20 November 2026. Base: the supplied 0.31.2 project archive.
+Version: Playtest 0.51.1 · Architecture preview 1. Base: the supplied 0.51.1 full-roster archive.
+
+## Architecture review and preview 1
+
+The preview starts from the supplied full-roster Playtest 0.51.1 archive. Its local Git baseline is tagged `playtest-0.51.1-baseline` and the work is on `architecture/refactor`. The preview contains three small refactors and targeted regression checks. The planned UI work follows the architecture pass.
+
+### Changes in preview 1
+
+- Hero modules declare `leafletPositives` in leaflet display order. Entries use `true` for ordinary gains or a function for a hero-specific copied gain. The engine derives the shared list and dispatches copied gains. Scarlet Witch's Conjure and Crackle, Deadpool's Fourth Wall!, Psylocke's Positive-status handling and Jean Grey's removal choices all use that catalogue. As before, unlisted leaflets contribute no Positive entries.
+- The first turn and later turns use one Upkeep entry check. `turnStartUpkeep` in a hero module specifies when that hero's recurring Upkeep applies. Token-driven Upkeep is also checked on later turns. Jean Grey retains the opening-turn exception and the existing Upkeep damage reset runs in both places where it is needed.
+- Transference! and Tactical Advantage use the same exclusions and the same transfer handlers for Time Bombs and Bags of Tricks. The handlers keep the chosen countdown or original Bag owner. Each action retains its own targeting and capacity checks. Three unreachable branches that returned action objects from the acting-seat resolver were removed.
+- Save schema 2, the existing local save key, hero and card IDs, and the supplied artwork are preserved. The service worker uses a preview cache version so that an update fetches the revised scripts. Legacy timing, Income and primary-deck reshuffling remain active.
+
+### Architecture findings and next passes
+
+| Area | Finding | Next extraction and verification |
+| --- | --- | --- |
+| Statuses | Positive leaflet data now lives with each hero. Generic caps, negative ordering and collection still sit in the engine, with separate gain paths for direct gains, inflicted/received gains and transfers. For example, Transference! runs some overflow handlers that Tactical Advantage bypasses. | Record parity for a full recipient, mirrored heroes and status-specific overflow before deciding which differences are rule exceptions. Centralise shared token definitions and retain per-instance data and the order of choices. |
+| Phases | Upkeep entry now has one owner. The reducer still coordinates turn-end resets, individual Upkeep choices, Income, roll entry and extra rolls through nested helpers. | Separate turn entry and completion from resolving effects. Compare first-turn Income, skipped phases, transfer-driven Upkeep, and extra rolls in the same turn. |
+| Timing and dice | `legal`, `actor`, `cardActor`, `rollContext`, `rollPhase` and `attackLocked` each inspect pending tasks in their own order. Ownership can differ from the acting seat in opposed rolls and with borrowed dice. | Give pending rolls a shared read-only description of dice, owners, allowed actions and response seat. Preserve the current precedence for nested card rolls, subsidiary rolls, frozen dice and locked Ultimates. Migrate and compare one roll family at a time. |
+| Damage | Attack damage, defensive return damage, Upkeep and isolated damage settle along different paths. Some sources also resume a parent roll or attack. | Extract common prevention arithmetic first. Compare flat and percentage prevention, evasion, simultaneous settlement and isolated damage before consolidating any settlement logic. |
+| Saves and presentation | The classic scripts and their order are part of the offline shell. The app renders from engine state and the hero modules contain serialisable pending tasks. | Keep the schema and storage key stable. Check a save during a response before moving code that changes task handling. Use real-device checks for service-worker updates and offline launch before release. |
+
+Rules cross-reference. The v2.4.3 rulebook's turn breakdown and damage sections distinguish phase entry from damage settlement. The advanced clarifications separate token removal from transferring a token, which counts as gaining or inflicting it. Their January 2027 organised-play changes are recorded separately from the existing rules used in this preview. The architecture changes preserve existing game behaviour, including current differences between the two transfer routes.
+
+### Verification
+
+Run `node tests/architecture.test.cjs` from the repository root. Pass a path to the original 0.51.1 `docs` directory as the first argument to repeat the differential check. Preview 1 passed 23,459 baseline comparisons, including 3,236 transitions across all 45 heroes, plus focused assertions for copied statuses, transfer countdowns and ownership, Upkeep, skipped phases, extra rolls and legacy reshuffling. The checks exercise selected paths through the roster. The archive supplied for this pass contains no copy of the historical suites referenced below.
+
+A service-worker simulation installed all 99 listed files, replaced the 0.51.1 cache for this scope and served the shell and assets offline. The execution environment blocked Chromium at startup. Real-browser update, Windows and Android installation, and touch behaviour still need checking.
 
 ## Project structure
 
@@ -11,8 +40,8 @@ Version: Playtest 0.51.1, 20 November 2026. Base: the supplied 0.31.2 project ar
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.51.1.
-- `tests/`: Node-based rules tests and interface/asset checks.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.51.1-architecture.1.
+- `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
 
@@ -369,6 +398,8 @@ Priorities for the pass:
 4. **Incremental verification:** extract one responsibility at a time, compare behaviour before and after each extraction, and combine automated regression checks with targeted playtesting of cross-hero interactions. Preserve existing saves, hero/card IDs, save schema 2 and the `dice-throne-card-pilot-v2` storage key.
 
 This pass must preserve the current legacy timing, Income and reshuffling behaviour. It does not authorise globally activating the January 2027 rules. Record any proposed gameplay or rules change separately from the structural work.
+
+After the architecture review and incremental refactor are complete, undertake the planned major UI work. This sequencing was agreed on 20 November 2026; do not fold the UI overhaul into the architecture pass.
 
 
 ## Alchemist 0.47.0

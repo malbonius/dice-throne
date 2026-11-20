@@ -64,7 +64,9 @@ const captainMarvel=(()=>{
     return blackPanther.incoming(s,seat);
   }
   function prevent(s,seat,amount){blackPanther.prevent(s,seat,amount,incoming(s,seat));}
-  return {id,board,upgrades,cards,promoId:33,star,sync,gainRay,spendRay,canRay,radianceDice,incoming,prevent,readyRay,
+  return {
+    leafletPositives: {cosmicFlare: true, radiance: true},
+   id,board,upgrades,cards,promoId:33,star,sync,gainRay,spendRay,canRay,radianceDice,incoming,prevent,readyRay,
     initialize(s,seat){Object.assign(s.players[seat],{cosmicRay:0,cosmicRays:[],cosmicFlare:0,radiance:0});},
     defenceDiceCount(p){return p.upgrades?.defence?5:4;},
     resolveDefence({state,defender,counts,grantStatus,updateDamage}){

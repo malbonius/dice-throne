@@ -37,7 +37,9 @@ const necromancer=(()=>{
   const singles=Object.keys(undead).filter(k=>count(p,k)>0);
   return [[],...singles.map(k=>[k]),...singles.flatMap((k,i)=>singles.slice(i).filter(j=>j!==k||count(p,k)>1).map(j=>[k,j]))];
  }
- return {id,board,upgrades,cards,promoId:34,undead,unearth,gain,count,summon,types,
+ return {
+  turnStartUpkeep: 'every-turn',
+  id,board,upgrades,cards,promoId:34,undead,unearth,gain,count,summon,types,
   initialize(s,seat){Object.assign(s.players[seat],{corpses:0,covered:'Black Shroud',undead:{}});},
   effects:{corpseExplosion(hit,c){hit.damage+=(c.Scythe??0)+2*(c.Bones??0);hit.undefendable||=!!c.Soul;}},
   defenceDiceCount(p){return p.upgrades?.defence?5:4;},

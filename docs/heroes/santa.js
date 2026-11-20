@@ -49,7 +49,12 @@ const santa=(()=>{
  function printed(s,random){const h=s.pending,r=h.santa;if((r.contest||r.naughty)&&!r.rolled){s.stage='santaTarget';return;}if(r.printed)return;r.printed=true;const q=[];if(r.cheer)q.push({kind:'gain',key:'cheer',amount:r.cheer});if(r.nog)q.push({kind:'gain',key:'eggNog',amount:r.nog});if(r.festive)q.push({kind:'allCP',amount:1});if(r.nice)q.push({kind:'cp',amount:1,target:1-s.active});if(r.bad)q.push({kind:'gain',key:'cheer',amount:1,target:1-s.active});if(r.mistletoe)q.push({kind:'mistletoe',left:r.mistletoe,targets:[]});if(r.extreme&&r.bad&&!r.apologyQueued){r.apologyQueued=true;h.undefendable=true;q.push({kind:'apology'});}q.push({kind:'calculate'});begin(s,s.active,q,'santaPrepared',random,true);}
  function damage(s,n){const h=s.pending;if(h.grossDamage===undefined){h.damage+=n;h.santaModifiers=(h.santaModifiers??0)+n;}else{h.grossDamage+=n;updateDamage(h);}}
  function attack(s,seat){const h=s.pending;return !!(seat===s.active&&h&&(h.attack??h.damage>0)&&!h.nonAttack&&!h.pure&&!h.evaded&&!h.parlayBlocked&&!s.sideDamage&&['santaAbility','santaTarget','santaRoll','santaPrepared','targeting','defence','defenceResponse','damage','locked'].includes(s.stage));}
- return {id,board,upgrades,cards,promoId:33,removalChoices(s){const r=s.santaRemoval;return s.players[r.choice.target][r.choice.status]?[r.choice]:mainTargets({...s,santaRemoval:null},r.source,7);},begin,pump,gain,ability,printed,cheerChoices,canNog,contexts,view,damage,attack,
+ return {
+  leafletPositives: {
+   cheer: (state, seat) => gain(state, seat, 'cheer'),
+   eggNog: (state, seat) => gain(state, seat, 'eggNog')
+  },
+  id,board,upgrades,cards,promoId:33,removalChoices(s){const r=s.santaRemoval;return s.players[r.choice.target][r.choice.status]?[r.choice]:mainTargets({...s,santaRemoval:null},r.source,7);},begin,pump,gain,ability,printed,cheerChoices,canNog,contexts,view,damage,attack,
   initialize(s,seat){Object.assign(s.players[seat],{cheer:0,eggNog:0});},
   defenceDiceCount:p=>p.upgrades?.defence?5:4,
   resolveDefence({state:s,seat,counts:c,random}){const q=[];if(c.Bell)q.push({kind:'gain',key:'eggNog',amount:c.Bell});if(c.Star)q.push({kind:'gain',key:'cheer',amount:1});begin(s,seat,q,'damage',random);return s.stage;},

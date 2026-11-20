@@ -46,7 +46,9 @@ const storm=(()=>{
  function strike(s,seat){const r=s.pending?.storm,p=s.players[seat];return !!(seat===s.active&&r?.key&&!r.wasCharged&&!r.charged&&p.stormChargeUsed?.[r.key]!==s.turn&&!busy(s)&&s.stage==='stormAbility'&&!r.printed);}
  function oppReroll(s,seat){return !!(seat===s.active&&s.stage==='effectResponse'&&s.pending?.effect==='stormOpposites'&&s.pending.storm.charged&&!s.pending.storm.oppRerolled&&!s.cardRoll&&!s.retry&&!s.response);}
  function light(s,c,resume){const n=(c.Wind??0)+(c.Cyclone??0);grantStatus(s.players[s.active],'tornado',Math.floor((c.Rain??0)/2));if(n){begin(s,s.active,[{kind:'place',left:n}],resume);return true;}return false;}
- return {id,board,upgrades,cards,promoId:33,slots,borrowed,dieHero,symbols,canTornado,canWind,begin,pump,places,chargeEffect,ability,printed,strike,oppReroll,light,
+ return {
+  leafletPositives: {tornado: true, windShear: true},
+  id,board,upgrades,cards,promoId:33,slots,borrowed,dieHero,symbols,canTornado,canWind,begin,pump,places,chargeEffect,ability,printed,strike,oppReroll,light,
   initialize(s,seat){Object.assign(s.players[seat],{tornado:0,windShear:false,lightningCharges:Object.fromEntries(slots.map(k=>[k,false]))});},
   defenceDiceCount:()=>5,
   resolveDefence({state:s,seat,defender:p,counts:c}){if((c.Wind??0)>=3)grantStatus(p,'tornado');if((c.Rain??0)>=2)s.pending.prevention=(s.pending.prevention??0)+2;updateDamage(s.pending);if(c.Cyclone){begin(s,seat,[{kind:'place',left:1}],'damage');return 'stormChoices';}return 'damage';},

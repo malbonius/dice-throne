@@ -80,7 +80,11 @@ const iceman=(()=>{
  function onStart(s){if(s.iceFirstRoll?.seat===s.active&&s.players[s.active].diceCube)s.players[s.active].diceCube=0;delete s.iceFirstRoll;delete s.iceFreezeChoice;if(s.players.some(p=>p.hero===id||p.diceCube))s.icePhaseSerial=(s.icePhaseSerial??0)+1;}
  function clear(s){if(s.players[s.active].diceCube)s.players[s.active].diceCube=0;delete s.iceFirstRoll;delete s.iceFreezeChoice;}
  function permitted(before,after){const f=before.iceFirstRoll,g=after.iceFirstRoll;if(!f||!g||f.seat!==g.seat||f.phase!==g.phase||before.turn!==after.turn)return true;return !before.dice.some((v,i)=>locked(before,before.active,i)&&after.dice[i]!==v);}
- return {id,board,upgrades,cards,promoId:33,paths,phase,begin,gain,canConvert,canFreezerConvert,transferOptions,path,canGlide,ability,meet,pump,locked,contextLocked,freeze,capture,onStart,clear,permitted,
+ return {
+  leafletPositives: {
+   iceShard: (state, seat) => gain(state, seat)
+  },
+  id,board,upgrades,cards,promoId:33,paths,phase,begin,gain,canConvert,canFreezerConvert,transferOptions,path,canGlide,ability,meet,pump,locked,contextLocked,freeze,capture,onStart,clear,permitted,
   initialize(s,seat){Object.assign(s.players[seat],{iceShard:0,glide:false,freezer:{shards:0,glide:false}});},
   defenceDiceCount:p=>p.upgrades?.defence?4:3,
   resolveDefence({state:s,seat,defender:p,counts:c}){

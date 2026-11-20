@@ -29,6 +29,11 @@ const headlessHorseman=(()=>{
   const cards=[['Dancing Pumpkin!',2,'main'],['Cranial Assist!',1,'roll'],['Unescapable!',1,'roll'],['Spirited Reprisal!',1,'roll'],
     ['Thundering Hooves!',0,'roll'],['Rolling Pumpkin!',0,'instant'],['Dark Surprise!',2,'instant'],['Get Ahead!',0,'main']];
   return {
+    turnStartUpkeep: 'every-turn',
+    leafletPositives: {
+    dreadful: true,
+    grim: (state, seat) => gainGrim(state, seat, 1)
+   },
     id,board,upgrades,cards,promoId:33,haunted,
     initialize(s,seat){
       s.players[seat].hauntedHeadSeat=seat;

@@ -28,6 +28,7 @@ const shadowThief = (() => {
   };
 
   return {
+    leafletPositives: {shadows: true, sneak: true},
     board,
     upgrades,
     cards,

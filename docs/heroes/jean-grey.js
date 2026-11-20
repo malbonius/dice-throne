@@ -39,7 +39,7 @@ const jeanGrey=(()=>{
  }
  function fieldChoices(s,seat){
   const p=s.players[seat];if(!p.forceField||!window(s,seat)||busy(s)||s.cardRoll)return [];
-  const keys=[...new Set([...scarletWitch.positives,'regenerate1'])].filter(k=>k!=='forceField'&&p[k]);
+  const keys=[...new Set([...positiveStatusKeys,'regenerate1'])].filter(k=>k!=='forceField'&&p[k]);
   const costs=keys.flatMap(key=>key==='bagOfTricks'?(p.trickBags??[]).map(b=>({key,tokenId:b.id,label:`Bag of Tricks from ${heroNames(s)[b.owner]}`})):[{key,label:statusLabel(key)}]);
   return [0,1].flatMap(target=>{const kind=blackPanther.incoming({...s,stage:phase(s)},target);return kind?costs.map(c=>({...c,target,kind,label:`Remove Force Field and 1 ${c.label} · prevent half ${heroNames(s)[target]}’s incoming damage`})):[];});
  }
@@ -67,7 +67,14 @@ const jeanGrey=(()=>{
    t.queue.shift();
   }
  }
- return {id,board,upgrades,cards,promoId:33,startTurn,main1,needsSwitch,needsBurn,phase,begin,gain,busy,acuityChoices,flameChoices,fieldChoices,ability,multiplier,pump,
+ return {
+  turnStartUpkeep: 'after-opening',
+  leafletPositives: {
+   forceField: true,
+   acuity: (state, seat) => gain(state, seat, 'acuity'),
+   flameBlast: (state, seat) => gain(state, seat, 'flameBlast')
+  },
+  id,board,upgrades,cards,promoId:33,startTurn,main1,needsSwitch,needsBurn,phase,begin,gain,busy,acuityChoices,flameChoices,fieldChoices,ability,multiplier,pump,
   initialize(s,seat){Object.assign(s.players[seat],{darkPhoenix:false,jeanOwnTurns:0,acuity:0,flameBlast:0,forceField:false});},
   defenceDiceCount:p=>(p.upgrades?.defence?3:2)+(p.darkPhoenix?2:0),
   resolveDefence({state:s,seat,defender:p,counts:c}){

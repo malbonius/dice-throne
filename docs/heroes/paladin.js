@@ -46,6 +46,7 @@ const paladin = (() => {
   };
 
   return {
+    leafletPositives: {retribution: true, crit: true, protect: true, accuracy: true},
     board,
     upgrades,
     cards,

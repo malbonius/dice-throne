@@ -65,7 +65,11 @@ const loki=(()=>{
  function canIllusion(s,seat){return !!(s.cards&&!busy(s)&&s.players[seat].illusion&&seat!==s.active&&s.pending?.attack&&!s.pending.ultimate&&!s.pending.pure&&!attackLocked(s)&&['defence','defenceResponse','damage'].includes(s.stage)&&incomingDamage(s)>0);}
  function bagRoll(s,target,owner,roll,outwit=false){s.lokiBag={parent:s.lokiBag??null,locked:!!attackLocked(s),seat:target,owner,dice:[roll()],resume:s.stage,kind:'roll',amount:outwit?3:2,outwit};s.stage='lokiBagRoll';s.response=null;}
  function finishBag(s){const t=s.lokiBag;s.stage=t.resume;s.lokiBag=t.parent??null;}
- return {id,board,upgrades,cards,promoId:33,illusionNames,key,blocked,bindChoices,removeBound,give,removeBag,sync,begin,options,pump,ability,canIllusion,bagRoll,
+ return {
+  leafletPositives: {
+   bagOfTricks: give
+  },
+  id,board,upgrades,cards,promoId:33,illusionNames,key,blocked,bindChoices,removeBound,give,removeBag,sync,begin,options,pump,ability,canIllusion,bagRoll,
   initialize(s,seat){Object.assign(s.players[seat],{illusion:0,trickBags:[],bagOfTricks:0,boundAbilities:[],spellbound:0,lokiOwner:seat});},
   defenceDiceCount(p){return p.upgrades?.defence?2:1;},
   resolveDefence({state,seat,defender,counts,grantStatus,random}){
