@@ -1,6 +1,66 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.52.0. Base: the merged architecture refactor.
+Version: Playtest 0.52.0 · UI preview 4.6. Base: the merged architecture release.
+
+## Match interface preview
+
+### Preview 4.6 · Leaflet wording and desktop setup
+
+The attachment picker uses the individual Potion descriptions from Alchemist's leaflet. On viewports wider than 800px, the hero selectors and setup controls fill the Match setup panel.
+
+### Preview 4.5 · Token choices and Potion slots
+
+Card targeting and removal choices pair token names with their game artwork. Deadpool's Curmudgeon control appears in his hero panel during his Main Phase, independently of Shoot.
+
+Alchemist's attached Potion list hides zero-capacity slot rows and displays the token beside its position. To attach, choose a Potion by its icon and effect, then choose an eligible slot. Each slot shows its ability name and roll requirement, including equipped upgrades.
+
+### Preview 4.4 · Dice choices on the roll tray
+
+Playing a dice manipulation card closes the Hand and opens its controls on the current tray. Select a die to see the legal new faces, preview the changes, then confirm. Select dice on the tray to reroll them. Cancelling restores the selected card in the Hand and preserves the roll and resources. Sequential rerolls such as Try, Try Again! show the result before offering the next choice.
+
+### Preview 4.3 · Ability and card references
+
+Offensive Ability requirements are rendered from the symbol counts and straight lengths used by the engine, including upgraded abilities and Storm's six-number straight. Desktop leaflets fit the viewer height and width when first opened. The draw count displays the card-back icon.
+
+Card selection effects now offer a separate View control for card faces already available to the chooser. This includes Black Widow's upgrades, Doctor Strange's Spells, and the deck search, ordering and discard controls. Viewing a card leaves the pending choice in place.
+
+### Preview 4.2 · Defence rolls in place
+
+Roll defence fills the Defensive Roll tray in one click, including Gunslinger's Duel. The defender stays on the same screen and can act on the dice once they are visible. Eligible attacker effects are available on the unrolled defence screen. An older save that was waiting for a pre-defence response resumes on that unrolled screen.
+
+### Preview 4.1 · Cumulative update
+
+Applying the incremental Preview 4 overlay to the 0.52.0 architecture release without the intermediate previews could leave `docs/rolls.js` out of date. The result was a missing `rollBatch` error during defence rolls and other effects. The cumulative Preview 4.1 overlay includes every changed file since the architecture release. The new cache version refreshes the app and its scripts together.
+
+### Preview 4 · Roll flow and card timing
+
+Offensive and Defensive Roll Phase dice, including Duel and rerolls of phase dice, update their usual tray immediately. The roll opens the existing hold, modifier or resolution controls. Initiative and standalone rolls keep their result reveal. A saved phase roll already revealed in Preview 3 resumes with its saved result.
+
+Both Hand buttons show the hero name and card count. The current screen reminds players when eligible Instant and Roll Phase cards can be played. Card-only prompts are handled through the Hands. The engine still offers distinct status or ability responses when needed and applies card eligibility to the current state before and after each roll.
+
+### Preview 3 · Dice results and hand access
+
+A roll fills the dice tray and holds the result until Continue. Initiative uses Start match for a winning roll and shows tied results before preparing two fresh slots. The result and queued transition survive a reload. Offensive rerolls show held dice, and opposed rolls show both faces under their owners.
+
+The engine can give the opponent a response before a defence or other roll. The preparation button makes that timing clear. After the response, Roll fills the blank tray and Continue opens the post-roll window. Resist Death, Duel and other defences use the same roll and reveal flow.
+
+Both Hand buttons stay available in the match. Each shows the selected player's cards and offers play only when that player has priority to act and the card is legal. During a pending or displayed roll, players can inspect their hands while the roll is paused.
+
+### Preview 2 · Player-initiated rolls
+
+Fresh rolls in the match interface show blank dice before the roll. Existing Roll controls handle Offensive and Defensive Roll Phases and the explicitly prompted effect rolls. When a card, status effect or ability would roll automatically, the interface records the pending action and offers a Roll button. The user can reload with that roll pending. The engine resumes the action with the chosen batch on confirmation. Initiative also has its own Roll button, with another press for each tie.
+
+Opposed rolls use a single press for both dice. The slots show the hero names in active-player order before and after rolling. The engine keeps each die's original owner and opens the existing response window after both results appear. The current opposed rolls include Gunslinger's Showdown and Duel, Santa's Fireside Chat, Mystic Brawler's Strong Arm, Rogue's Skyward and Wolverine's Alpha.
+
+Automated UI tests cover initiative ties, a reload during a pending Evasive roll, Showdown and Duel. The rules suite passed all 30,932 comparisons against the original 0.51.1, and the offline cache simulation served all 103 assets. Browser and touch verification of this preview remains open.
+
+### Preview 1 · Match layout
+
+The `ui/match-screen` branch starts from Playtest 0.52.0. The match shows both players' Health, CP and a short status summary, then identifies who is making the current decision. The Hand button follows the player who can play cards. Hero details expand to show statuses, decks and hero-specific resources. Board and Leaflet use the existing zoomable viewer. Ability descriptions stay in the Offensive Roll Phase list. Extra effects sit in a labelled disclosure below the current action.
+
+On narrow screens the player summaries sit side by side above the match actions, with Hand and Board both reachable from the bottom toolbar. On wide screens the player panels flank the action area. The setup controls use a disclosure in the header.
+
+The match-interface checks cover playing and selling from Hand, opening Board and Leaflet, visible ability descriptions, a Paladin response and Alchemist Potion details. All 30,932 baseline comparisons passed, and the offline cache simulation served 103 assets including the new stylesheet. Responsive layout and touch still need a visual check on Windows and Android.
 
 ## Architecture review
 
@@ -63,7 +123,8 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 
 ## Project structure
 
-- `docs/index.html`: UI shell, styles, ordered classic-script loading, version label.
+- `docs/index.html`: UI shell, base styles, ordered classic-script loading and version label.
+- `docs/match-ui.css`: responsive match layout, hero details and the action area.
 - `docs/heroes/*.js`: hero boards, upgrades, action cards, defence rules and hero-specific helpers. Black Widow is in `black-widow.js`; Captain Marvel is in `captain-marvel.js`.
 - `docs/engine.js`: two-seat state machine, shared cards, hero registration, legal actions and common damage/status handling.
 - `docs/turn.js`: turn advancement, Upkeep entry and settlement, Income, Main Phase 1 preparation and Offensive Roll Phase entry.
@@ -73,7 +134,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.4.6.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
@@ -561,7 +622,7 @@ Update-only patch merging onto 0.51.0. All 45 heroes, card IDs, schema-2 saves a
 - Psylocke's separate Manifest icon now selects a single face from `art.manifestDice` using the current numeric value. Before the first roll it displays face 1 and retains the “not rolled” label; this is a display fallback, so Manifest's existing availability rules are preserved. Six faces are cropped from the supplied purple Manifest sheet, with faces 1 and 6 correctly oriented. The original sheet is retained as an asset but is no longer used for the icon.
 - A Manifest swap records `players[seat].manifestIndex`. The offensive dice tray uses Manifest artwork at that exact position, selecting its current face after a reroll or dice change. Other dice retain their normal artwork, including the existing foreign-die handling. The index survives JSON saves and is cleared by Psylocke's next Offensive Roll Phase start. Existing saves without the optional index continue to load; an already-used pre-patch swap has no stored position to recover, while subsequent swaps record it correctly.
 - Alchemist's corrected base slot capacities are Transmute 1, Hermetics 0, Potion Overload 3, Diffusion 0, Chain Reaction 1, Catalyst 2 and Passivation 2. The programmatic defence slot remains named `defence`. Transmute II and Chain Reaction II increase their capacities to 2; Hermetics remains 0 and Potion Overload remains 3 after upgrading. New attachment choices and the visible capacity list use this table. Existing attached Potions are retained in loaded saves, including placements permitted by the previous incorrect limits; no existing token is silently discarded. Legacy fixture checks retain coverage for using those older attachments.
-- Deadpool's Shoot reference is now a native collapsed disclosure with its Active/Inactive state visible in the summary. It can be expanded, retains that open state through ordinary rerenders, and starts closed on initial loading or a new match. The Shoot zoom reference and Curmudgeon control remain inside it.
+- Deadpool's Shoot reference is now a native collapsed disclosure with its Active/Inactive state visible in the summary. It can be expanded, retains that open state through ordinary rerenders, and starts closed on initial loading or a new match. The Shoot zoom reference remains available inside it.
 - Cyclops' hero panel now always displays “Leadership cards played this turn” using the existing `cyclops.count(state,seat)` function. It updates as cards are committed, works independently for mirror-match players, and shows 0 after the turn advances. No second counter or gameplay reset has been introduced.
 
 Validation: 1,381 rules groups (including the new Manifest position/save checks and exact base/upgraded Alchemist capacity checks); 490 simulated interface states; all 45 art bundles; 96 JavaScript syntax checks; JSON save round-trips; complete offline references. Display checks cover all six Manifest values plus default 1, the inserted face changing after a card and reroll, both player seats, save reload, next-phase reset, corrected potion capacities, collapsed Shoot/open-state preservation, and real turn advancement for Cyclops' counter. Six new Manifest face payloads validate and were visually inspected. Existing legacy timing, Income and primary-deck reshuffling remain in use; January 2027 global rules remain disabled. Browser/touch layout and installed-PWA update/offline launch remain manual playtesting checks.

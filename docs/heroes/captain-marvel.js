@@ -48,7 +48,7 @@ const captainMarvel=(()=>{
     if(index<0)return false;
     p.cosmicRays.splice(index,1);sync(p);p.cosmicRayUsedTurn=s.turn;
     const locked=!!attackLocked(s);
-    s.cosmicRayRoll={seat,dice:[roll(),roll()],resume:s.stage,locked};s.stage='cosmicRayRoll';
+    s.cosmicRayRoll={seat,dice:rollBatch(roll,2),resume:s.stage,locked};s.stage='cosmicRayRoll';
     s.response=null;
     return true;
   }

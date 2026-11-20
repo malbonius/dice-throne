@@ -10,18 +10,31 @@ const match = document.getElementById('match');
 const storageKey = 'dice-throne-card-pilot-v2';
 const roll = () => 1 + Math.floor(Math.random()*6);
 let state;
-let boardOverride = null;
+let rollRequest;
 try {
   const saved = JSON.parse(localStorage.getItem(storageKey));
-  if (saved?.version === 2 && saved.cards && saved.players?.length === 2 && Array.isArray(saved.log)) state = saved;
+  if (saved?.version === 2 && saved.cards && saved.players?.length === 2 && Array.isArray(saved.log)) {
+    const {uiRollRequest, ...matchState} = saved;
+    state = matchState;
+    if (uiRollRequest?.action || uiRollRequest?.setup) rollRequest = uiRollRequest;
+  } else if (saved?.uiRollRequest?.setup) rollRequest = saved.uiRollRequest;
 } catch {}
-state ??= createMatch(roll,{});
-let names=heroNames(state);
+let names = state ? heroNames(state) : [];
 let selectedCard=null;
+let handSeat;
+let diceEdit;
+let retryPick;
+let selectedPotion;
 const handDialog=document.getElementById('hand-dialog');
 const handTitle=document.getElementById('hand-title');
 const handContent=document.getElementById('hand-content');
 const button = (action,label,attrs='') => `<button type="button" data-action="${action}" ${attrs}>${label}</button>`;
+function previewCard(state, seat, id, label = 'View') {
+  return button('inspect-card', label, `data-index="${id}" data-seat="${seat}" aria-label="View ${seatCard(state,seat,id).name}" aria-haspopup="dialog"`);
+}
+function previewableOption(state, seat, id, controls) {
+  return `<div class="card-option">${controls}${previewCard(state,seat,id)}</div>`;
+}
 function boardImage(state,seat,full=false) {
   const id=heroId(state,seat);
   if(id===cursedPirate.id && state.players[seat].cursed)
@@ -32,14 +45,12 @@ function boardImage(state,seat,full=false) {
   if(id===druid.id&&form!=='druid')return art[form+(full?'DruidFullBoard':'DruidBoard')];
   return (full?art.fullBoards:art.boards)[id];
 }
-function board(seat) {
+function heroEquipment(seat) {
   const upgrades=Object.values(state.players[seat].upgrades??{});
-  return `<figure class="board-panel">${button('inspect-board',
-    `<img src="${boardImage(state,seat)}" alt="">`,`class="board-open" data-index="${seat}" aria-label="Zoom ${names[seat]} board"`)}
-    ${heroId(state,seat)===alchemist.id?`<details class="board-upgrades"><summary>Attached Potions (${alchemist.tokens(state,seat).length})</summary>${Object.entries(alchemist.slots(state.players[seat])).map(([slot,cap])=>`<p><strong>${slot==='defence'?'Passivation':slot}</strong> · ${alchemist.tokens(state,seat).filter(t=>t.slot===slot).length}/${cap} slots<br>${alchemist.tokens(state,seat).filter(t=>t.slot===slot).map(t=>alchemist.tokenLabel(t)).join('<br>')||'Empty'}</p>`).join('')}</details>`:''}
-    ${heroId(state,seat)===krampus.id?`<details class="board-upgrades"><summary>Rejects (${state.players[seat].rejects.length}/3)</summary><div class="controls">${state.players[seat].rejects.map(id=>button('inspect-reject',`<img src="${art.krampusRejects[id]}" alt="${krampus.names[id]}" style="width:100px;max-width:100%"><br>${krampus.names[id]}${state.players[seat].rejectUsed[id]===state.turn?' · used this turn':''}`,`data-index="${id}" data-seat="${seat}"`)).join('')||'No Rejects in play'}</div><p>Draw pile: ${state.players[seat].rejectDeck.length} · Discard: ${state.players[seat].rejectDiscard.map(id=>krampus.names[id]).join(', ')||'empty'}</p></details>`:''}
-    ${upgrades.length?`<details class="board-upgrades" data-seat="${seat}"><summary>Equipped upgrades (${upgrades.length})</summary>
-      ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
+  return `${heroId(state,seat)===alchemist.id?attachedPotions(seat):''}
+    ${heroId(state,seat)===krampus.id?`<details class="board-upgrades" data-disclosure="rejects-${seat}"><summary>Rejects (${state.players[seat].rejects.length}/3)</summary><div class="controls">${state.players[seat].rejects.map(id=>button('inspect-reject',`<img src="${art.krampusRejects[id]}" alt="${krampus.names[id]}" style="width:100px;max-width:100%"><br>${krampus.names[id]}${state.players[seat].rejectUsed[id]===state.turn?' · used this turn':''}`,`data-index="${id}" data-seat="${seat}"`)).join('')||'No Rejects in play'}</div><p>Draw pile: ${state.players[seat].rejectDeck.length} · Discard: ${state.players[seat].rejectDiscard.map(id=>krampus.names[id]).join(', ')||'empty'}</p></details>`:''}
+    ${upgrades.length?`<details class="board-upgrades" data-disclosure="upgrades-${seat}"><summary>Equipped upgrades (${upgrades.length})</summary>
+      ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}`;
 }
 const statusNotes = {
   donut:'Positive, stack limit 2. When gaining Donut, choose any player to receive it. During your own Upkeep, spend one and roll: heal half the final value, rounded up. Healing uses the existing end-of-Upkeep timing.',
@@ -172,77 +183,87 @@ const statusNotes = {
   entangle: 'One fewer attempt in your next Offensive Roll Phase. Remove at the end of that Roll Phase. Stack limit 1.',
   blind: 'Check before resolving your next offensive ability. A 1 or 2 cancels it. Remove Blind if you end the phase without an ability. Stack limit 1.'
 };
-const token = (seat,key,label,suffix=key) => {
-  const id = `status-${seat}-${suffix}`;
-  const hero=heroId(state,seat);
+function tokenImage(view,seat,key) {
+  if (!key) return '';
+  const hero=heroId(view,seat), player=view.players[seat];
   const tokenArt=hero===mysticBrawler.id&&key==='concussion'?'mysticConcussion':hero===alchemist.id&&key==='poison'?'alchemistPoison':hero===psylocke.id&&key==='agility'?'psylockeAgility':hero===thor.id&&key==='guardBreak'?'thorGuardBreak':hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
     hero===gunslinger.id&&key==='knockdown'?'gunslingerKnockdown':
     hero===tactician.id&&key==='targeted'?'tacticianTargeted':
     hero===tactician.id&&key==='protect'?'tacticianProtect':
     hero===seraph.id&&key==='cleanse'?'seraphCleanse':
     hero===seraph.id&&key==='blessing'?'seraphBlessing':key;
-  const image=key==='manifestDie'?art.manifestDice[(state.players[seat].manifestDie||1)-1]:key==='sunDial'?(state.players[seat].sunDawn?art.dialSun:art.dialDusk):key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[state.players[seat].moonShard-1]:art[tokenArt];
-  return `<span class="token-help">${button('status',`<span class="token"><img src="${image}" alt="">${label}</span>`,
+  const image=key==='manifestDie'?art.manifestDice[(player.manifestDie||1)-1]:key==='sunDial'?(player.sunDawn?art.dialSun:art.dialDusk):key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[(player.moonShard||1)-1]:art[tokenArt];
+  return image?`<img class="token-icon" src="${image}" alt="">`:'';
+}
+
+function tokenChoiceLabel(view, choice, seat) {
+  const image = tokenImage(view,choice.target??seat,choice.status??choice.key);
+  return image?`<span class="token-choice">${image}<span>${choice.label}</span></span>`:choice.label;
+}
+
+const token = (seat,key,label,suffix=key) => {
+  const id = `status-${seat}-${suffix}`;
+  return `<span class="token-help">${button('status',`<span class="token">${tokenImage(state,seat,key)}${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
-function hero(seat) {
-  const p=state.players[seat];
-  return `<section class="hero" aria-label="${names[seat]}" style="--hero:${seat ? '#91ddff' : '#ffad86'}">
-    <div class="hero-head"><h2>${names[seat]}</h2><span class="vitals"><strong>${p.hp} health</strong><strong>${p.cp} CP</strong></span>
-    ${heroId(state,seat)===cyclops.id?`<div class="leadership-counter" role="status">Leadership cards played this turn: <strong>${cyclops.count(state,seat)}</strong></div>`:''}
-    ${p.nyra?`<div class="tokens"><span class="token"><img src="${art.nyraDials[Number(p.nyra.downed)]}" alt="">
-      Nyra · ${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health</span></div>`:''}
-    <div class="tokens">${[p.evasive && token(seat,'evasive',`Evasive ×${p.evasive}`),p.entangle && token(seat,'entangle','Entangle'),p.blind && token(seat,'blind','Blind'),p.targeted && token(seat,'targeted','Targeted'),
-    p.pirateCoins?.[seat]&&token(seat,'doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`),
-    p.pirateCoins?.[1-seat]&&token(seat,'doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent'),
-    ...['powderKeg','wither','parlay'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
-    ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
-    ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&token(seat,key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
+function hero(seat, decisionSeat, responding) {
+  const p = state.players[seat];
+  const statusLabels = [];
+  const status = (key, label, suffix) => {
+    statusLabels.push(label);
+    return token(seat, key, label, suffix);
+  };
+  const statuses = [p.evasive && status('evasive',`Evasive ×${p.evasive}`),p.entangle && status('entangle','Entangle'),p.blind && status('blind','Blind'),p.targeted && status('targeted','Targeted'),
+    p.pirateCoins?.[seat]&&status('doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`),
+    p.pirateCoins?.[1-seat]&&status('doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent'),
+    ...['powderKeg','wither','parlay'].map(key=>p[key]&&status(key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
+    ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&status(key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
+    ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&status(key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
     ...Object.entries(p.armor??{}).filter(([,tier])=>tier).map(([slot,tier])=>{
       const name=forgemaster.armorName(slot,tier);
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
       return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
     }),
-    p.combo&&token(seat,'combo','Combo'),
-    p.invisibility&&token(seat,'invisibility','Invisibility'),
-    p.webbed&&token(seat,'webbed','Webbed'),
-    p.probabilityManipulation>0&&token(seat,'probabilityManipulation',`Probability Manipulation ×${p.probabilityManipulation}`),
-    p.realityWarp&&token(seat,'realityWarp','Reality Warp'),
-    state.realityDie?.seat===seat&&token(seat,'realityWarp','Reality Warp · Scarlet Witch die 5','active'),
-    p.conjure&&token(seat,'conjure','Conjure'),
-    p.crackle>0&&token(seat,'crackle',`Crackle ×${p.crackle}`),
-    p.illusion>0&&token(seat,'illusion',`Illusion ×${p.illusion}`),
-    ...(p.trickBags??[]).map(b=>token(seat,'bagOfTricks',`Bag of Tricks · ${names[b.owner]}`,`bag-${b.id}`)),
-    ...(p.boundAbilities??[]).map(b=>token(seat,'spellbound',`Spellbound · ${b.key}`,`bound-${b.id}`)),
-    p.premonition>0&&token(seat,'premonition',`Premonition ×${p.premonition}`),
-    p.dejaVu&&token(seat,'dejaVu','Déjà Vu'),
-    p.crimsonBands&&token(seat,'crimsonBands','Crimson Bands'),
-    p.cosmicRay>0&&token(seat,'cosmicRay',`Cosmic Ray ×${p.cosmicRay} · ${(p.cosmicRays??[]).filter(ray=>captainMarvel.readyRay(ray,state.turn)).length} ready`),
-    p.cosmicFlare>0&&token(seat,'cosmicFlare',`Cosmic Flare ×${p.cosmicFlare}`),
-    p.radiance>0&&token(seat,'radiance',`Radiance ×${p.radiance}`),
-    p.covertOps>0&&token(seat,'covertOps',`Covert Ops ×${p.covertOps}`),
-    p.agility>0&&token(seat,'agility',`Agility ×${p.agility}`),
-    ...(p.timeBombTimers??[]).map((b,i)=>token(seat,'timeBomb',`Time Bomb ${i+1} · 0:0${b.ticks}`,`timeBomb-${b.id}`)),
-    p.kineticEnergy>0&&token(seat,'kineticEnergy',`Kinetic Energy ${p.kineticEnergy}/${statusCap(p,'kineticEnergy')}`),
-    p.vibraniumSuit&&token(seat,'vibraniumSuit','Vibranium Suit'),
-    p.sunDial!==undefined&&token(seat,'sunDial',`${p.sunDawn?'Dawn':'Dusk'} · ${p.sunDial}/5`),
-    p.sunMarked&&token(seat,'sunMarked','Sun Marked'),
-    p.chargedGem&&token(seat,'chargedGem','Charged Gem'),
-    p.footwork!==undefined&&token(seat,'footwork',`Footwork · ${duelist.positions[p.footwork+2]}`),
-    p.guardBreak>0&&token(seat,'guardBreak',`Guard Break ×${p.guardBreak}`),
-    p.disarm&&token(seat,'disarm','Disarm'),
+    p.combo&&status('combo','Combo'),
+    p.invisibility&&status('invisibility','Invisibility'),
+    p.webbed&&status('webbed','Webbed'),
+    p.probabilityManipulation>0&&status('probabilityManipulation',`Probability Manipulation ×${p.probabilityManipulation}`),
+    p.realityWarp&&status('realityWarp','Reality Warp'),
+    state.realityDie?.seat===seat&&status('realityWarp','Reality Warp · Scarlet Witch die 5','active'),
+    p.conjure&&status('conjure','Conjure'),
+    p.crackle>0&&status('crackle',`Crackle ×${p.crackle}`),
+    p.illusion>0&&status('illusion',`Illusion ×${p.illusion}`),
+    ...(p.trickBags??[]).map(b=>status('bagOfTricks',`Bag of Tricks · ${names[b.owner]}`,`bag-${b.id}`)),
+    ...(p.boundAbilities??[]).map(b=>status('spellbound',`Spellbound · ${b.key}`,`bound-${b.id}`)),
+    p.premonition>0&&status('premonition',`Premonition ×${p.premonition}`),
+    p.dejaVu&&status('dejaVu','Déjà Vu'),
+    p.crimsonBands&&status('crimsonBands','Crimson Bands'),
+    p.cosmicRay>0&&status('cosmicRay',`Cosmic Ray ×${p.cosmicRay} · ${(p.cosmicRays??[]).filter(ray=>captainMarvel.readyRay(ray,state.turn)).length} ready`),
+    p.cosmicFlare>0&&status('cosmicFlare',`Cosmic Flare ×${p.cosmicFlare}`),
+    p.radiance>0&&status('radiance',`Radiance ×${p.radiance}`),
+    p.covertOps>0&&status('covertOps',`Covert Ops ×${p.covertOps}`),
+    p.agility>0&&status('agility',`Agility ×${p.agility}`),
+    ...(p.timeBombTimers??[]).map((b,i)=>status('timeBomb',`Time Bomb ${i+1} · 0:0${b.ticks}`,`timeBomb-${b.id}`)),
+    p.kineticEnergy>0&&status('kineticEnergy',`Kinetic Energy ${p.kineticEnergy}/${statusCap(p,'kineticEnergy')}`),
+    p.vibraniumSuit&&status('vibraniumSuit','Vibranium Suit'),
+    p.sunDial!==undefined&&status('sunDial',`${p.sunDawn?'Dawn':'Dusk'} · ${p.sunDial}/5`),
+    p.sunMarked&&status('sunMarked','Sun Marked'),
+    p.chargedGem&&status('chargedGem','Charged Gem'),
+    p.footwork!==undefined&&status('footwork',`Footwork · ${duelist.positions[p.footwork+2]}`),
+    p.guardBreak>0&&status('guardBreak',`Guard Break ×${p.guardBreak}`),
+    p.disarm&&status('disarm','Disarm'),
     p.druidForm&&`<span class="token">${druid.formName(p.druidForm)} Form</span>`,
-    p.shapeShift>0&&token(seat,'shapeshift',`Shape Shift ×${p.shapeShift}`),
-    p.regenerate>0&&token(seat,'regenerate',`Regenerate (2) ×${p.regenerate}`),
-    p.regenerate1>0&&token(seat,'regenerate1',`Regenerate (1) ×${p.regenerate1}`),
-    p.wound>0&&token(seat,'wound',`Wound ×${p.wound}`),
-    p.hex&&token(seat,'hex','Hex'),
-    p.feather>0&&token(seat,'feather',`Feathers ${p.feather}/${p.featherCap??5}`),
+    p.shapeShift>0&&status('shapeshift',`Shape Shift ×${p.shapeShift}`),
+    p.regenerate>0&&status('regenerate',`Regenerate (2) ×${p.regenerate}`),
+    p.regenerate1>0&&status('regenerate1',`Regenerate (1) ×${p.regenerate1}`),
+    p.wound>0&&status('wound',`Wound ×${p.wound}`),
+    p.hex&&status('hex','Hex'),
+    p.feather>0&&status('feather',`Feathers ${p.feather}/${p.featherCap??5}`),
     ...state.players.flatMap((owner,i)=>owner.nevermoreSeat===seat?
-      [token(seat,'nevermore',`Nevermore${heroId(state,1-i)===raveness.id?` (P${i+1})`:''} · ${owner.nevermoreVitality}/3`,`nevermore-${i}`)]:[]),
+      [status('nevermore',`Nevermore${heroId(state,1-i)===raveness.id?` (P${i+1})`:''} · ${owner.nevermoreVitality}/3`,`nevermore-${i}`)]:[]),
     p.werewolf&&'<span class="token">Werewolf form</span>',
-    p.moonShard>0&&token(seat,'moonShard',`Moon Shards ×${p.moonShard}`),
-    p.prey>0&&token(seat,'prey',`Prey ×${p.prey}`),
+    p.moonShard>0&&status('moonShard',`Moon Shards ×${p.moonShard}`),
+    p.prey>0&&status('prey',`Prey ×${p.prey}`),
     p.corpses!==undefined&&`<span class="token"><img src="${art.corpseDial}" alt="">Corpses ${p.corpses}/10</span>`,
     p.covered&&`<span class="token">Unearth covers ${p.covered}</span>`,
     ...Object.entries(p.undead??{}).filter(([,count])=>count).map(([kind,count])=>{
@@ -250,108 +271,159 @@ function hero(seat) {
       return `<span class="token"><img src="${art[key]}" alt="">${name} ×${count}</span>`;
     }),
     p.resurrected&&'<span class="token">Resurrected · CP and cards locked</span>',
-    p.resurrect&&token(seat,'resurrect','Resurrect'),
-    p.decrepify&&token(seat,'decrepify','Decrep-ify'),
-    p.dreadful&&token(seat,'dreadful',`Dreadful ×${p.dreadful}`),
-    p.grim&&token(seat,'grim',`Grim Pursuit ×${p.grim}`),
-    ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&token(seat,'hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
-    p.nyraBond&&token(seat,'nyraBond','Nyra’s Bond'),
+    p.resurrect&&status('resurrect','Resurrect'),
+    p.decrepify&&status('decrepify','Decrep-ify'),
+    p.dreadful&&status('dreadful',`Dreadful ×${p.dreadful}`),
+    p.grim&&status('grim',`Grim Pursuit ×${p.grim}`),
+    ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&status('hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
+    p.nyraBond&&status('nyraBond','Nyra’s Bond'),
     heroId(state,seat)===jeanGrey.id&&`<span class="token">${p.darkPhoenix?'Dark Phoenix':'Jean Grey'} active</span>`,
-    ...alchemist.types.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
-    p.coal&&token(seat,'coal',`Coal ${p.coal}/4`),
-    p.gift&&token(seat,'gift',`Gift ${p.gift}/3`),
-    ...['donut','onomatopoeia','rps'].map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
-    ...['cheer','eggNog'].map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
-    ...mysticBrawler.keys.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${mysticBrawler.caps[key]}`)),
-    p.rage&&token(seat,'rage',`Rage ${p.rage}/3`),
-    p.alpha&&token(seat,'alpha','Alpha'),
-    p.tornado&&token(seat,'tornado',`Tornado ${p.tornado}/4`),
-    p.windShear&&token(seat,'windShear','Wind Shear'),
-    p.lightningCharges&&`<details class="token-actions"><summary>Lightning · ${Object.values(p.lightningCharges).filter(Boolean).length} charged abilities</summary>${storm.slots.map(key=>`<span class="token">${token(seat,'lightning',key+': '+(p.lightningCharges[key]?'Charged':'empty'))}</span>`).join('')}</details>`,
-    p.influence&&token(seat,'influence',`Influence ${p.influence}/3`),
-    p.ionicEnergy&&token(seat,'ionicEnergy',`Ionic (1) ×${p.ionicEnergy} · ${rogue.total(p)}/${rogue.cap(p)}`),
-    p.ionicEnergy2&&token(seat,'ionicEnergy2',`Ionic (2) ×${p.ionicEnergy2} · ${rogue.total(p)}/${rogue.cap(p)}`),
-    p.skyward&&token(seat,'skyward',`Skyward ${p.skyward}/2`),
-    p.paralyze&&token(seat,'paralyze','Paralyze'),
-    p.infiltration&&token(seat,'infiltration',`Infiltration ${p.infiltration}/2`),
-    heroId(state,seat)===psylocke.id&&token(seat,'manifestDie',`Manifest die · ${p.manifestDie||1}${!p.manifestDie?' · not rolled':''}${p.manifestUsedTurn===state.turn?' · used this turn':''}`),
-    p.acuity&&token(seat,'acuity',`Acuity ${p.acuity}/4`),
-    p.flameBlast&&token(seat,'flameBlast',`Flame Blast ${p.flameBlast}/5`),
-    p.forceField&&token(seat,'forceField','Force Field'),
-    p.phoenixBurn&&token(seat,'phoenixBurn','Phoenix Burn'),
-    p.iceShard&&token(seat,'iceShard',`Ice Shards ${p.iceShard}/5`),
-    p.diceCube&&token(seat,'diceCube',`Dice Cube ×${p.diceCube}`),
-    p.glide&&token(seat,'glide','Glide'),
-    p.dissolution&&token(seat,'dissolution',`Dissolution ×${p.dissolution}`),
-    p.disruption&&token(seat,'disruption','Disruption'),
-    p.battlePlan&&token(seat,'battlePlan',`Battle Plan ${p.battlePlan}/4`),
-    p.support&&token(seat,'support',`Support ${p.support}/3`),
-    p.focusFire&&token(seat,'focusFire',`Focus Fire ×${p.focusFire}`),
-    p.electrokinesis&&token(seat,'electrokinesis',`Electrokinesis ${p.electrokinesis}/4`),
-    ...state.players.map((owner,i)=>owner.mjolnirSeat===seat&&token(seat,'mjolnir',i===seat?'Own Mjölnir':`${names[i]}’s Mjölnir`,`mjolnir-${i}`)),
-    p.tactical&&token(seat,'tactical',`Tactical Advantage ${p.tactical}/${statusCap(p,'tactical')}`),
-    p.constrict&&token(seat,'constrict','Constrict'),
-    p.honor&&token(seat,'honor',`Honor ×${p.honor}`),p.shame&&token(seat,'shame',`Shame ×${p.shame}`),
-    p.backStrike&&token(seat,'backStrike','Back Strike'),
-    p.reload&&token(seat,'reload',`Reload ×${p.reload}`),p.bounty&&token(seat,'bounty','Bounty'),
-    p.synth&&token(seat,'synth',`Synth ×${p.synth}`),p.nanite&&token(seat,'nanite',`Nanite ×${p.nanite}`),
+    ...alchemist.types.map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
+    p.coal&&status('coal',`Coal ${p.coal}/4`),
+    p.gift&&status('gift',`Gift ${p.gift}/3`),
+    ...['donut','onomatopoeia','rps'].map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
+    ...['cheer','eggNog'].map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
+    ...mysticBrawler.keys.map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${mysticBrawler.caps[key]}`)),
+    p.rage&&status('rage',`Rage ${p.rage}/3`),
+    p.alpha&&status('alpha','Alpha'),
+    p.tornado&&status('tornado',`Tornado ${p.tornado}/4`),
+    p.windShear&&status('windShear','Wind Shear'),
+    p.lightningCharges&&`<details class="token-actions"><summary>Lightning · ${Object.values(p.lightningCharges).filter(Boolean).length} charged abilities</summary>${storm.slots.map(key=>`<span class="token">${status('lightning',key+': '+(p.lightningCharges[key]?'Charged':'empty'))}</span>`).join('')}</details>`,
+    p.influence&&status('influence',`Influence ${p.influence}/3`),
+    p.ionicEnergy&&status('ionicEnergy',`Ionic (1) ×${p.ionicEnergy} · ${rogue.total(p)}/${rogue.cap(p)}`),
+    p.ionicEnergy2&&status('ionicEnergy2',`Ionic (2) ×${p.ionicEnergy2} · ${rogue.total(p)}/${rogue.cap(p)}`),
+    p.skyward&&status('skyward',`Skyward ${p.skyward}/2`),
+    p.paralyze&&status('paralyze','Paralyze'),
+    p.infiltration&&status('infiltration',`Infiltration ${p.infiltration}/2`),
+    heroId(state,seat)===psylocke.id&&status('manifestDie',`Manifest die · ${p.manifestDie||1}${!p.manifestDie?' · not rolled':''}${p.manifestUsedTurn===state.turn?' · used this turn':''}`),
+    p.acuity&&status('acuity',`Acuity ${p.acuity}/4`),
+    p.flameBlast&&status('flameBlast',`Flame Blast ${p.flameBlast}/5`),
+    p.forceField&&status('forceField','Force Field'),
+    p.phoenixBurn&&status('phoenixBurn','Phoenix Burn'),
+    p.iceShard&&status('iceShard',`Ice Shards ${p.iceShard}/5`),
+    p.diceCube&&status('diceCube',`Dice Cube ×${p.diceCube}`),
+    p.glide&&status('glide','Glide'),
+    p.dissolution&&status('dissolution',`Dissolution ×${p.dissolution}`),
+    p.disruption&&status('disruption','Disruption'),
+    p.battlePlan&&status('battlePlan',`Battle Plan ${p.battlePlan}/4`),
+    p.support&&status('support',`Support ${p.support}/3`),
+    p.focusFire&&status('focusFire',`Focus Fire ×${p.focusFire}`),
+    p.electrokinesis&&status('electrokinesis',`Electrokinesis ${p.electrokinesis}/4`),
+    ...state.players.map((owner,i)=>owner.mjolnirSeat===seat&&status('mjolnir',i===seat?'Own Mjölnir':`${names[i]}’s Mjölnir`,`mjolnir-${i}`)),
+    p.tactical&&status('tactical',`Tactical Advantage ${p.tactical}/${statusCap(p,'tactical')}`),
+    p.constrict&&status('constrict','Constrict'),
+    p.honor&&status('honor',`Honor ×${p.honor}`),p.shame&&status('shame',`Shame ×${p.shame}`),
+    p.backStrike&&status('backStrike','Back Strike'),
+    p.reload&&status('reload',`Reload ×${p.reload}`),p.bounty&&status('bounty','Bounty'),
+    p.synth&&status('synth',`Synth ×${p.synth}`),p.nanite&&status('nanite',`Nanite ×${p.nanite}`),
     ...Object.entries(p.bots??{}).map(([bot,level])=>`<span class="token"><img src="${art.artificerBots[bot][level-1]}" alt="">${level===2?'Advanced':'Basic'} ${artificer.bots[bot]}</span>`),
-    p.barbed&&token(seat,'barbed','Barbed Vine'),p.wellspring&&token(seat,'wellspring','Wellspring'),
-    ...spiritTypes.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ×${p[key]}`)),
-    p.delayedPoison&&token(seat,'delayedPoison',`Delayed Poison ×${p.delayedPoison}`),
-    p.smoke&&token(seat,'smoke','Smoke Bomb'),p.ninjutsu&&token(seat,'ninjutsu',`Ninjutsu ×${p.ninjutsu}`),
-    ...[...paladinBuffs,'blessing'].map(key=>p[key]&&token(seat,key,statusLabel(key))),
-    p.chi&&token(seat,'chi',`Chi ${p.chi}/${statusCap(p,'chi')}`),p.cleanse&&token(seat,'cleanse',`Cleanse ×${p.cleanse}`),
-    p.poison&&token(seat,'poison',`Poison ×${p.poison}`),p.shadows&&token(seat,'shadows','Shadows'),p.sneak&&token(seat,'sneak','Sneak Attack'),
-    p.burn&&token(seat,'burn','Burn'),p.knockdown&&token(seat,'knockdown','Knockdown'),
-    p.fireMastery&&token(seat,'fireMastery',`Fire Mastery ${p.fireMastery}/${statusCap(p,'fireMastery')}`),
-    p.concussion && token(seat,'concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && token(seat,'stun','Stun')].filter(Boolean).join('') || 'No status effects'}</div></div>
-    ${board(seat)}<div class="inventory"><span class="deck">${(p.deck.length??p.deck) ? `<img src="${art.back}" alt="">` : ''} Draw ${p.deck.length??p.deck} · Discard ${p.discard?.length??0}</span><span class="hand-tools"><span class="hand-count">${p.hand.length??p.hand} in hand</span>
-      ${button('open-hand','Hand',`data-index="${seat}" aria-label="Open ${names[seat]}’s hand" aria-haspopup="dialog" ${seat===cardActor(state)&&!['finished','nyraDamage'].includes(state.stage)?'':'disabled'}`)}</span>${button('inspect-leaflet','Leaflet',`class="leaflet" data-index="${seat}" aria-label="${names[seat]} leaflet"`)}${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}</div>
-    ${heroId(state,seat)===deadpool.id?`<details class="token-actions deadpool-shoot" data-seat="${seat}"><summary>Shoot · ${p.shootActive?'Active':'Inactive'}</summary><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="Shoot ${p.shootActive?'Active':'Inactive'}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}${seat===cardActor(state)&&seat===state.active&&isMain(state)?button('toggleCurmudgeon',`Curmudgeon coin · ${p.curmudgeon?'On':'Off'}`):''}</div><p>The Shoot card is separate from the draw deck. Curmudgeon coin waives Deadpool’s spoken bonus requirements.</p></details>`:''}
+    p.barbed&&status('barbed','Barbed Vine'),p.wellspring&&status('wellspring','Wellspring'),
+    ...spiritTypes.map(key=>p[key]&&status(key,`${statusLabel(key)} ×${p[key]}`)),
+    p.delayedPoison&&status('delayedPoison',`Delayed Poison ×${p.delayedPoison}`),
+    p.smoke&&status('smoke','Smoke Bomb'),p.ninjutsu&&status('ninjutsu',`Ninjutsu ×${p.ninjutsu}`),
+    ...[...paladinBuffs,'blessing'].map(key=>p[key]&&status(key,statusLabel(key))),
+    p.chi&&status('chi',`Chi ${p.chi}/${statusCap(p,'chi')}`),p.cleanse&&status('cleanse',`Cleanse ×${p.cleanse}`),
+    p.poison&&status('poison',`Poison ×${p.poison}`),p.shadows&&status('shadows','Shadows'),p.sneak&&status('sneak','Sneak Attack'),
+    p.burn&&status('burn','Burn'),p.knockdown&&status('knockdown','Knockdown'),
+    p.fireMastery&&status('fireMastery',`Fire Mastery ${p.fireMastery}/${statusCap(p,'fireMastery')}`),
+    p.concussion && status('concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && status('stun','Stun')].filter(Boolean);
+  const visibleStatuses = statusLabels.slice(0, 2).join(' · ');
+  const moreStatuses = statusLabels.length > 2 ? ` · +${statusLabels.length - 2}` : '';
+  const statusSummary = visibleStatuses ? visibleStatuses + moreStatuses : 'Hero details';
+  const ready = seat === decisionSeat && state.stage !== 'finished';
+  return `<section class="hero seat-${seat}" aria-label="${names[seat]}" data-deciding="${ready}" style="--hero:${seat ? '#89cbc5' : '#e9a987'}">
+    <div class="hero-head">
+      <span class="seat-label">Player ${seat + 1}</span>
+      <h2>${names[seat]}</h2>
+      <div class="vitals"><span><strong>${p.hp}</strong> Health</span><span><strong>${p.cp}</strong> CP</span></div>
+      <div class="hero-links">
+        ${button('inspect-board','Board',`data-index="${seat}" aria-label="Open ${names[seat]}’s board" aria-haspopup="dialog"`)}
+        ${button('inspect-leaflet','Leaflet',`data-index="${seat}" aria-label="Open ${names[seat]}’s leaflet" aria-haspopup="dialog"`)}
+      </div>
+      ${heroId(state,seat)===deadpool.id&&seat===responding&&seat===state.active&&isMain(state)&&!state.cardRoll&&!state.mainAction&&!rollRequest?
+        button('toggleCurmudgeon',`Curmudgeon coin · ${p.curmudgeon?'On':'Off'}`,`class="curmudgeon-toggle" aria-pressed="${!!p.curmudgeon}" title="Waive Deadpool’s spoken bonus requirements"`):''}
+    </div>
+    <details class="hero-information" data-disclosure="hero-${seat}">
+      <summary>${statusSummary}</summary>
+      <div class="hero-information-body">
+        ${heroId(state,seat)===cyclops.id?`<div class="leadership-counter" role="status">Leadership cards played this turn: <strong>${cyclops.count(state,seat)}</strong></div>`:''}
+        ${p.nyra?`<div class="tokens"><span class="token"><img src="${art.nyraDials[Number(p.nyra.downed)]}" alt="">Nyra · ${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health</span></div>`:''}
+        <div class="tokens">${statuses.join('') || 'No status effects'}</div>
+        <div class="inventory">
+          <span class="draw-count"><img src="${art.back}" alt="">Draw ${p.deck.length ?? p.deck}</span><span>Discard ${p.discard?.length ?? 0}</span>
+          <span>${p.hand.length ?? p.hand} in hand</span>
+          ${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}
+        </div>
+        ${heroEquipment(seat)}
+    ${heroId(state,seat)===deadpool.id?`<details class="token-actions deadpool-shoot" data-disclosure="shoot-${seat}"><summary>Shoot · ${p.shootActive?'Active':'Inactive'}</summary><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="Shoot ${p.shootActive?'Active':'Inactive'}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}</div><p>The Shoot card is separate from the draw deck.</p></details>`:''}
     ${p.spellBook?`<div class="forge-inventory"><strong>Book of Vishanti · ${p.spellBook.length} prepared</strong><div class="controls">${p.spellBook.map(id=>button('inspect-card',doctorStrange.spells[id],`data-index="${id}" data-seat="${seat}"`)).join('')||'No prepared Spells'}</div></div>`:''}
-    ${p.forgeOre?`<details class="forge-inventory" data-seat="${seat}"><summary>The Forge · ${p.forgeOre.length} Ore</summary>
+    ${p.forgeOre?`<details class="forge-inventory" data-disclosure="forge-${seat}"><summary>The Forge · ${p.forgeOre.length} Ore</summary>
       <div class="controls">${[19,28,34].map(id=>{
         const ore=forgemaster.oreType(id),cards=p.forgeOre.filter(card=>forgemaster.oreType(card)===ore);
         return cards.length?button('inspect-card',`${seatCard(state,seat,id).name} ×${cards.length}`,`data-index="${id}" data-seat="${seat}"`):'';
       }).join('')}${['mining','crafting'].map(key=>button('inspect-forging',key==='mining'?'Mining rules':'Crafting rules',`data-status="${key}"`)).join('')}</div>
     </details>`:''}
-    ${p.freezer?`<details class="token-actions"><summary>The Freezer · ${p.freezer.shards}/5 Ice Shards · ${p.freezer.glide?'Glide stored':'No Glide stored'}</summary><div class="controls">${button('inspect-freezer','View The Freezer',`data-index="${seat}"`)}</div><p>Stored tokens are out of play. They cannot be removed, transferred by ordinary status cards or counted for damage. Only an authorised ability or card can transfer them to your board. Five stored shards can be converted into stored Glide.</p></details>`:''}
-    ${p.aces?`<details class="token-actions"><summary>Ace cards · ${p.aceTurn===state.turn?p.aceExploded??0:0}/${1+(p.aceTurn===state.turn?p.aceExtra??0:0)} exploded this turn</summary><div class="controls">${gambit.suits.map((suit,i)=>`<figure style="max-width:150px;margin:6px">${button('inspect-ace',`<img src="${p.aces[suit].up?art.gambitAces[i]:art.back}" alt="${suit} Ace" style="width:100%">`,`data-index="${i}" data-seat="${seat}"`)}<figcaption>${statusLabel(suit)} · ${p.aces[suit].up?`${p.aces[suit].charge}/${gambit.caps[suit]} charged`:'Face down'}</figcaption></figure>`).join('')}</div><p>One Ace explosion per turn in total, plus any additional allowance. Acceleration tokens remain on their own Aces and cannot be transferred or removed.</p></details>`:''}
+    ${p.freezer?`<details class="token-actions" data-disclosure="freezer-${seat}"><summary>The Freezer · ${p.freezer.shards}/5 Ice Shards · ${p.freezer.glide?'Glide stored':'No Glide stored'}</summary><div class="controls">${button('inspect-freezer','View The Freezer',`data-index="${seat}"`)}</div><p>Stored tokens are out of play. They cannot be removed, transferred by ordinary status cards or counted for damage. Only an authorised ability or card can transfer them to your board. Five stored shards can be converted into stored Glide.</p></details>`:''}
+    ${p.aces?`<details class="token-actions" data-disclosure="aces-${seat}"><summary>Ace cards · ${p.aceTurn===state.turn?p.aceExploded??0:0}/${1+(p.aceTurn===state.turn?p.aceExtra??0:0)} exploded this turn</summary><div class="controls">${gambit.suits.map((suit,i)=>`<figure style="max-width:150px;margin:6px">${button('inspect-ace',`<img src="${p.aces[suit].up?art.gambitAces[i]:art.back}" alt="${suit} Ace" style="width:100%">`,`data-index="${i}" data-seat="${seat}"`)}<figcaption>${statusLabel(suit)} · ${p.aces[suit].up?`${p.aces[suit].charge}/${gambit.caps[suit]} charged`:'Face down'}</figcaption></figure>`).join('')}</div><p>One Ace explosion per turn in total, plus any additional allowance. Acceleration tokens remain on their own Aces and cannot be transferred or removed.</p></details>`:''}
+      </div>
+    </details>
   </section>`;
 }
-function tray(values,seat,editable,held=[]) {
+function dieFace(values, seat, index, view, value = values[index], showFace = false) {
+  const primary = values === view.dice;
+  const blank = !dieValue(value,view.players[seat]);
+  const foreign = primary && view.realityDie?.seat===seat && view.realityDie.index===index;
+  const borrowed = primary && storm.borrowed(view,seat,index);
+  const ownerHero = heroId(view,seat);
+  const dieHero = values===view.santaNogRoll?.dice ? santa.id : foreign ? scarletWitch.id
+    : primary ? storm.dieHero(view,seat,index) : ownerHero;
+  const manifest = primary && ownerHero===psylocke.id && view.players[seat].manifestIndex===index;
+  const symbols = HEROES[dieHero].symbols[value-1];
+  const label = blank ? showFace ? `${value}, blank due to Hex` : 'Blank · Hex'
+    : borrowed ? `${value} ${symbols} · borrowed ${HEROES[dieHero].name} die${dieHero!==ownerHero?', symbol unavailable':''}`
+    : foreign && ownerHero!==scarletWitch.id ? `${value} · Scarlet Witch die, symbol unavailable`
+    : `${value} ${symbols}${manifest?' · Manifest die':''}`;
+  const image = manifest ? art.manifestDice[value-1] : art.dice[dieHero][value-1];
+  const picture = blank&&!showFace ? '<span aria-label="Blank due to Hex">—</span>' : `<img src="${image}" alt="${label}">`;
+  return {label,picture};
+}
+
+function tray(values,seat,editable,held=[],view=state) {
   return `<div class="dice" role="group" aria-label="${names[seat]} dice">${values.map((value,i) => {
-    if (!value) return '<span class="die empty" aria-hidden="true">·</span>';
-    const blank=!dieValue(value,state.players[seat]);
-    const foreign=values===state.dice&&state.realityDie?.seat===seat&&state.realityDie.index===i;
-    const borrowed=values===state.dice&&storm.borrowed(state,seat,i);
-    const dieHero=values===state.santaNogRoll?.dice?santa.id:foreign?scarletWitch.id:values===state.dice?storm.dieHero(state,seat,i):heroId(state,seat);
-    const label = blank?'Blank · Hex':borrowed?`${value} ${HEROES[dieHero].symbols[value-1]} · borrowed ${HEROES[dieHero].name} die${dieHero!==heroId(state,seat)?', symbol unavailable':''}`:foreign&&heroId(state,seat)!==scarletWitch.id?`${value} · Scarlet Witch die, symbol unavailable`:`${value} ${HEROES[dieHero].symbols[value-1]}`;
-    const manifest=values===state.dice&&heroId(state,seat)===psylocke.id&&state.players[seat].manifestIndex===i;
-    const picture = blank?'<span aria-label="Blank due to Hex">—</span>':
-      `<img src="${manifest?art.manifestDice[value-1]:art.dice[dieHero][value-1]}" alt="${label}${manifest?' · Manifest die':''}">`;
-    if(values===state.dice&&iceman.locked(state,seat,i))return `<span class="die frozen" style="outline:2px solid #b8f5ff" aria-label="Die ${i+1}, ${label}, frozen by Dice Cube">${picture}<small>Frozen</small></span>`;
+    if (!value) return blankDie;
+    const {label,picture} = dieFace(values,seat,i,view);
+    if(values===view.dice&&iceman.locked(view,seat,i))return `<span class="die frozen" style="outline:2px solid #b8f5ff" aria-label="Die ${i+1}, ${label}, frozen by Dice Cube">${picture}<small>Frozen</small></span>`;
     return editable ? button('hold',picture,`class="die" data-index="${i}" aria-pressed="${!!held[i]}" aria-label="Die ${i+1}, ${label}, ${held[i]?'held':'available to reroll'}"`)
-      : `<span class="die">${picture}</span>`;
+      : `<span class="die${held[i]?' kept':''}"${held[i]?` aria-label="Die ${i+1}, ${label}, held"`:''}>${picture}</span>`;
   }).join('')}</div>`;
 }
+function handCardChoices(choices, seat) {
+  if (!choices.length || (choices.length===1 && choices[0].label==='Play')) return '';
+  const labels=choices.map(choice=>tokenChoiceLabel(state,choice,seat));
+  if (labels.some((label,index)=>label!==choices[index].label)) {
+    return `<fieldset class="card-token-choices"><legend>Choose effect</legend>
+      ${labels.map((label,index)=>`<label><input type="radio" name="card-choice" value="${index}" ${index===0?'checked':''}>${label}</label>`).join('')}
+    </fieldset>`;
+  }
+  return `<label>Choose effect <select id="card-choice">${labels.map((label,index)=>`<option value="${index}">${label}</option>`).join('')}</select></label>`;
+}
+
 function handPanel() {
   if(!state.cards || state.stage==='finished')return '';
-  const seat=cardActor(state), player=state.players[seat];
+  const seat=handSeat, player=state.players[seat];
+  const canPlay = !rollRequest && canPlayFromHand(state, seat);
   if(!player.hand.length)return '<p>No cards in hand.</p>';
   const groups={playable:[],unavailable:[]};
   for(const id of player.hand){
-    const c=seatCard(state,seat,id), choices=cardChoices(state,seat,id);
+    const c=seatCard(state,seat,id), choices=canPlay ? cardChoices(state,seat,id) : [];
     const chosen=selectedCard===id;
-    const detail=choices.length===1&&choices[0].label==='Play' ? '' :
-      choices.length ? `<label>Choose effect <select id="card-choice">${choices.map((choice,i)=>`<option value="${i}">${choice.label}</option>`).join('')}</select></label>` : '';
+    const detail=chosen&&!cardDicePlan(seat,id,choices)?handCardChoices(choices,seat):'';
     const entry=`<div class="hand-card">
       ${button('select-card',`<strong>${c.name}</strong><small>${price(state,seat,id)} CP · ${c.phase}</small>`,`data-index="${id}" aria-expanded="${chosen}"`)}
-      ${button('inspect-card','View',`data-index="${id}" data-seat="${seat}" aria-label="View ${c.name}"`)}
+      ${previewCard(state,seat,id)}
     </div>${chosen?`<div class="card-command">${detail}
       ${choices.length?button('playCard','Play card',`class="primary" data-index="${id}"`):'<small>Unavailable in this window.</small>'}
-      ${isSelling(state)&&seat===state.active?button('sell','Sell for 1 CP',`data-index="${id}"`):''}</div>`:''}`;
+      ${canPlay&&isSelling(state)&&seat===state.active?button('sell','Sell for 1 CP',`data-index="${id}"`):''}</div>`:''}`;
     groups[choices.length?'playable':'unavailable'].push(entry);
   }
   return [['Playable now',groups.playable],['Unavailable now',groups.unavailable]]
@@ -379,12 +451,415 @@ function rerollDice(dice,max,filter=()=>true){
     ${dice.map((v,i)=>`<label><input type="checkbox" name="ability-reroll" value="${i}" ${filter(v)?'':'disabled'}> Die ${i+1} (${v})</label>`).join('')}
     </div>${button('abilityReroll',`Reroll up to ${max}`)}`;
 }
-function rollDisplay(context){
-  if(!context.owners)return tray(context.dice,context.seat,false);
-  return context.dice.map((value,i)=>`<div><strong>${names[dieOwner(context,i)]}</strong>${tray([value],dieOwner(context,i),false)}</div>`).join('');
+function orderedDice(dice, owners, first) {
+  return dice.map((value, index) => ({value, owner: owners[index], index}))
+    .sort((left, right) => Number(right.owner === first) - Number(left.owner === first));
 }
-function arena() {
-  const allowed=legal(state), seat=actor(state), p=state.pending, responding=cardActor(state);
+
+function opposedTray(dice, owners, first, playerNames, renderDie) {
+  return `<div class="opposed-dice" role="group" aria-label="${dice[0] ? 'Opposed dice' : 'Unrolled dice'}">${orderedDice(dice, owners, first)
+    .map(({value, owner, index}) => `<div><strong>${playerNames[owner]}</strong>${renderDie(value, owner, index)}</div>`).join('')}</div>`;
+}
+
+function rollDisplay(context, view = state, first = view.active) {
+  if (!context.owners) return tray(context.dice, context.seat, false, context.held, view);
+  return opposedTray(context.dice, context.owners, first, names, (value, owner) => tray([value], owner, false, [], view));
+}
+
+function cardDicePlan(seat, id, choices) {
+  const context = rollContext(state);
+  if (!context) return null;
+  const options = choices.map((choice, choiceIndex) => {
+    const index = choice.i ?? (Number.isInteger(choice.to) ? choice.index : undefined);
+    const dice = Number.isInteger(index) ? [[index, choice.v ?? choice.to ?? null]] : [];
+    if (Number.isInteger(choice.j)) dice.push([choice.j, choice.w ?? null]);
+    return {choiceIndex, label: choice.label, dice};
+  });
+  const diceOptions = options.filter(option => option.dice.length);
+  if (!diceOptions.length) return null;
+  const hero = heroId(state,seat);
+  const mode = diceOptions[0].dice[0][1] !== null ? 'change'
+    : hero===cursedPirate.id && id===29 ? 'target' : 'reroll';
+  const cost = hero===cyclops.id && id===27 ? 'Changing a die spends 1 Support and 1 Battle Plan.' : '';
+  return {seat,id,context,options,mode,cost,limit:Math.max(...diceOptions.map(option=>option.dice.length))};
+}
+
+function activeDiceOptions(editor, except) {
+  return editor.options.filter(option => option.dice.length && [...editor.picks].every(([index, face]) =>
+    index === except || option.dice.some(([candidate, value]) => candidate === index && value === face)));
+}
+
+function selectableRoll(context, renderDie) {
+  if (!context.owners) {
+    return `<div class="dice" role="group" aria-label="${names[context.seat]} dice">${context.dice.map((_,i)=>renderDie(i,context.seat)).join('')}</div>`;
+  }
+  return opposedTray(context.dice,context.owners,state.active,names,(_,owner,index)=>
+    `<div class="dice">${renderDie(index,owner)}</div>`);
+}
+
+function selectableDie(context, index, seat, action, enabled, selected, face, open = false) {
+  const {label,picture} = dieFace(context.dice,seat,index,state,face);
+  const frozen = iceman.contextLocked(state,context,index);
+  const classes = `class="die${selected?' kept':''}${open?' face-picker-open':''}${enabled?'':' unavailable-die'}${frozen?' frozen':''}"`;
+  const description = `aria-label="Die ${index+1}, ${label}${frozen?', frozen':''}"`;
+  if (!enabled) return `<span ${classes} ${description}>${picture}${frozen?'<small>Frozen</small>':''}</span>`;
+  const expanded = action==='pick-card-die' && diceEdit?.mode==='change' ? ` aria-expanded="${open}"` : '';
+  return button(action,picture,`${classes} ${description} data-index="${index}" aria-pressed="${selected}"${expanded}`);
+}
+
+function faceChoices(editor, index) {
+  return [...new Set(activeDiceOptions(editor,index).flatMap(option=>
+    option.dice.filter(([candidate])=>candidate===index).map(([,face])=>face)))].sort((a,b)=>a-b);
+}
+
+function diceEditorPanel(editor) {
+  const {context,mode,picks,open,seat,id,limit,cost} = editor;
+  const changing = mode==='change';
+  const dice = selectableRoll(context, (index,owner)=>{
+    const selected=picks.has(index);
+    const enabled=selected||activeDiceOptions(editor,index).some(option=>option.dice.some(([candidate])=>candidate===index));
+    return selectableDie(context,index,owner,'pick-card-die',enabled,selected,picks.get(index) ?? undefined,open===index);
+  });
+  const faces = open===undefined ? '' : `<div class="face-picker" role="group" aria-label="New face for die ${open+1}">
+    <strong>New face for die ${open+1}</strong>
+    <div class="face-picker-options">${faceChoices(editor,open).map(value=>{
+      const {label,picture}=dieFace(context.dice,dieOwner(context,open),open,state,value,true);
+      return button('pick-card-face',picture,`class="die" data-index="${value}" aria-label="${label}" aria-pressed="${picks.get(open)===value}"`);
+    }).join('')}
+    ${picks.has(open)?button('undo-card-face','Undo change'):''}</div></div>`;
+  const ready=activeDiceOptions(editor).find(option=>option.dice.length===picks.size);
+  const confirm=changing?'Confirm changes':mode==='reroll'?'Reroll selected dice':'Confirm target';
+  const instruction=changing?'Select a die, then choose its new face.':mode==='reroll'?'Tap the dice you want to reroll.':'Choose a die to target.';
+  return `<section class="arena dice-editor" aria-label="Choose dice">
+    <div class="phase"><span>${names[seat]} · ${picks.size} of ${limit} selected</span></div>
+    <h2 tabindex="-1" id="action-title">${seatCard(state,seat,id).name}</h2>
+    <p>${instruction}${cost?` ${cost}`:''}</p>
+    ${!context.owners&&context.seat!==seat?`<strong>${names[context.seat]}’s dice</strong>`:''}
+    ${dice}${faces}
+    <div class="controls">${button('confirm-card-dice',confirm,`class="primary" ${ready?'':'disabled'}`)}
+    ${editor.options.filter(option=>!option.dice.length).map(option=>button('confirm-card-dice',option.label,`data-choice="${option.choiceIndex}"`)).join('')}
+    ${button('cancel-card-dice','Cancel')}</div></section>`;
+}
+
+function handleDiceEditor(type, index, alternate) {
+  const editor = diceEdit;
+  const {picks,open,mode} = editor;
+  if (type==='cancel-card-dice') {
+    diceEdit = null;
+    handSeat = editor.seat;
+    selectedCard = editor.id;
+    render();
+    renderHand();
+    handDialog.showModal();
+    return;
+  }
+  if (type==='confirm-card-dice') {
+    const option = alternate===undefined
+      ? activeDiceOptions(editor).find(option=>option.dice.length===picks.size)
+      : editor.options.find(option=>!option.dice.length && option.choiceIndex===Number(alternate));
+    if (!option) return;
+    const action = {type:'playCard',id:editor.id,seat:editor.seat,choice:option.choiceIndex};
+    diceEdit=null;
+    selectedCard=null;
+    state=mode==='reroll' ? transitionOnMatchScreen(state,action,roll,Math.random)
+      : applyMatchAction(action,seatCard(state,editor.seat,editor.id).name);
+    render();
+    focusRollAction();
+    return;
+  }
+  if (type==='pick-card-die') {
+    const selected=picks.has(index);
+    if (!selected && !activeDiceOptions(editor).some(option=>option.dice.some(([candidate])=>candidate===index))) return;
+    if (mode==='change') editor.open=open===index?undefined:index;
+    else if (selected) picks.delete(index);
+    else picks.set(index,null);
+  } else if (type==='pick-card-face' && open!==undefined && faceChoices(editor,open).includes(index)) {
+    picks.set(open,index);
+    editor.open=undefined;
+  } else if (type==='undo-card-face' && open!==undefined) {
+    picks.delete(open);
+    editor.open=undefined;
+  } else return;
+  render();
+  const die = type==='pick-card-die'?index:open;
+  const selector = editor.open===undefined
+    ? `button[data-action="pick-card-die"][data-index="${die}"]` : 'button[data-action="pick-card-face"]';
+  match.querySelector(selector)?.focus({preventScroll:true});
+}
+
+const blankDie = '<span class="die empty" aria-hidden="true">·</span>';
+
+function blankRoll(count, owners, playerNames = names, first = state?.active) {
+  if (owners) return opposedTray(Array(count).fill(null), owners, first, playerNames,
+    () => `<div class="dice">${blankDie}</div>`);
+  return `<div class="dice" role="group" aria-label="Unrolled dice">${blankDie.repeat(count)}</div>`;
+}
+
+function initiativeTray(request, playerNames) {
+  if (!request.initiative) return blankRoll(2, request.owners, playerNames, 0);
+  return opposedTray(request.initiative, request.owners, 0, playerNames, (value, seat) =>
+    `<div class="dice"><span class="die"><img src="${art.dice[request.setup.heroes[seat]][value - 1]}" alt="${playerNames[seat]} rolled ${value}"></span></div>`);
+}
+
+function offenceDice() {
+  return state.dice.length ? state.dice : Array(5+(state.stormDice?.count??0)).fill(null);
+}
+
+function abilityRequirement(ability) {
+  if (ability.straight) {
+    const length = ability.straight;
+    const label = {4:'Small straight', 5:'Large straight', 6:'Six-number straight'}[length] ?? `${length}-number straight`;
+    const ranges = Array.from({length: 7 - length}, (_, index) => `${index + 1}–${index + length}`);
+    return `${label} (${ranges.length > 1 ? ranges.slice(0, -1).join(', ') + ' or ' + ranges.at(-1) : ranges[0]})`;
+  }
+  return Object.entries(ability.symbols).map(([symbol, count]) => `${count} × ${symbol}`).join(' + ');
+}
+
+function potionSlotName(seat, slot, abilities) {
+  if (slot==='defence') return defenceName(state,seat);
+  const ability=abilities.find(ability=>(ability.upgradeSlot??ability.name)===slot);
+  return ability?.label??slot;
+}
+
+function attachedPotions(seat) {
+  const potions=alchemist.tokens(state,seat);
+  const abilities=abilitiesFor(state,seat);
+  const capacities=alchemist.slots(state.players[seat]);
+  const slots=Object.entries(capacities).filter(([,capacity])=>capacity>0);
+  const legacy=potions.filter(potion=>!capacities[potion.slot]);
+  return `<details class="board-upgrades" data-disclosure="potions-${seat}">
+    <summary>Attached Potions (${potions.length})</summary>
+    <div class="potion-inventory">${slots.map(([slot,capacity])=>{
+      const attached=potions.filter(potion=>potion.slot===slot);
+      return `<div><strong>${potionSlotName(seat,slot,abilities)}</strong> · ${attached.length}/${capacity} slots
+        ${attached.length?`<ul>${attached.map(potion=>`<li>${tokenChoiceLabel(state,{
+          key:potion.key,label:`Slot ${potion.index+1} · ${statusLabel(potion.key)}`
+        },seat)}</li>`).join('')}</ul>`:'<small>Empty</small>'}</div>`;
+    }).join('')}${legacy.map(potion=>tokenChoiceLabel(state,{key:potion.key,label:alchemist.tokenLabel(potion)},seat)).join('')}</div></details>`;
+}
+
+const potionLeafletText = {
+  punchify: 'May only be Attached to an Offensive Ability. When spent, add 2 dmg to your Attack. Attack Modifier.',
+  bolsterate: 'May only be Attached to a Defensive Ability. When spent, prevent 2 incoming dmg.',
+  cleansitude: 'May be Attached to any Ability. When spent, the Alchemist chooses one: Remove 1 status effect from yourself or Heal 1.',
+  toxification: 'May be Attached to any Ability. When spent, inflict Poison on a chosen player.'
+};
+
+function potionAttachmentChoices(seat, choices) {
+  const slots=choices.map((choice,index)=>({...choice,choiceIndex:index})).filter(choice=>choice.key===selectedPotion);
+  if (!slots.length) {
+    return `<div class="potion-picker" role="group" aria-label="Potion types">${alchemist.types.map(key=>{
+      const available=choices.some(choice=>choice.key===key);
+      return button('select-potion',`${tokenChoiceLabel(state,{key,label:`<strong>${statusLabel(key)}</strong>`},seat)}
+        <small>Limit ${alchemist.limits[key]} · ${potionLeafletText[key]}</small>
+        ${available?'':'<small>Unavailable for this attachment</small>'}`,
+        `class="potion-type" data-status="${key}" ${available?'':'disabled'}`);
+    }).join('')}</div>`;
+  }
+  const abilities=abilitiesFor(state,seat);
+  const defensiveRequirement=`Defensive roll · ${alchemist.defenceDiceCount(state.players[seat])} dice · 1 attachment per Crucible (6)`;
+  return `<div class="potion-picker" role="group" aria-label="Open Potion slots">
+    <strong>${tokenChoiceLabel(state,{key:selectedPotion,label:statusLabel(selectedPotion)},seat)}</strong>
+    ${slots.map(({slot,index,choiceIndex})=>{
+      const ability=abilities.find(ability=>(ability.upgradeSlot??ability.name)===slot)
+        ?? boardFor(state,seat).abilities.find(ability=>ability.name===slot);
+      const requirement=slot==='defence'?defensiveRequirement:abilityRequirement(ability);
+      const name=slot==='defence'?defenceName(state,seat):ability.label??ability.name;
+      return button('alchemistChoice',`<strong>${name} · slot ${index+1}</strong>
+        <small class="ability-requirement">${requirement}</small>`,
+        `class="ability potion-slot" data-choice="${choiceIndex}"`);
+    }).join('')}
+    ${button('back-to-potions','Choose a different Potion','class="potion-back"')}
+  </div>`;
+}
+
+function offenceAbilities(seat, available = []) {
+  return `<div class="abilities">${abilitiesFor(state,seat).map((a,i)=>{
+    const text = a.straight ? a.text.replace(/^(Small|Large|Six-number) straight · /i, '') : a.text;
+    return button('declare',`<strong>${a.label??a.name}</strong><small class="ability-requirement">${abilityRequirement(a)}</small><small>${text}</small>`,
+      `class="ability" data-ability="${i}" ${available.includes(a.name)?'':'disabled'}`);
+  }).join('')}</div>`;
+}
+
+function rollResultTray(request) {
+  return request.reveal.map(batch => {
+    const view = request.next;
+    const context = batch.primary ? {...batch, dice: view.dice, held: view.held} : batch;
+    return rollDisplay(context, view, state.active);
+  }).join('');
+}
+
+function rollRequestPanel(request) {
+  const {setup, owners, initiative, reveal} = request;
+  const playerNames = setup ? setup.heroes.map((id, seat) =>
+    setup.heroes[0] === setup.heroes[1] ? `${HEROES[id].name} (P${seat + 1})` : HEROES[id].name) : names;
+  const tied = initiative && initiative[0] === initiative[1];
+  const readyToAdvance = initiative || reveal;
+  const phase = setup ? 'Match setup' : `Turn ${state.turn} · Roll`;
+  const label = readyToAdvance
+    ? setup ? tied ? 'Prepare tie-break roll' : 'Start match' : 'Continue'
+    : setup ? 'Roll for initiative' : owners ? 'Roll both dice' : request.count === 1 ? 'Roll die' : 'Roll dice';
+  let dice;
+  if (setup) dice = initiativeTray(request, playerNames);
+  else if (reveal) dice = rollResultTray(request);
+  else dice = blankRoll(request.count, owners);
+  return `<section class="arena" aria-label="${readyToAdvance?'Roll result':'Pending roll'}">
+    <div class="phase"><span>${phase}</span></div>
+    <h2 tabindex="-1" id="action-title">${request.description}</h2>
+    ${tied ? '<p>Tied initiative. Roll again to break the tie.</p>' : ''}
+    ${dice}
+    ${button(readyToAdvance ? 'advance-roll' : 'roll-request',label,'class="primary"')}
+    ${setup ? '' : matchTools(cardActor(state))}
+  </section>`;
+}
+
+const rerollActions = new Set([
+  'rerollDuel', 'rerollSkyward', 'gambitMagicReroll', 'mysticWildReroll',
+  'spiderSenseReroll', 'widowDefenceReroll', 'abilityReroll', 'effectRetry',
+  'retryDie', 'extraDefence', 'stormOppReroll', 'rerollUndead', 'rerollReload',
+  'rerollMesmerized', 'nyraReroll', 'titheReroll'
+]);
+
+const manualRollActions = new Set([
+  'roll', 'defend', 'rollEffect', 'rollMysticContest', 'rollSantaAbility',
+  'deadpoolLuckyRoll', 'rollTrickBag', 'widowBombRoll', 'rollPrey', 'rollNevermore',
+  ...rerollActions
+]);
+
+function rollsOnCurrentScreen(view, type) {
+  if (type === 'roll' || type === 'defend' || type === 'retryDie') return true;
+  if (!rerollActions.has(type)) return false;
+  const context = rollContext(view);
+  return !!context && (context.dice === view.dice || context.dice === view.defenceDice ||
+    view.gunContest?.kind === 'duel' && context.dice === view.gunContest.dice);
+}
+
+function defenceAttackerView(view) {
+  // Reuse the engine's response priority for an attacker effect chosen before the roll.
+  return {...view, response: {seat: view.active}};
+}
+
+function transitionOnMatchScreen(view, action, roller, random) {
+  if (action.type === 'defend') return transition(view, action, roller, random, true);
+  if (!action.attackerEffect) return transition(view, action, roller, random, 'inlineCards');
+  if (view.stage !== 'defence' || view.response) return view;
+  const priority = defenceAttackerView(view);
+  const next = transition(priority, action, roller, random, 'inlineCards');
+  if (next === priority) return view;
+  // The temporary priority has no deferred action and must never enter the save.
+  if (next.response && !next.response.action) next.response = null;
+  return next;
+}
+
+// Stop just before an incidental roll so the player can roll explicitly.
+function beforeDice(action, onRoll, random) {
+  const stop = Symbol('pause before dice');
+  const before = structuredClone(state);
+  const wait = () => wait.requestBatch(1);
+  wait.requestBatch = (count, owners) => {
+    onRoll?.(count, owners);
+    throw stop;
+  };
+  try {
+    const next = transitionOnMatchScreen(before, action, wait, random);
+    return next === before ? state : next;
+  } catch (error) {
+    if (error !== stop) throw error;
+    return state;
+  }
+}
+
+function revealRoll(request, random = Math.random) {
+  const {action, rollType} = request;
+  if (rollsOnCurrentScreen(state, rollType)) {
+    rollRequest = null;
+    return transitionOnMatchScreen(state, action, roll, random);
+  }
+  const batches = [];
+  let singles;
+  const record = () => {
+    if (!singles) {
+      singles = {dice: []};
+      batches.push(singles);
+    }
+    const face = roll();
+    singles.dice.push(face);
+    return face;
+  };
+  record.requestBatch = (count, owners) => {
+    singles = undefined;
+    const dice = Array.from({length: count}, roll);
+    batches.push({dice, owners});
+    return dice;
+  };
+  const next = transitionOnMatchScreen(state, action, record, random);
+  if (!batches.length || next === state) {
+    rollRequest = null;
+    return next;
+  }
+  const context = rollContext(next);
+  const seat = context?.seat ?? action.seat ?? cardActor(state);
+  const reveal = rerollActions.has(rollType) && context?.dice?.length
+    ? [{...context, primary: context.dice === next.dice}]
+    : batches.map(batch => ({...batch, seat}));
+  rollRequest = {...request, reveal, next};
+  return state;
+}
+
+function applyMatchAction(action, description) {
+  const rollAction = action.type === 'passResponse' ? state.response?.action : action;
+  const rollType = rollAction?.type;
+  if (manualRollActions.has(rollType)) {
+    if (action.type === 'passResponse') description = state.pending?.name ?? 'Roll dice';
+    return revealRoll({action, description, rollType});
+  }
+  const randomPrefix = [];
+  return beforeDice(action, (count, owners) => {
+    const title = owners ? state.pending?.name ?? description : description;
+    rollRequest = {action, rollType, description: title, count, owners, randomPrefix};
+  }, () => {
+    const value = Math.random();
+    randomPrefix.push(value);
+    return value;
+  });
+}
+
+function resolveRollRequest() {
+  const request = rollRequest;
+  if (request.setup) {
+    rollRequest = {...request, initiative: [roll(), roll()]};
+  } else {
+    let index = 0;
+    const random = () => request.randomPrefix[index++] ?? Math.random();
+    state = revealRoll(request, random);
+  }
+  render();
+  focusRollAction();
+}
+
+function advanceRollRequest() {
+  const request = rollRequest;
+  if (request.setup && request.initiative[0] === request.initiative[1]) {
+    rollRequest = {...request, initiative: undefined};
+  } else {
+    let index = 0;
+    state = request.setup ? createMatch(() => request.initiative[index++], request.setup) : request.next;
+    names = heroNames(state);
+    rollRequest = null;
+    if (handDialog.open) handDialog.close();
+    selectedCard = null;
+  }
+  render();
+  focusRollAction();
+}
+
+function focusRollAction() {
+  (match.querySelector('button[data-action="advance-roll"], button[data-action="roll-request"]')
+    ?? document.getElementById('action-title'))?.focus();
+}
+
+function arena(seat, responding, decisionSeat) {
+  const allowed=legal(state), p=state.pending;
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
@@ -399,16 +874,22 @@ function arena() {
     if(h.kind==='donuts'){heading=`Give Donut · ${h.left} remaining`;detail='Choose any player for each token. The whole batch is allocated before tokens are gained; excess is lost at each player’s limit of 2.';content=names.map((name,target)=>button('deadpoolDonutTarget',`${name} · ${(state.players[target].donut??0)+h.allocation[target]}/2`,`data-target="${target}"`)).join('');}
     if(h.kind==='gain'){heading=`Gain ${h.amount} ${statusLabel(h.key)}`;detail='Spend existing eligible tokens before collecting the whole batch if desired. Excess is lost.';content=button('deadpoolCollect','Collect the whole batch','class="primary"');}
     if(h.kind==='speechCP'||h.kind==='speechTaco'){heading=h.kind==='speechCP'?'Finger Guns · spoken bonus':'Taco Truck · spoken bonus';detail=h.kind==='speechCP'?'Say “Pew, Pew” while pointing finger guns to gain 1 CP, or skip the bonus.':'The straight can use a 1 or 6. Shout “Taco Tuesday!” to add 1 damage, or skip the bonus.';content=button('deadpoolSpeech','Claim the spoken bonus','data-status="yes"')+button('deadpoolSpeech','Skip the spoken bonus','data-status="no"');}
-    if(h.kind==='fourth'){heading='Fourth Wall! · choose a Positive status';content=`<label>Gain <select id="deadpool-fourth">${deadpool.fourthChoices(state,t.seat).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('deadpoolFourth','Gain the chosen status','class="primary"');}
+    if(h.kind==='fourth'){heading='Fourth Wall! · choose a Positive status';content=`<div class="controls">${deadpool.fourthChoices(state,t.seat).map((choice,i)=>
+      button('deadpoolFourth',tokenChoiceLabel(state,choice,choice.key==='donut'?t.seat:1-t.seat),`data-choice="${i}"`)).join('')}</div>`;}
   } else if(state.deadpoolDonutRoll&&!state.response&&!state.retry){
     phase='Donut';heading='Roll for Donut healing';detail='Heal half the final die value, rounded up. Healing is accumulated with the existing end-of-Upkeep effects.';content=rollDisplay(rollContext(state))+button('resolveDonut','Resolve Donut healing','class="primary"');
   } else if(state.deadpoolLucky&&!state.response&&!state.retry){
     const r=state.deadpoolLucky;phase='Do You Feel Lucky?!';heading=`${names[r.target]} · hope for a number`;
     if(r.step==='hope'){content=`<label>Hope for <select id="deadpool-lucky-hope">${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${n===6?'selected':''}>${n}</option>`).join('')}</select></label>`+button('deadpoolLuckyHope','Commit the hoped-for number','class="primary"');}
-    if(r.step==='ready'){detail=`Hope: ${r.hope}. Match it to heal 3; otherwise receive 3 isolated damage.`;content=button('deadpoolLuckyRoll','Roll the opponent’s die','class="primary"');}
+    if(r.step==='ready'){detail=`Hope: ${r.hope}. Match it to heal 3; otherwise receive 3 isolated damage.`;content=blankRoll(1)+button('deadpoolLuckyRoll','Roll the opponent’s die','class="primary"');}
     if(r.step==='roll'){detail=`Hope: ${r.hope}. The final die belongs to ${names[r.target]} and can be altered before resolution.`;content=rollDisplay(rollContext(state))+button('deadpoolLuckyResolve','Resolve the hoped-for roll','class="primary"');}
   } else if(state.santaRemoval&&!state.santaNogRoll&&!state.sideDamage&&!state.retry){
-    phase='Status effect response';heading=state.santaRemoval.choosing?`${names[state.santaRemoval.source]} resolves the removal`:`${names[state.santaRemoval.seat]} may spend tokens first`;detail='Resolve the committed removal after spending eligible existing tokens if desired. If the chosen effect has gone, another available status effect must be selected.';content=state.santaRemoval.choosing?`<label>Remove <select id="santa-removal-choice">${santa.removalChoices(state).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('resolveSantaRemoval','Resolve status removal','class="primary"'):button('santaRemovalReady','Finish token response','class="primary"');
+    const removal=state.santaRemoval;
+    phase='Status effect response';heading=removal.choosing?`${names[removal.source]} resolves the removal`:`${names[removal.seat]} may spend tokens first`;
+    detail='If the chosen token has gone, select another available token.';
+    content=removal.choosing?`<div class="controls">${santa.removalChoices(state).map((choice,i)=>
+      button('resolveSantaRemoval',tokenChoiceLabel(state,choice,removal.seat),`data-choice="${i}"`)).join('')}</div>`
+      :button('santaRemovalReady','Finish token response','class="primary"');
   } else if(state.santaGift){
     const g=state.santaGift;phase='White Elephant Gift';heading=g.stage==='hide'?'Santa · conceal the gift':'Opponent · choose a hand';detail=g.stage==='hide'?'Privately choose which hand holds Cheer and 3 Egg Nog from the supply, then let the opponent guess.':'Choose a hand. If it is empty, Santa gains the gift; otherwise no tokens are gained.';content=['left','right'].map(hand=>button(g.stage==='hide'?'santaGiftHide':'santaGiftGuess',`${hand==='left'?'Left':'Right'} hand`,`data-status="${hand}"`)).join('');
   } else if(state.santaTask&&state.stage==='santaChoices'){
@@ -437,9 +918,19 @@ function arena() {
     if(h.kind==='free'){heading='Optional free Reject activation';detail='Activate one eligible Reject without discarding it. The once-per-turn limit still applies.';content=krampus.options(state,responding,true).map((c,i)=>button('krampusFree',c.label,`data-choice="${i}"`)).join('')+button('krampusFreeSkip','Keep the Rejects without activating','class="primary"');}
     if(h.kind==='rejection'){heading='Rejection · choose the benefit';content=button('krampusRejection','Draw 1 Reject','data-status="draw"')+button('krampusRejection','Activate a Reject without discarding','data-status="free"');}
   } else if(!state.response&&state.alchemistTask&&state.stage==='alchemistChoices'){
-    const h=state.alchemistTask.queue[0];phase='Alchemist';heading=h.kind==='attach'?`Attach Potions · ${h.left} remaining`:h.kind==='remove'?`Remove Potions · up to ${h.left}`:h.kind==='target'?'Tonic! · choose a player':'Transmogrify! · choose a status';
-    detail=h.kind==='attach'?'Choose an open slot and an available potion. All attachments resolve before potions can be spent.':h.kind==='remove'?'Removing a potion does not activate its potion effect.':'';
-    content=`<label>Choose <select id="alchemist-choice">${alchemist.taskChoices(state).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('alchemistChoice','Confirm choice','class="primary"')+(allowed.alchemistDone?button('alchemistDone','Finish removing Potions'):'');
+    const task=state.alchemistTask, h=task.queue[0], choices=alchemist.taskChoices(state);
+    phase='Alchemist';
+    if (h.kind==='attach') {
+      const choosingSlot=choices.some(choice=>choice.key===selectedPotion);
+      heading=choosingSlot?`Choose a slot · ${h.left} remaining`:`Choose a Potion · ${h.left} remaining`;
+      content=potionAttachmentChoices(task.seat,choices);
+    } else {
+      heading=h.kind==='remove'?`Remove Potions · up to ${h.left}`:h.kind==='target'?'Tonic! · choose a player':'Transmogrify! · choose a status';
+      if(h.kind==='remove')detail='Removing a Potion leaves its effect unused.';
+      content=`<div class="controls">${choices.map((choice,i)=>button('alchemistChoice',
+        tokenChoiceLabel(state,choice,task.seat),`data-choice="${i}"`)).join('')}
+        ${allowed.alchemistDone?button('alchemistDone','Finish removing Potions'):''}</div>`;
+    }
   } else if(!state.response&&state.alchemistRoll&&!state.cardRoll&&!state.retry){
     phase='Upkeep · The Lab II';heading=names[state.alchemistRoll.seat];detail='Solution attaches 1 Potion. Composition or Crucible attaches 2. A blank attaches none.';content=tray(state.alchemistRoll.dice,state.alchemistRoll.seat,false)+button('resolveAlchemistLab','Resolve The Lab roll','class="primary"');
   } else if(state.iceFreezeChoice){
@@ -450,7 +941,7 @@ function arena() {
   } else if(!state.response&&state.alphaRoll&&!state.cardRoll&&!state.retry){
     const t=state.alphaRoll;phase='Alpha';heading=`${names[t.seat]} challenges ${names[t.target]}`;detail='If the attacker’s result is lower, remove Alpha. A tie retains it. Each die uses its owner’s Hex and manipulation rules.';content=rollDisplay(rollContext(state))+button('resolveAlpha','Resolve Alpha','class="primary"');
   } else if(state.wolverineIntimidate){
-    const t=state.wolverineIntimidate;phase='Intimidate!';heading=`${names[t.target]} chooses`;detail='Discard one card, or receive 4 isolated damage. This discard does not trigger Recovery or Frenzy.';content=state.players[t.target].hand.map(id=>button('wolverineIntimidate',`Discard ${seatCard(state,t.target,id).name}`,`data-status="discard" data-index="${id}"`)).join('')+button('wolverineIntimidate','Receive 4 isolated damage','data-status="damage"');
+    const t=state.wolverineIntimidate;phase='Intimidate!';heading=`${names[t.target]} chooses`;detail='Discard one card, or receive 4 isolated damage. This discard does not trigger Recovery or Frenzy.';content=state.players[t.target].hand.map(id=>previewableOption(state,t.target,id,button('wolverineIntimidate',`Discard ${seatCard(state,t.target,id).name}`,`data-status="discard" data-index="${id}"`))).join('')+button('wolverineIntimidate','Receive 4 isolated damage','data-status="damage"');
   } else if(!state.response&&state.wolverineGain){
     const t=state.wolverineGain;phase='Gain Rage';heading=`${names[t.seat]} gains ${t.amount} Rage`;detail='Spend existing Rage first if desired, then collect the whole batch. Tokens beyond the stack limit are lost.';content=button('collectRage','Collect incoming Rage','class="primary"');
   } else if(!state.response&&state.stormTask&&state.stage==='stormChoices'){
@@ -526,7 +1017,7 @@ function arena() {
       detail=h.cards.length?'This does not discard, draw or transfer any cards.':'The opponent’s hand is empty.';
     } else if(h.kind==='scout'){
       heading='Battle Plan · top three cards';detail=h.picking?'Reveal and add up to one Leadership card to your hand, or skip.':'For each remaining card, discard it or choose it as the next card returned. The first returned card will be on top.';
-      content=h.cards.map((card,i)=>`<figure class="reveal-card"><img src="${cardArtwork(state,t.seat,card)}" alt="${seatCard(state,t.seat,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,t.seat,card).name}</figcaption>${h.picking?(cyclops.isLeadership(state,t.seat,card)?button('cyclopsScoutTake','Reveal and take',`data-index="${i}"`):''):button('cyclopsScoutTop','Return next to deck',`data-index="${i}"`)+button('cyclopsScoutDiscard','Discard',`data-index="${i}"`)}</figure>`).join('')+(h.picking?button('cyclopsScoutSkip','Take no Leadership card','class="primary"'):'');
+      content=h.cards.map((card,i)=>`<figure class="reveal-card"><img src="${cardArtwork(state,t.seat,card)}" alt="${seatCard(state,t.seat,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,t.seat,card).name}</figcaption>${previewCard(state,t.seat,card)}${h.picking?(cyclops.isLeadership(state,t.seat,card)?button('cyclopsScoutTake','Reveal and take',`data-index="${i}"`):''):button('cyclopsScoutTop','Return next to deck',`data-index="${i}"`)+button('cyclopsScoutDiscard','Discard',`data-index="${i}"`)}</figure>`).join('')+(h.picking?button('cyclopsScoutSkip','Take no Leadership card','class="primary"'):'');
       if(h.order.length)detail+=` ${h.order.length} card(s) already ordered.`;
     } else if(h.kind==='defence'){
       heading='Recourse · Blast result';detail='This choice applies once, regardless of the number of Blast symbols.';
@@ -543,7 +1034,7 @@ function arena() {
   } else if(state.conjureTask){
     const t=state.conjureTask,opponent=1-t.seat;phase='Conjure';heading=`${names[opponent]} may block Conjure`;
     detail=`${names[t.seat]} wants to gain ${statusLabel(t.choice.status)} from ${names[t.choice.source]}’s leaflet. Discard one card to prevent the gain, or allow it.`;
-    content=state.players[opponent].hand.map(id=>button('conjureDiscard',`Discard ${seatCard(state,opponent,id).name}`,`data-index="${id}"`)).join('')+button('conjureAllow','Allow the status gain','class="primary"');
+    content=state.players[opponent].hand.map(id=>previewableOption(state,opponent,id,button('conjureDiscard',`Discard ${seatCard(state,opponent,id).name}`,`data-index="${id}"`))).join('')+button('conjureAllow','Allow the status gain','class="primary"');
   } else if(!state.response&&state.scarletJinx&&!state.cardRoll&&!state.retry){
     const t=state.scarletJinx;phase='Jinx';heading=`${activeName} resolves a Crown reroll`;
     detail=`${p.scarlet.jinxUpgrade?'Each Crown adds 1 damage and rolls again.':'Each On outcome can happen only once across the whole ability.'} ${t.left} reroll${t.left===1?'':'s'} pending. Earlier dice have resolved and cannot be changed or matched.`;
@@ -576,7 +1067,7 @@ function arena() {
     }
   } else if(!state.response&&allowed.rollTrickBag){
     phase='Upkeep · Bag of Tricks';heading=`${activeName} resolves a Bag of Tricks`;detail='Resolve each token separately. Choose which to remove and roll first.';
-    content=(state.players[state.active].trickBags??[]).map(b=>button('rollTrickBag',`Roll Bag of Tricks from ${names[b.owner]}`,`data-index="${b.id}"`)).join('');
+    content=blankRoll(1)+(state.players[state.active].trickBags??[]).map(b=>button('rollTrickBag',`Roll Bag of Tricks from ${names[b.owner]}`,`data-index="${b.id}"`)).join('');
   } else if(state.premonitionTask){
     const t=state.premonitionTask,player=state.players[t.seat];phase='Income Phase';heading=`${actingName} uses Premonition`;
     if(t.kind==='choose'){
@@ -584,13 +1075,20 @@ function arena() {
       content=button('choosePremonition','Normal Income · draw 1','data-amount="0"')+(player.premonition>=1?button('choosePremonition','Spend 1 Premonition · draw 2','data-amount="1"'):'')+(player.premonition>=3?button('choosePremonition','Spend 3 Premonition · draw 3','data-amount="3"'):'');
     } else if(t.kind==='return'){
       detail='Return one of these newly drawn cards. Other cards in your hand cannot be returned.';
-      content=t.drawn.map(id=>`<div class="controls"><strong>${seatCard(state,t.seat,id).name}</strong>${button('returnPremonition','Put on top',`data-index="${id}" data-status="top"`)}${button('returnPremonition','Put on bottom',`data-index="${id}" data-status="bottom"`)}</div>`).join('');
+      content=t.drawn.map(id=>previewableOption(state,t.seat,id,`<div class="controls">
+        <strong>${seatCard(state,t.seat,id).name}</strong>
+        ${button('returnPremonition','Put on top',`data-index="${id}" data-status="top"`)}
+        ${button('returnPremonition','Put on bottom',`data-index="${id}" data-status="bottom"`)}
+      </div>`)).join('');
     } else {detail='Income complete.';content=button('completePremonition','Continue to Main Phase','class="primary"');}
   } else if(state.strangeTask&&state.stage!=='sideDamage'){
     const task=state.strangeTask,t=task.queue[0];phase='Spells';heading=t.kind==='prepare'?'Prepare a Spell':t.kind==='cast'?'Cast a Spell':t.kind==='order'?'Order the remaining cards':t.kind==='heal'?'Choose a Hero to heal':t.kind==='dejaTarget'?'Give Déjà Vu to a player':'Remove a status effect';
     if(t.kind==='prepare'||t.kind==='cast')detail=`${t.left} remaining · ${t.zone==='peek'?'among the top five cards':t.zone==='book'?'from the Book of Vishanti':'from your discard pile'}. Resolve this effect completely before choosing another Spell.`;
     if(t.kind==='order')detail='Choose from top to bottom. The remaining cards stay in the order you choose.';
-    content=doctorStrange.options(state).map((choice,i)=>button('strangeChoose',choice.label,`data-choice="${i}"`)).join('')+(t.optional?button('strangeSkip','Continue without this effect','class="primary"'):'');
+    content=doctorStrange.options(state).map((choice,i)=>{
+      const select=button('strangeChoose',tokenChoiceLabel(state,choice,task.seat),`data-choice="${i}"`);
+      return choice.card===undefined?select:previewableOption(state,task.seat,choice.card,select);
+    }).join('')+(t.optional?button('strangeSkip','Continue without this effect','class="primary"'):'');
   } else if(!state.response&&state.cosmicRayRoll&&!state.cardRoll&&!state.retry){
     phase='Cosmic Ray';heading=`${actingName} chooses the damage bonus`;
     detail=state.cosmicRayRoll.locked?'Ultimate: these dice cannot be altered. Choose one die.':'Choose one of the two dice to add to your attack. Dice may be altered before this choice is final.';
@@ -613,15 +1111,17 @@ function arena() {
     if(t.revealed?.length)detail='Revealed upgrades/cards: '+t.revealed.map(id=>seatCard(state,t.seat,id).name).join(', ')+'.';
     if(t.kind==='covert'){
       detail='Put an upgrade from your hand into play for free, or look at the top 3 cards of your deck.';
-      content=blackWidow.upgradeChoices(state,t.seat,'hand').map(id=>button('widowHandUpgrade',`Play ${seatCard(state,t.seat,id).name}`,`data-index="${id}"`)).join('')+button('widowPeek','Look at top 3 cards');
+      content=blackWidow.upgradeChoices(state,t.seat,'hand').map(id=>previewableOption(state,t.seat,id,button('widowHandUpgrade',`Play ${seatCard(state,t.seat,id).name}`,`data-index="${id}"`))).join('')+button('widowPeek','Look at top 3 cards');
     } else if(t.kind==='order'){
       detail+=' Choose the next card from top to bottom.';
       if(t.ordered?.length)detail+=' Chosen: '+t.ordered.map(id=>seatCard(state,t.seat,id).name).join(' → ')+'.';
-      content=t.cards.map(id=>button('widowOrder',seatCard(state,t.seat,id).name,`data-index="${id}"`)).join('')+button('widowKeep','Keep remaining order','class="primary"');
+      content=t.cards.map(id=>previewableOption(state,t.seat,id,button('widowOrder',seatCard(state,t.seat,id).name,`data-index="${id}"`))).join('')+button('widowKeep','Keep remaining order','class="primary"');
     } else {
-      if(t.kind==='covertSearch')detail='No upgrades in the top 3. You may reveal these cards and search for an upgrade: '+(t.revealed??[]).map(id=>seatCard(state,t.seat,id).name).join(', ')+'.';
-      else detail=`Choose up to ${t.left} more upgrades. Your deck is shuffled before any passive card draws.`;
-      content=(t.kind==='search'&&!t.left?[]:blackWidow.upgradeChoices(state,t.seat)).map(id=>button('widowSearch',seatCard(state,t.seat,id).name,`data-index="${id}"`)).join('')+button(t.kind==='search'?'widowSearchDone':'widowKeep',t.kind==='search'?'Finish selection and shuffle':'Do not search','class="primary"');
+      if(t.kind==='covertSearch'){
+        detail='No upgrades in the top 3. You may reveal these cards and search for an upgrade.';
+        content=(t.revealed??[]).map(id=>previewCard(state,t.seat,id,seatCard(state,t.seat,id).name)).join('');
+      } else detail=`Choose up to ${t.left} more upgrades. Your deck is shuffled before any passive card draws.`;
+      content+=(t.kind==='search'&&!t.left?[]:blackWidow.upgradeChoices(state,t.seat)).map(id=>previewableOption(state,t.seat,id,button('widowSearch',seatCard(state,t.seat,id).name,`data-index="${id}"`))).join('')+button(t.kind==='search'?'widowSearchDone':'widowKeep',t.kind==='search'?'Finish selection and shuffle':'Do not search','class="primary"');
     }
   } else if(!state.response&&state.widowAgility&&!state.cardRoll&&!state.retry){
     phase='Agility';heading=`${actingName} rolls for Agility`;
@@ -633,7 +1133,7 @@ function arena() {
     content=tray(state.widowBombRoll.dice,seat,false)+button('widowBombResolve','Resolve bomb roll','class="primary"');
   } else if(allowed.widowBombRoll){
     phase='Upkeep · Time Bombs';heading=`${actingName} checks Time Bombs`;
-    content=(state.players[state.active].timeBombTimers??[]).filter(b=>!(state.widowBombChecked??[]).includes(b.id)).map(b=>button('widowBombRoll',`Roll for bomb · 0:0${b.ticks}`,`data-index="${b.id}"`)).join('');
+    content=blankRoll(1)+(state.players[state.active].timeBombTimers??[]).filter(b=>!(state.widowBombChecked??[]).includes(b.id)).map(b=>button('widowBombRoll',`Roll for bomb · 0:0${b.ticks}`,`data-index="${b.id}"`)).join('');
   } else if(allowed.collectShapeShift){
     phase='Status effect';heading='Collect Shape Shift';
     detail='You may spend an existing Shape Shift to make room for incoming tokens.';
@@ -676,24 +1176,30 @@ function arena() {
     phase='Upkeep · Phoenix Burn';heading='Roll to remove Phoenix Burn';detail='A 5 or 6 removes the token. This roll may be modified before it resolves.';content=tray(state.jeanBurnRoll.dice,state.jeanBurnRoll.seat,false)+button('resolvePhoenixBurn','Resolve removal roll','class="primary"');
   } else if(allowed.gambitHighStakes){
     phase='Upkeep · High Stakes';heading='Choose two or five dice';detail='With five dice, any 1 loses every reward and removes one charge token. With two dice, a 1 does not cause a bust.';
-    content=button('gambitHighStakes','Roll 2 dice','data-amount="2"')+button('gambitHighStakes','Roll 5 dice','data-amount="5"');
+    content=button('gambitHighStakes','Choose 2 dice','data-amount="2"')+button('gambitHighStakes','Choose 5 dice','data-amount="5"');
   } else if(allowed.gambitTakeDisruption){
     phase='Upkeep · Disruption';heading=`${activeName} resolves Disruption`;detail='Remove the token after choosing. Its two damage joins the other Upkeep damage and can be prevented normally.';
     content=(allowed.gambitPayDisruption?button('gambitPayDisruption','Lose 1 CP'):'')+button('gambitTakeDisruption','Receive 2 Upkeep damage','class="primary"');
   } else if(state.retry) {
     const context=rollContext(state);
     phase=state.retry.remaining?'Tsunami!':'Try, Try Again!'; heading=state.retry.remaining?`${actingName} may reroll up to ${state.retry.remaining} more ${state.retry.remaining===1?"time":"times"}`:`${actingName} can reroll once more`;
-    content=rollDisplay(context)+`<div class="controls">${diceOwnedBy(context,seat,state).map((value,i)=>button('retryDie',`Reroll die ${i+1} (${value})`,`data-index="${i}"`)).join('')}
-      ${button('finishRetry','Keep this roll','class="primary"')}</div>`;
+    detail='Select a die to reroll, or keep this roll.';
+    const eligible=diceOwnedBy(context,state.retry.seat,state);
+    content=selectableRoll(context,(index,owner)=>selectableDie(context,index,owner,'pick-retry-die',!!eligible[index],retryPick===index))+
+      `<div class="controls">${button('retryDie','Reroll selected die',`class="primary" data-index="${retryPick ?? ''}" ${retryPick===undefined?'disabled':''}`)}
+      ${button('finishRetry','Keep this roll')}</div>`;
   } else if(state.mainChoice) {
     const {seat,id}=state.mainChoice;
     phase='Main Phase action'; heading=seatCard(state,seat,id).name;
     detail='Choose the target after the response.';
-    content=`<div class="controls">${mainTargets(state,seat,id).map(({label},i)=>button('resolveMainChoice',label,`data-choice="${i}"`)).join('')}</div>`;
+    content=`<div class="controls">${mainTargets(state,seat,id).map((choice,i)=>
+      button('resolveMainChoice',tokenChoiceLabel(state,choice,seat),`data-choice="${i}"`)).join('')}</div>`;
   } else if(state.response) {
-    phase='Card response'; heading=`${names[responding]} can respond`;
+    phase=state.stage==='offence'?'Offensive Roll':
+      ['defence','defenceResponse'].includes(state.stage)||state.gunContest?.kind==='duel'&&state.stage==='gunContest'?'Defensive Roll':'Response';
+    heading=`${names[responding]} can respond`;
     const context=rollContext(state);
-    detail='Play an eligible card, use an available ability or token, or pass to continue.';
+    detail='Use an available effect or pass.';
     content=(context?rollDisplay(context):'')+`<div class="controls">
       ${allowed.evade?button('evade','Spend Evasive'):''}${allowed.evadeReturn?button('evadeReturn','Spend Evasive'):''}
       ${button('passResponse','Pass','class="primary"')}</div>`;
@@ -719,11 +1225,13 @@ function arena() {
     content=tray(state.cardRoll.dice,state.cardRoll.roller??seat,false)+(allowed.mysticWildReroll?`<div class="defence-choice"><p>Reroll up to ${mysticBrawler.wildLimit(state)} different dice, once.</p>${state.cardRoll.dice.map((v,i)=>`<label><input type="checkbox" name="mystic-wild-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+button('mysticWildReroll','Reroll selected Wild Strength dice'):'')+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>heroId(state,seat)===paleLady.id||v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
   } else if(state.stage==='gunContest') {
     const contest=state.gunContest;
-    phase=contest.kind==='duel'?'Defensive Roll':'Ability roll';
-    heading=contest.kind==='duel'?defenceName(state,contest.seat):p.name;
-    content=rollDisplay(rollContext(state))+
-      (allowed.rerollDuel?button('rerollDuel','Reroll the defence die'):'')+
-      button('resolveGunContest','Resolve roll-off','class="primary"');
+    const duel=contest.kind==='duel';
+    phase=duel?'Defensive Roll':'Ability roll';
+    heading=duel?`${names[contest.seat]} defends`:p.name;
+    if(duel)detail=`${p.name} brings ${p.damage} incoming damage.`;
+    content=(duel?effectRoll:'')+rollDisplay(rollContext(state))+
+      `<div class="controls">${allowed.rerollDuel?button('rerollDuel','Reroll the defence die'):''}
+      ${button('resolveGunContest','Resolve roll-off','class="primary"')}</div>`;
   } else if(state.stage==='gunReload') {
     phase='Attack Modifier'; heading='Reload';
     detail='Add half the die value, rounded up.';
@@ -758,11 +1266,10 @@ function arena() {
       heading=`${actingName} rolls`;
       detail=state.budget===0?'Influence removed all Roll Attempts. End this phase, spend Déjà Vu, or play One More Time! to gain a Roll Attempt.':state.players[state.active].decrepify&&state.attempts?'Decrep-ify · hold at least three dice to reroll.':state.attempts ? 'Tap dice to keep them, reroll the rest, or announce an available ability.' : 'Roll all five dice to begin.';
       if(state.stormDice)detail+=` ${state.stormDice.count} borrowed ${HEROES[state.stormDice.hero].name} ${state.stormDice.count===1?"die":"dice"} join the five ordinary dice.`;
-      content=tray(state.dice.length ? state.dice : Array(5+(state.stormDice?.count??0)).fill(null),seat,!!allowed.hold,state.held)
+      content=tray(offenceDice(),seat,!!allowed.hold,state.held)
         + `<div class="controls">${button('roll',state.attempts?(constrictCost(state)?'Reroll · 1 CP':'Reroll'):'Roll dice',`class="primary" ${allowed.roll?'':'disabled'}`)}
         ${button('end','End without an ability',allowed.end?'':'disabled')}</div>`
-        + `<div class="abilities">${abilitiesFor(state,seat).map((a,i)=>button('declare',`<strong>${a.label??a.name}</strong><small>${a.text}</small>`,
-          `class="ability" data-ability="${i}" ${allowed.declare.includes(a.name)?'':'disabled'}`)).join('')}</div>`;
+        + offenceAbilities(seat, allowed.declare);
       break;
     case 'announce':
       phase='Ability response'; heading=`${actingName} responds`;
@@ -781,7 +1288,7 @@ function arena() {
       phase='Ability choice'; heading=p.name;
       detail='Choose one card to put into your hand. The rest of the deck will be shuffled.';
       const deck=state.players[state.active].deck.slice().sort((a,b)=>seatCard(state,seat,a).name.localeCompare(seatCard(state,seat,b).name));
-      content=deck.map(id=>button('searchVampireDeck',seatCard(state,seat,id).name,`data-index="${id}"`)).join('');
+      content=deck.map(id=>previewableOption(state,seat,id,button('searchVampireDeck',seatCard(state,seat,id).name,`data-index="${id}"`))).join('');
       break;
     }
     case 'vampireChoice':
@@ -798,7 +1305,8 @@ function arena() {
     case 'purify':
       phase='Ability choice'; heading=p.name;
       detail=`Choose a status to remove from ${names[p.seraphTarget]}.`;
-      content=statusKeys.filter(key=>state.players[p.seraphTarget][key]).map(status=>button('resolvePurify',`Remove ${statusLabel(status)}`,`data-status="${status}"`)).join('')+
+      content=statusKeys.filter(key=>state.players[p.seraphTarget][key]).map(status=>button('resolvePurify',
+        tokenChoiceLabel(state,{status,label:`Remove ${statusLabel(status)}`},p.seraphTarget),`data-status="${status}"`)).join('')+
         button('resolvePurify','Continue without removing a status','class="primary"');
       break;
     case 'undeadRoll': {
@@ -858,8 +1366,9 @@ function arena() {
     case 'forgeMine': {
       const task=state.forgeTask, ores=task.cards.filter(forgemaster.oreType);
       phase='The Mines';heading=`${actingName} looks at the top ${task.cards.length} cards`;
-      detail=task.cards.map(id=>seatCard(state,task.seat,id).name).join(' · ');
-      content=ores.map(id=>button('forgeMineChoice',`Reveal ${seatCard(state,task.seat,id).name}`,`data-index="${id}" data-status="one"`)).join('')+
+      content=task.cards.map(id=>forgemaster.oreType(id)
+        ? previewableOption(state,task.seat,id,button('forgeMineChoice',`Reveal ${seatCard(state,task.seat,id).name}`,`data-index="${id}" data-status="one"`))
+        : previewCard(state,task.seat,id,seatCard(state,task.seat,id).name)).join('')+
         (task.all&&ores.length>1?button('forgeMineChoice','Reveal all Ore','data-status="all"'):'')+
         button('forgeMineChoice','Reveal none · gain 1 CP','data-status="none"');
       break;
@@ -867,12 +1376,12 @@ function arena() {
     case 'forgeOrder':
       phase='The Mines';heading='Return the remaining cards';
       detail='Choose which card goes on the bottom next.';
-      content=state.forgeTask.cards.map(id=>button('forgeOrder',seatCard(state,seat,id).name,`data-index="${id}"`)).join('');
+      content=state.forgeTask.cards.map(id=>previewableOption(state,seat,id,button('forgeOrder',seatCard(state,seat,id).name,`data-index="${id}"`))).join('');
       break;
     case 'forgeSearch':
       phase='Ultimate';heading='Final Touches!';
       content=[...new Map(state.players[state.active].deck.filter(forgemaster.oreType).map(id=>[forgemaster.oreType(id),id])).values()]
-        .map(id=>button('forgeSearch',`Forge ${seatCard(state,state.active,id).name}`,`data-index="${id}"`)).join('');
+        .map(id=>previewableOption(state,state.active,id,button('forgeSearch',`Forge ${seatCard(state,state.active,id).name}`,`data-index="${id}"`))).join('');
       break;
     case 'forgeAbility':
       phase='Ability';heading=p.name;
@@ -941,7 +1450,7 @@ function arena() {
       break;
     case 'ravenDiscard':
       phase='Upkeep';heading='Nevermore forces a discard';
-      content=state.players[seat].hand.map(id=>button('ravenDiscard',seatCard(state,seat,id).name,`data-index="${id}"`)).join('');
+      content=state.players[seat].hand.map(id=>previewableOption(state,seat,id,button('ravenDiscard',seatCard(state,seat,id).name,`data-index="${id}"`))).join('');
       break;
     case 'ravenAttackChoice': {
       const holder=state.players[seat].nevermoreSeat;
@@ -957,7 +1466,7 @@ function arena() {
     case 'prey':
       phase='Attack modifier';heading='Prey';
       content=state.preyRoll?tray(state.preyRoll,state.active,false)+button('resolvePrey','Resolve Prey roll','class="primary"'):
-        (allowed.rollPrey?button('rollPrey','Roll for Prey','class="primary"'):'')+button('skipPrey','Continue attack');
+        (allowed.rollPrey?blankRoll(1)+button('rollPrey','Roll for Prey','class="primary"'):'')+button('skipPrey','Continue attack');
       break;
     case 'petulant':
       phase='Main Phase action';heading='Petulant!';
@@ -978,7 +1487,7 @@ function arena() {
       }
       if(allowed.resolveDisarm){
         heading='Disarm';detail='Discard one card or skip your Income Phase.';
-        content=hero.hand.map(id=>button('resolveDisarm',`Discard ${seatCard(state,state.active,id).name}`,`data-index="${id}" data-status="discard"`)).join('')+
+        content=hero.hand.map(id=>previewableOption(state,state.active,id,button('resolveDisarm',`Discard ${seatCard(state,state.active,id).name}`,`data-index="${id}" data-status="discard"`))).join('')+
           button('resolveDisarm','Skip Income Phase','data-status="skip"');
         break;
       }
@@ -990,7 +1499,7 @@ function arena() {
       if(allowed.alchemistUpkeep){heading=state.players[state.active].upgrades['The Lab']?'The Lab II':'The Lab';detail='Resolve the mandatory Upkeep attachment before continuing.';content=button('alchemistUpkeep',state.players[state.active].upgrades['The Lab']?'Roll for The Lab II':'Attach 1 Potion','class="primary"');break;}
       if(allowed.rollNevermore){
         heading='Nevermore';detail=`${activeName} starts their upkeep with Nevermore.`;
-        content=button('rollNevermore','Roll the Nevermore die','class="primary"');
+        content=blankRoll(1)+button('rollNevermore','Roll the Nevermore die','class="primary"');
         break;
       }
       if(allowed.unearth){
@@ -1010,7 +1519,7 @@ function arena() {
       }
       detail=[hero.sunDial!==undefined&&!hero.sunDawn&&!state.sunUpkeep?'Dusk increases the Sun Dial by 1.':'',hero.moonShard===3&&!hero.werewolf?'Twilight flips Pale Lady to Werewolf.':'',heroId(state,state.active)===gunslinger.id&&hero.reload!==2&&!state.quickDrawChecked?'Quick Draw grants Reload.':'',hero.nyra?.downed?(hero.nyra.hp>=5?'Nyra becomes Active.':'Nyra heals 1 and remains Downed.'):'',hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
       content=(allowed.checkWound?button('checkWound','Resolve a Wound token'):'')+
-        (allowed.checkRegenerate?button('checkRegenerate','Resolve Regenerate'):'')+(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Roll to clear Nanites'):'')+
+        (allowed.checkRegenerate?button('checkRegenerate','Resolve Regenerate'):'')+(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Check Nanites'):'')+
         (allowed.evadeUpkeep?button('evadeUpkeep','Spend Evasive'):'')+(allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
       break;
     }
@@ -1035,8 +1544,17 @@ function arena() {
       const {kind,seat: chooser}=state.pirateChoice;
       const titles={coins:'Gain Cursed Doubloons',remove:'Shiver Me Timbers',plank:'Walk the Plank',discard:'Choose a card to discard',inspect:'Crow’s Nest!',yoHo:'Yo Ho!',ransom:'Ransom!',passKeg:'Powder Keg'};
       phase='Choice'; heading=titles[kind]; detail=`${actingName} chooses.`;
-      if(kind==='inspect')detail=state.players[1-chooser].hand.map(id=>seatCard(state,1-chooser,id).name).join(' · ')||'Opponent’s hand is empty.';
-      content=cursedPirate.choices(state).map((label,i)=>button('resolvePirateChoice',label,`data-choice="${i}"`)).join('');
+      if(kind==='inspect'){
+        const cards=state.players[1-chooser].hand;
+        detail=cards.length?'':'Opponent’s hand is empty.';
+        content=cards.map(id=>previewCard(state,1-chooser,id,seatCard(state,1-chooser,id).name)).join('');
+      }
+      content+=cursedPirate.choices(state).map((label,i)=>{
+        if(kind==='remove')label=tokenChoiceLabel(state,{key:'doubloon',label},chooser);
+        const select=button('resolvePirateChoice',label,`data-choice="${i}"`);
+        const card=state.players[chooser].hand[i];
+        return kind==='discard'&&card!==undefined?previewableOption(state,chooser,card,select):select;
+      }).join('');
       break;
     }
     case 'knockdown':
@@ -1112,7 +1630,7 @@ function arena() {
     case 'effect':
       phase='Ability roll'; heading=p.name;
       detail=`${actingName} rolls ${effectDiceCount(p,state.players[state.active])} separate effect dice to determine the ability’s effects.`;
-      content=button('rollEffect','Roll for effect','class="primary"'); break;
+      content=blankRoll(effectDiceCount(p,state.players[state.active]))+button('rollEffect','Roll for effect','class="primary"'); break;
     case 'effectResponse':
       if(p.effect==='thorChain'){
         phase='Chain Lightning';heading='Choose any two dice';detail=`Their total becomes the attack damage. The separate ${p.thor.chain} collateral damage resolves first.`;
@@ -1130,20 +1648,14 @@ function arena() {
       content=p.ninjaTarget?names.map((name,target)=>button('chooseEffect',`Give Smoke Bomb and Ninjutsu to ${name}`,`data-target="${target}"`)).join('')
         :p.retributionTarget?names.map((name,target)=>button('chooseEffect',`Give Retribution to ${name}`,`data-target="${target}"`)).join('')
         :p.grantEvasive?names.map((name,target)=>button('chooseEffect',`Give Evasive to ${name}`,`data-target="${target}"`)).join('')
-        :statusKeys.filter(k=>state.players[state.active][k]).map(k=>button('chooseEffect',`Remove ${statusLabel(k)}`,`data-status="${k}"`)).join('')+button('chooseEffect','Keep status effects');
+        :statusKeys.filter(k=>state.players[state.active][k]).map(k=>button('chooseEffect',
+          tokenChoiceLabel(state,{key:k,label:`Remove ${statusLabel(k)}`},state.active),`data-status="${k}"`)).join('')+button('chooseEffect','Keep status effects');
       break;
     case 'preventStatus':
       phase='Defensive Roll'; heading='Thick Skin II';
       detail='You may prevent one incoming status effect.';
       content=p.incomingStatus.map(k=>button('preventStatus',`Prevent ${statusLabel(k)}`,`data-status="${k}"`)).join('')+button('preventStatus','Continue without prevention');
       break;
-    case 'defenceResponse':
-      phase='Defensive Roll'; heading=`${actingName} reviews the defence roll`;
-      content=tray(state.defenceDice,seat,false);
-      if(allowed.abilityReroll)content+=rerollDice(state.defenceDice,p.seraphDefenceReroll??p.ninjaDefenceRerolls);
-      if(allowed.extraDefence)content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="defence-reroll" value="${i}"> Die ${i+1}</label>`).join('')}</div>`+button('extraDefence','Reroll selected dice');
-      if(allowed.evade)content+=button('evade','Spend Evasive before resolving defence');
-      content+=button('resolveDefence','Resolve defence','class="primary"');break;
     case 'postHit':
       phase='After damage'; heading=`${actingName} can play Head Bash!`;
       content=button('continueHit','Continue to Main Phase 2','class="primary"');break;
@@ -1151,14 +1663,25 @@ function arena() {
       phase=p.ultimate ? 'Ultimate damage' : 'Stunned defender';
       heading=`${activeName} resolves ${p.name}`;
       detail=`${p.damage?`${p.damage} incoming damage. `:''}${names[1-state.active]} cannot respond.${vineDamage(state)?` Barbed Vine deals up to ${vineDamage(state)} to ${activeName}.`:''}`;
-      content=(allowed.reopenPrey?button('reopenPrey','Roll for Prey'):'')+button('settle',footworkPending?'Apply Footwork bonus':p.damage?'Resolve damage':'Resolve ability','class="primary"'); break;
+      content=(allowed.reopenPrey?button('reopenPrey','Use Prey'):'')+button('settle',footworkPending?'Apply Footwork bonus':p.damage?'Resolve damage':'Resolve ability','class="primary"'); break;
+    case 'defenceResponse':
     case 'defence':
-      phase='Defensive Roll'; heading=`${actingName} can defend`;
+      phase='Defensive Roll'; heading=`${actingName} defends`;
       detail=`${p.name} brings ${p.damage} incoming damage.`;
-      {
+      if(state.stage==='defenceResponse'){
+        content=effectRoll+tray(state.defenceDice,seat,false);
+        if(allowed.abilityReroll)content+=rerollDice(state.defenceDice,p.seraphDefenceReroll??p.ninjaDefenceRerolls);
+        if(allowed.extraDefence)content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="defence-reroll" value="${i}"> Die ${i+1}</label>`).join('')}</div>`+button('extraDefence','Reroll selected dice');
+        content+=`<div class="controls">${allowed.evade?button('evade','Spend Evasive before resolving defence'):''}
+          ${button('resolveDefence','Resolve defence','class="primary"')}</div>`;
+      } else {
         const defences=heroId(state,seat)===spiderMan.id?['counterpunch','spiderSense']:heroId(state,seat)===3?['shadowDefence','counterStrike']:['defence'];
         const options=allowed.defend?defences.map(kind=>button('defend',`Roll ${defenceName(state,seat,kind)}`,`class="primary" data-defence="${kind}"`)).join(''):'';
-        content=effectRoll+`<div class="controls">${options}${button('skipDefence',allowed.defend?'Decline defence':'Continue with Shadows')}</div>`;
+        const defender = heroRoster[heroId(state,seat)];
+        const readyDice = !allowed.defend ? '' : defender.id === gunslinger.id
+          ? blankRoll(2,[state.active,seat])
+          : defences.length === 1 ? blankRoll(defender.defenceDiceCount(state.players[seat],defences[0])) : '';
+        content=effectRoll+readyDice+`<div class="controls">${options}${button('skipDefence',allowed.defend?'Decline defence':'Continue with Shadows')}</div>`;
       } break;
     case 'nyraDamage': {
       phase='Damage assignment'; heading='Huntress and Nyra';
@@ -1175,7 +1698,7 @@ function arena() {
       phase='Damage response'; heading=`${actingName} responds`;
       detail=`${incomingDamage(state)} incoming damage${shadowAvoids(state)&&p.damage?' after Shadows':p.pure?' (pure)':p.undefendable?' (undefendable)':''}${returnDamageFor(state) ? ` · ${returnDamageFor(state)} return damage` : ''}.${p.recoil && incomingDamage(state) ? ` Reckless deals ${p.recoil} damage to Barbarian if this attack hits.` : ''}`;
       content=(state.defenceDice.length ? tray(state.defenceDice,seat,false):'')
-        +`<div class="controls">${allowed.evade?button('evade',`${actingName} spends Evasive`):''}${allowed.evadeReturn?button('evadeReturn',`${activeName} spends Evasive`):''}${allowed.reopenPrey?button('reopenPrey','Roll for Prey'):''}${button('settle',footworkPending?'Apply Footwork bonus':nyraIncoming(state)?'Assign damage':'Resolve damage','class="primary"')}</div>`; break;
+        +`<div class="controls">${allowed.evade?button('evade',`${actingName} spends Evasive`):''}${allowed.evadeReturn?button('evadeReturn',`${activeName} spends Evasive`):''}${allowed.reopenPrey?button('reopenPrey','Use Prey'):''}${button('settle',footworkPending?'Apply Footwork bonus':nyraIncoming(state)?'Assign damage':'Resolve damage','class="primary"')}</div>`; break;
     case 'evasion':
       phase='Avoid damage'; heading=`${actingName} checks ${statusLabel(state.evasionToken??'evasive')}`;
       detail=state.evasionToken==='smoke'?'A 1–3 avoids the incoming damage.':'A 1 or 2 avoids the incoming damage.';
@@ -1191,7 +1714,7 @@ function arena() {
     case 'santaAbility':
       phase='Santa';heading='Resolve Santa’s printed effects';content=button('finishSantaAbility','Continue Santa’s ability','class="primary"');break;
     case 'santaTarget':
-      phase=state.pending.santa.contest?'Fireside Chat':'Naughty or Nice';heading=`Target ${names[1-state.active]}`;detail='The opponent is targeted before the subsidiary dice are rolled.';content=button('rollSantaAbility','Confirm target and roll','class="primary"');break;
+      phase=state.pending.santa.contest?'Fireside Chat':'Naughty or Nice';heading=`Target ${names[1-state.active]}`;detail='The opponent is targeted before the subsidiary dice are rolled.';content=(p.santa.contest?blankRoll(2,[state.active,1-state.active]):blankRoll(1))+button('rollSantaAbility',p.santa.contest?'Roll both dice':'Roll die','class="primary"');break;
     case 'santaPrepared':
       phase='Santa';heading='Continue the activated ability';content=button('finishSantaPrepared','Continue ability','class="primary"');break;
     case 'santaExtraRoll':
@@ -1199,7 +1722,7 @@ function arena() {
     case 'mysticAbility':
       phase='Mystic Brawler';heading=p.name;content=button('finishMysticAbility','Resolve ability effects','class="primary"');break;
     case 'mysticStrongTarget':
-      phase='Targeting · Strong Arm';heading=`Strong Arm targets ${names[1-state.active]}`;detail='Both players roll one die after targeting.';content=button('rollMysticContest','Roll both players’ dice','class="primary"');break;
+      phase='Targeting · Strong Arm';heading=`Strong Arm targets ${names[1-state.active]}`;detail='Both players roll one die after targeting.';content=blankRoll(2,[state.active,1-state.active])+button('rollMysticContest','Roll both dice','class="primary"');break;
     case 'mysticPrepared':
       phase='Mystic Brawler';heading=p.name;content=button('finishMysticPrepared','Continue ability','class="primary"');break;
     case 'mysticResolved':
@@ -1215,7 +1738,10 @@ function arena() {
     case 'alchemistAbility':
       phase='Alchemist';heading=p.name;detail='Resolve the printed attachments and other effects before spending Potions.';content=button('finishAlchemistAbility','Resolve ability effects','class="primary"');break;
     case 'alchemistPotions':
-      phase=state.alchemistSpend.defensive?'Defensive Potions':'End of Offensive Roll Phase';heading='Spend attached Potions';detail='Spend eligible Potions, or keep them for later. Potions removed for The Lab or a card do not activate their effects.';content=alchemist.spendChoices(state,responding).map((c,i)=>button('spendPotion',c.label,`data-choice="${i}"`)).join('')+button('finishAlchemistPotions','Finish spending Potions','class="primary"');break;
+      phase=state.alchemistSpend.defensive?'Defensive Potions':'End of Offensive Roll Phase';heading='Spend attached Potions';detail='Spend eligible Potions, or keep them for later. Potions removed for The Lab or a card do not activate their effects.';
+      content=alchemist.spendChoices(state,responding).map((choice,i)=>
+        button('spendPotion',tokenChoiceLabel(state,{key:choice.key,label:choice.label},responding),`data-choice="${i}"`)).join('')+
+        button('finishAlchemistPotions','Finish spending Potions','class="primary"');break;
     case 'wolverineAbility':
       phase='Wolverine';heading=p.name;detail='Resolve healing, card draws and Rage before the Attack continues.';content=button('finishWolverineAbility','Continue ability','class="primary"');break;
     case 'wolverineResolved':
@@ -1225,7 +1751,9 @@ function arena() {
     case 'wolverineSevere':
       phase='Severe Threat II';heading='Mask result';content=button('wolverineSevere','Gain Rage','data-status="rage"')+button('wolverineSevere','Add 3 damage','data-status="damage"');break;
     case 'wolverineRemove':
-      phase='Regenerate';heading='Optional status removal';content=wolverine.removalChoices(state).map((c,i)=>button('wolverineRemove',`Remove ${c.label}`,`data-choice="${i}"`)).join('')+button('wolverineRemove','Keep current status effects','data-choice="-1"');break;
+      phase='Regenerate';heading='Optional status removal';content=wolverine.removalChoices(state).map((choice,i)=>
+        button('wolverineRemove',tokenChoiceLabel(state,{...choice,label:`Remove ${choice.label}`},state.active),`data-choice="${i}"`)).join('')+
+        button('wolverineRemove','Keep current status effects','data-choice="-1"');break;
     case 'stormCharge':
       phase='Charged Effect';heading=p.name;detail='The ability was Charged before activation. Remove its Lightning for the Charged Effect, or keep it.';content=button('stormUseCharge','Remove Lightning · use Charged Effect','class="primary"')+button('stormKeepCharge','Keep the Lightning');break;
     case 'stormAbility':
@@ -1293,154 +1821,204 @@ function arena() {
     default:
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
+  const effects = matchEffects(state, responding);
+  const attackerEffects = allowed.defend && hasEffectResponse(state, state.active)
+    ? matchEffects(defenceAttackerView(state), state.active, (action, label, attrs = '') =>
+      button(action, label, `data-attacker-effect="true" ${attrs}`))
+    : '';
+  const playing = state.stage !== 'finished';
+  const decisionName = names[decisionSeat];
+  return `<section class="arena" aria-label="Match actions">
+    <div class="phase"><span>Turn ${state.turn} · ${phase}</span><span>${state.stage==='offence' ? `Roll ${state.attempts}/${state.budget}` : ''}</span></div>
+    ${playing?`<div class="decision-owner" data-player="${decisionSeat}">
+      <strong>${decisionName} to act</strong>
+      ${decisionSeat!==state.active?`<span>${activeName}’s turn</span>`:''}
+    </div>`:''}
+    <h2 tabindex="-1" id="action-title">${heading}</h2>
+    ${detail?`<p>${detail}</p>`:''}
+    ${cardTimingReminder()}
+    ${p?.paralyzePrevented?.length?`<p>Paralyze prevented: ${p.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}
+    <div class="decision-actions">${content}</div>
+    ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
+    ${attackerEffects?`<details class="match-effects" data-disclosure="defence-attacker-effects"><summary>${activeName} · effects before the defence roll</summary><div class="effect-options">${attackerEffects}</div></details>`:''}
+    <details class="action-log" data-disclosure="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
+    ${matchTools(responding)}
+    </section>`;
+}
+
+function matchEffects(state, responding, renderButton = button) {
+  let content = '';
   if(!state.psyReveal){
-  for(const [choice,c] of deadpool.onomChoices(state,responding).entries())content+=button('spendOnomatopoeia',c.label,`data-choice="${choice}"`);
-  if(deadpool.canRps(state,responding))content+=button('spendRps','Spend RPS · play Rock, Paper, Scissors');
-  if(deadpool.canDonut(state,responding))content+=button('spendDonut','Spend Donut · roll for healing');
-  for(const [choice,c] of santa.cheerChoices(state,responding).entries())content+=button('spendCheer',c.label,`data-choice="${choice}"`);
-  if(santa.canNog(state,responding))content+=button('spendEggNog','Spend 3 Egg Nog · roll for a benefit');
-  for(const n of mysticBrawler.oceanChoices(state,responding))content+=button('spendOcean',n===1?'Spend 1 Ocean · gain 1 CP':'Spend 2 Ocean · gain 1 CP and heal 2',`data-amount="${n}"`);
-  if(krampus.canGift(state,responding))content+=button('spendGift','Spend Gift · draw 1 Reject');
-  if(!(state.krampusTask&&state.stage==='krampusChoices'&&state.krampusTask.queue[0]?.kind==='free'))for(const [i,c] of krampus.options(state,responding).entries())content+=button('activateReject',c.label,`data-choice="${i}"`);
+  for(const [choice,c] of deadpool.onomChoices(state,responding).entries())content+=renderButton('spendOnomatopoeia',c.label,`data-choice="${choice}"`);
+  if(deadpool.canRps(state,responding))content+=renderButton('spendRps','Spend RPS · play Rock, Paper, Scissors');
+  if(deadpool.canDonut(state,responding))content+=renderButton('spendDonut','Spend Donut · roll for healing');
+  for(const [choice,c] of santa.cheerChoices(state,responding).entries())content+=renderButton('spendCheer',c.label,`data-choice="${choice}"`);
+  if(santa.canNog(state,responding))content+=renderButton('spendEggNog','Spend 3 Egg Nog · roll for a benefit');
+  for(const n of mysticBrawler.oceanChoices(state,responding))content+=renderButton('spendOcean',n===1?'Spend 1 Ocean · gain 1 CP':'Spend 2 Ocean · gain 1 CP and heal 2',`data-amount="${n}"`);
+  if(krampus.canGift(state,responding))content+=renderButton('spendGift','Spend Gift · draw 1 Reject');
+  if(!(state.krampusTask&&state.stage==='krampusChoices'&&state.krampusTask.queue[0]?.kind==='free'))for(const [i,c] of krampus.options(state,responding).entries())content+=renderButton('activateReject',c.label,`data-choice="${i}"`);
   const lab=alchemist.labChoices(state,responding);
-  if(lab.length)content+=`<div class="token-actions"><label>The Lab <select id="alchemist-lab">${lab.map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>${button('alchemistLab','Remove Potion and reroll')}</div>`;
-  for(const [i,c] of wolverine.rageChoices(state,responding).entries())content+=button('spendRage',c.label,`data-choice="${i}"`);
+  if(lab.length)content+=`<div class="token-actions"><label>The Lab <select id="alchemist-lab-${responding}">${lab.map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>${renderButton('alchemistLab','Remove Potion and reroll')}</div>`;
+  for(const [i,c] of wolverine.rageChoices(state,responding).entries())content+=renderButton('spendRage',c.label,`data-choice="${i}"`);
   }
   if(!state.deadpoolRps&&!(state.deadpoolTask&&state.stage==='deadpoolChoices')&&!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
-  if(storm.canTornado(state,responding))content+=button('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
-  if(storm.canWind(state,responding))content+=button('spendWindShear',state.players[responding].ragingWindsTurn===state.turn?'Spend Wind Shear · prevent 4 and deal 4 isolated damage':'Spend Wind Shear · prevent 2 and deal 2 isolated damage');
-  if(storm.oppReroll(state,responding))content+=`<div class="controls">${button('stormOppReroll','Reroll effect die 1','data-status="first"')}${button('stormOppReroll','Reroll effect die 2','data-status="second"')}${button('stormOppReroll','Reroll both effect dice','data-status="both"')}</div>`;
-  for(const c of rogue.ionicChoices(state,responding))content+=button('spendIonic',c.label,`data-status="${c.key}"`);
-  if(rogue.canExpand(state,responding))content+=button('expandIonic','Pay 1 CP · allow four Ionic tokens this turn');
-  if(rogue.canSkyward(state,responding))content+=button('spendSkyward','Spend Skyward · both players roll');
-  if(rogue.boostLeach(state,responding))content+=button('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
+  if(storm.canTornado(state,responding))content+=renderButton('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
+  if(storm.canWind(state,responding))content+=renderButton('spendWindShear',state.players[responding].ragingWindsTurn===state.turn?'Spend Wind Shear · prevent 4 and deal 4 isolated damage':'Spend Wind Shear · prevent 2 and deal 2 isolated damage');
+  if(storm.oppReroll(state,responding))content+=`<div class="controls">${renderButton('stormOppReroll','Reroll effect die 1','data-status="first"')}${renderButton('stormOppReroll','Reroll effect die 2','data-status="second"')}${renderButton('stormOppReroll','Reroll both effect dice','data-status="both"')}</div>`;
+  for(const c of rogue.ionicChoices(state,responding))content+=renderButton('spendIonic',c.label,`data-status="${c.key}"`);
+  if(rogue.canExpand(state,responding))content+=renderButton('expandIonic','Pay 1 CP · allow four Ionic tokens this turn');
+  if(rogue.canSkyward(state,responding))content+=renderButton('spendSkyward','Spend Skyward · both players roll');
+  if(rogue.boostLeach(state,responding))content+=renderButton('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
   }
   if(!state.deadpoolRps&&!(state.deadpoolTask&&state.stage==='deadpoolChoices')&&!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
-  for(const c of psylocke.swaps(state,responding))content+=button('manifestSwap',c.label,`data-index="${c.index}"`);
-  if(psylocke.canBoost(state,responding))content+=button('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
-  for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=button('spendInfiltration',c.label,`data-choice="${i}"`);
-  for(const [i,c] of jeanGrey.acuityChoices(state,responding).entries())content+=button('spendAcuity',c.label,`data-choice="${i}"`);
-  for(const [i,c] of jeanGrey.flameChoices(state,responding).entries())content+=button('spendFlameBlast',c.label,`data-choice="${i}"`);
-  for(const [i,c] of jeanGrey.fieldChoices(state,responding).entries())content+=button('spendForceField',c.label,`data-choice="${i}"`);
-  if(!state.iceFreezeChoice&&iceman.canConvert(state,responding))content+=button('iceConvert','Spend 5 board Ice Shards · gain Glide');
-  if(!state.iceFreezeChoice&&iceman.canFreezerConvert(state,responding))content+=button('iceFreezerConvert','Convert 5 stored Ice Shards into stored Glide');
+  for(const c of psylocke.swaps(state,responding))content+=renderButton('manifestSwap',c.label,`data-index="${c.index}"`);
+  if(psylocke.canBoost(state,responding))content+=renderButton('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
+  for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=renderButton('spendInfiltration',c.label,`data-choice="${i}"`);
+  for(const [i,c] of jeanGrey.acuityChoices(state,responding).entries())content+=renderButton('spendAcuity',c.label,`data-choice="${i}"`);
+  for(const [i,c] of jeanGrey.flameChoices(state,responding).entries())content+=renderButton('spendFlameBlast',c.label,`data-choice="${i}"`);
+  for(const [i,c] of jeanGrey.fieldChoices(state,responding).entries())content+=renderButton('spendForceField',c.label,`data-choice="${i}"`);
+  if(!state.iceFreezeChoice&&iceman.canConvert(state,responding))content+=renderButton('iceConvert','Spend 5 board Ice Shards · gain Glide');
+  if(!state.iceFreezeChoice&&iceman.canFreezerConvert(state,responding))content+=renderButton('iceFreezerConvert','Convert 5 stored Ice Shards into stored Glide');
   const explode=gambit.canExplode(state,responding),dissolve=gambit.dissolveChoices(state,responding);
-  if(explode.length)content+=`<div class="token-actions"><strong>Explode one Ace · Attack Modifier</strong><div class="controls">${explode.map(suit=>button('gambitExplode',`Explode ${statusLabel(suit)}`,`data-status="${suit}"`)).join('')}</div></div>`;
-  if(dissolve.length)content+=`<details class="token-actions"><summary>Spend Dissolution</summary><div class="controls">${dissolve.map((choice,i)=>button('spendDissolution',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  if(explode.length)content+=`<div class="token-actions"><strong>Explode one Ace · Attack Modifier</strong><div class="controls">${explode.map(suit=>renderButton('gambitExplode',`Explode ${statusLabel(suit)}`,`data-status="${suit}"`)).join('')}</div></div>`;
+  if(dissolve.length)content+=`<details class="token-actions"><summary>Spend Dissolution</summary><div class="controls">${dissolve.map((choice,i)=>renderButton('spendDissolution',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   const support=state.iceFreezeChoice||gambit.forced(state)?[]:cyclops.supportChoices(state,responding),battlePlan=state.iceFreezeChoice||gambit.forced(state)?[]:cyclops.battleChoices(state,responding);
-  if(support.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Support</summary><div class="controls">${support.map((choice,i)=>button('spendSupport',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
-  if(battlePlan.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Battle Plan</summary><div class="controls">${battlePlan.map((choice,i)=>button('spendBattlePlan',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
-  if(cyclops.canRecourse(state,responding))content+=button('cyclopsRecourse','Remove 2 Battle Plan · activate Recourse II against this undefendable attack');
-  if(thor.canDraw(state,responding)&&!state.thorOverflow)content+=button('thorDraw','Spend 4 Electrokinesis · draw a card');
-  if(thor.canMove(state,responding))content+=`<details class="token-actions"><summary>Mjölnir · discard a card to ${thor.holder(state,responding)===responding?'throw':'retrieve'}</summary><div class="controls">${state.players[responding].hand.map((id,i)=>button('thorPassive',`Discard ${seatCard(state,responding,id).name}`,`data-index="${i}"`)).join('')}</div></details>`;
+  if(support.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Support</summary><div class="controls">${support.map((choice,i)=>renderButton('spendSupport',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  if(battlePlan.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Battle Plan</summary><div class="controls">${battlePlan.map((choice,i)=>renderButton('spendBattlePlan',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  if(cyclops.canRecourse(state,responding))content+=renderButton('cyclopsRecourse','Remove 2 Battle Plan · activate Recourse II against this undefendable attack');
+  if(thor.canDraw(state,responding)&&!state.thorOverflow)content+=renderButton('thorDraw','Spend 4 Electrokinesis · draw a card');
+  if(thor.canMove(state,responding))content+=`<details class="token-actions"><summary>Mjölnir · discard a card to ${thor.holder(state,responding)===responding?'throw':'retrieve'}</summary><div class="controls">${state.players[responding].hand.map((id,i)=>previewableOption(state,responding,id,renderButton('thorPassive',`Discard ${seatCard(state,responding,id).name}`,`data-index="${i}"`))).join('')}</div></details>`;
   if(!state.iceFreezeChoice&&!gambit.forced(state)&&!cyclops.choosing(state)&&!state.thorOverflow&&!(state.thorTask&&state.stage==='thorSequence')&&!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
   const probability=scarletWitch.probabilityChoices(state,responding);
-  if(probability.length)content+=`<div class="token-actions"><strong>${names[responding]} · Probability Manipulation</strong><div class="controls">${probability.map((choice,i)=>button('spendProbability',choice.label,`data-choice="${i}"`)).join('')}</div></div>`;
+  if(probability.length)content+=`<div class="token-actions"><strong>${names[responding]} · Probability Manipulation</strong><div class="controls">${probability.map((choice,i)=>renderButton('spendProbability',choice.label,`data-choice="${i}"`)).join('')}</div></div>`;
   const scarletChanges=scarletWitch.defenceChanges(state,responding);
-  if(scarletChanges.length)content+=`<details class="token-actions"><summary>Double Trouble II · discard Probability Manipulation to change any die</summary><div class="controls">${scarletChanges.map((choice,i)=>button('scarletDefenceChange',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
-  if(scarletWitch.canCrackle(state,responding))content+=button('spendCrackle',`Spend Crackle · +${Math.min(3,Math.max(0,scarletWitch.countedStatuses(state.players[responding])-1))} damage`);
+  if(scarletChanges.length)content+=`<details class="token-actions"><summary>Double Trouble II · discard Probability Manipulation to change any die</summary><div class="controls">${scarletChanges.map((choice,i)=>renderButton('scarletDefenceChange',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  if(scarletWitch.canCrackle(state,responding))content+=renderButton('spendCrackle',`Spend Crackle · +${Math.min(3,Math.max(0,scarletWitch.countedStatuses(state.players[responding])-1))} damage`);
   const conjure=scarletWitch.conjureChoices(state,responding);
-  if(conjure.length)content+=`<details class="token-actions"><summary>Spend Conjure</summary><div class="controls">${conjure.map((choice,i)=>button('spendConjure',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  if(conjure.length)content+=`<details class="token-actions"><summary>Spend Conjure</summary><div class="controls">${conjure.map((choice,i)=>renderButton('spendConjure',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   if(!state.response||state.response.seat===state.active){
-    if(sunElf.canGem(state,state.active))content+=button('spendChargedGem','Spend Charged Gem');
+    if(sunElf.canGem(state,state.active))content+=renderButton('spendChargedGem','Spend Charged Gem');
     const player=state.players[state.active];
-    if(sunElf.canDawn(state,state.active))content+=button('spendSunDawn',`Use Dawn · +${player.sunDial} damage`);
+    if(sunElf.canDawn(state,state.active))content+=renderButton('spendSunDawn',`Use Dawn · +${player.sunDial} damage`);
   }
-  if(spiderMan.canInvisibility(state,responding))content+=button('spendInvisibility','Spend Invisibility · activate a Defensive Ability');
-  if(spiderMan.canSenseReroll(state,responding))content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="spider-sense-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+button('spiderSenseReroll','Discard Invisibility · Spider-Sense additional Roll Attempt');
-  if(loki.canIllusion(state,responding))content+=button('spendIllusion',`${names[responding]} · spend Illusion`);
-  if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>button('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`)).join('')}</div></div>`;
-  if(doctorStrange.canDeja(state,state.active))content+=button('spendDejaVu',`${activeName} · spend Déjà Vu and restart the roll`);
-  if(captainMarvel.canRay(state,responding))content+=button('spendCosmicRay','Spend Cosmic Ray · roll 2 dice');
-  for(const die of captainMarvel.radianceDice(state,responding))content+=button('spendRadiance',`Spend Radiance · defence die ${die.index+1} (${die.value}) → 6`,`data-index="${die.index}"`);
-  if(blackWidow.canCovert(state,responding))content+=button('spendCovertOps','Spend Covert Ops');
-  if(state.players[responding].agility&&blackWidow.incoming(state,responding))content+=button('spendAgility','Spend Agility · roll to prevent half damage');
+  if(spiderMan.canInvisibility(state,responding))content+=renderButton('spendInvisibility','Spend Invisibility · activate a Defensive Ability');
+  if(spiderMan.canSenseReroll(state,responding))content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="spider-sense-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+renderButton('spiderSenseReroll','Discard Invisibility · Spider-Sense additional Roll Attempt');
+  if(loki.canIllusion(state,responding))content+=renderButton('spendIllusion',`${names[responding]} · spend Illusion`);
+  if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>previewableOption(state,state.active,id,renderButton('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`))).join('')}</div></div>`;
+  if(doctorStrange.canDeja(state,state.active))content+=renderButton('spendDejaVu',`${names[state.active]} · spend Déjà Vu and restart the roll`);
+  if(captainMarvel.canRay(state,responding))content+=renderButton('spendCosmicRay','Spend Cosmic Ray · roll 2 dice');
+  for(const die of captainMarvel.radianceDice(state,responding))content+=renderButton('spendRadiance',`Spend Radiance · defence die ${die.index+1} (${die.value}) → 6`,`data-index="${die.index}"`);
+  if(blackWidow.canCovert(state,responding))content+=renderButton('spendCovertOps','Spend Covert Ops');
+  if(state.players[responding].agility&&blackWidow.incoming(state,responding))content+=renderButton('spendAgility','Spend Agility · roll to prevent half damage');
   if(state.stage==='defenceResponse'&&!state.response&&!state.cardRoll&&heroId(state,1-state.active)===blackWidow.id&&blackWidow.count(state.players[1-state.active])>=4&&!state.pending.widowDefenceRerolled){
-    content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="widow-defence-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+button('widowDefenceReroll','Sabotage · additional Roll Attempt');
+    content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="widow-defence-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+renderButton('widowDefenceReroll','Sabotage · additional Roll Attempt');
   }
   if(state.players[responding].vibraniumSuit&&blackPanther.incoming(state,responding))
-    content+=button('spendVibraniumSuit','Spend Vibranium Suit · prevent 3 damage');
-  const forgeActions=forgemaster.choices(state,responding).map(({label},i)=>button('forgemasterAction',label,`data-choice="${i}"`));
+    content+=renderButton('spendVibraniumSuit','Spend Vibranium Suit · prevent 3 damage');
+  const forgeActions=forgemaster.choices(state,responding).map(({label,card},i)=>{
+    const select=renderButton('forgemasterAction',label,`data-choice="${i}"`);
+    return card===undefined?select:previewableOption(state,responding,card,select);
+  });
   if(forgeActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · The Mines and The Forge</strong><div class="controls">${forgeActions.join('')}</div></div>`;
   const shapeSeats=state.response?[responding]:state.stage==='announce'?[responding,state.active]:[responding];
   for(const owner of shapeSeats){
     const options=druid.shiftChoices(state,owner);
     if(options.length)content+=`<div class="token-actions"><strong>${names[owner]} · Shape Shift</strong><div class="controls">${options.map(form=>
-      button('spendShapeShift',`Shift to ${druid.formName(form)} Form`,`data-target="${owner}" data-status="${form}"`)).join('')}</div></div>`;
+      renderButton('spendShapeShift',`Shift to ${druid.formName(form)} Form`,`data-target="${owner}" data-status="${form}"`)).join('')}</div></div>`;
   }
   const featherSeats=state.response?[responding]:state.nevermoreRoll?[state.nevermoreRoll.owner,state.nevermoreRoll.target]:[responding];
   for(const owner of featherSeats){
     const options=raveness.featherChoices(state,owner);
     if(options.length)content+=`<div class="token-actions"><strong>${names[owner]} · spend Feathers</strong><div class="controls">${options.map(option=>
-      button('spendFeather',`${option.cost} Feather · ${option.label}`,`data-target="${owner}" data-status="${option.kind}"`)).join('')}</div></div>`;
+      renderButton('spendFeather',`${option.cost} Feather · ${option.label}`,`data-target="${owner}" data-status="${option.kind}"`)).join('')}</div></div>`;
   }
   const tokens=tokenChoices(state,responding);
   const tacticalActions=tacticalChoices(state,responding).map(({cost,label},index)=>
-    button('spendTactical',`${cost} Tactical Advantage · ${label}`,`data-choice="${index}"`));
-  const grimActions=grimChoices(state,responding).map(kind=>button('spendGrim',
+    renderButton('spendTactical',`${cost} Tactical Advantage · ${label}`,`data-choice="${index}"`));
+  const grimActions=grimChoices(state,responding).map(kind=>renderButton('spendGrim',
     kind==='attempt'?'Grim Pursuit · extra Roll Attempt':'Grim Pursuit · roll for attack damage',`data-status="${kind}"`));
   const tokenActions=state.grimOverflow?grimActions:state.stage==='nyraDamage'?[]:state.tacticalOverflow||state.tacticalRemoval?tacticalActions:[
     ...tacticalActions,
     ...grimActions,
-    ...necroActions(state,responding).map(({kind,label})=>button('necroAction',label,`data-status="${kind}"`)),
-    ...(canHealNyra(state,responding)?[button('healNyra','Nyra’s Bond · heal Nyra by 2')]:[]),
-    ...nyraRerolls(state,responding).map((value,i)=>button('nyraReroll',`Nyra takes 1 damage · reroll die ${i+1} (${value})`,`data-index="${i}"`)),
-    ...artificerActions(state,responding).map(({key,label})=>button('artificerAction',label,`data-status="${key}"`)),
-    ...(canBackStrike(state,responding)?[button('backStrike','Spend Back Strike')]:[]),
-    ...Array.from({length:honorChoices(state,responding)},(_,i)=>button('spendHonor',
+    ...necroActions(state,responding).map(({kind,label})=>renderButton('necroAction',label,`data-status="${kind}"`)),
+    ...(canHealNyra(state,responding)?[renderButton('healNyra','Nyra’s Bond · heal Nyra by 2')]:[]),
+    ...nyraRerolls(state,responding).map((value,i)=>renderButton('nyraReroll',`Nyra takes 1 damage · reroll die ${i+1} (${value})`,`data-index="${i}"`)),
+    ...artificerActions(state,responding).map(({key,label})=>renderButton('artificerAction',label,`data-status="${key}"`)),
+    ...(canBackStrike(state,responding)?[renderButton('backStrike','Spend Back Strike')]:[]),
+    ...Array.from({length:honorChoices(state,responding)},(_,i)=>renderButton('spendHonor',
       `Spend ${i+1} Honor · +${i===0?1:3} damage`,`data-amount="${i+1}"`)),
-    ...(canReload(state,responding)?[button('spendReload','Spend Reload')]:[]),
-    ...(canMesmerize(state,responding)?[button('mesmerize','Spend Mesmerize')]:[]),
+    ...(canReload(state,responding)?[renderButton('spendReload','Spend Reload')]:[]),
+    ...(canMesmerize(state,responding)?[renderButton('mesmerize','Spend Mesmerize')]:[]),
     ...bloodPowerChoices(state,responding).map(({cost,label},index)=>
-      button('bloodPower',`${cost} Blood Power · ${label}`,`data-choice="${index}"`)),
-    ...(tokens.flight?[button('flight',tokens.flight==='attack'?'Flight · make the attack undefendable':'Flight · avoid incoming damage')]:[]),
-    ...tokens.seedling.map((v,i)=>button('seedling',`Seedling · reroll die ${i+1} (${v})`,`data-index="${i}"`)),
-    ...(tokens.sapling?[button('sapling','Sapling · heal 1 and gain 1 CP')]:[]),
-    ...(tokens.saplingDraw?[button('saplingDraw','Sapling · draw for 1 CP')]:[]),
-    ...(tokens.dryad?[button('dryad','Dryad · add 3 damage')]:[]),
-    ...tokens.dryadPrevent.map(status=>button('dryadPrevent',`Dryad · prevent ${statusLabel(status)}`,`data-status="${status}"`)),
-    ...(tokens.wellspring?[button('wellspring','Spend Wellspring')]:[]),
-    ...(tokens.smoke?[button('smoke','Spend Smoke Bomb')]:[]),
-    ...(tokens.ninjutsu?[button('ninjutsu','Spend Ninjutsu')]:[]),
-    ...(tokens.evadeSide?[button('evadeSide','Spend Evasive')]:[]),
-    ...paladinBuffs.filter(key=>tokens[key]).map(key=>button(key,`Spend ${statusLabel(key)}`)),
-    ...tokens.cleanse.flatMap(status=>status==='spellbound'?(state.players[responding].boundAbilities??[]).map(b=>button('useCleanse',`Cleanse Spellbound · ${b.key}`,`data-status="spellbound" data-index="${b.id}"`)):status==='bagOfTricks'?(state.players[responding].trickBags??[]).map(b=>button('useCleanse',`Cleanse Bag of Tricks from ${names[b.owner]}`,`data-status="bagOfTricks" data-index="${b.id}"`)):status==='timeBomb'?(state.players[responding].timeBombTimers??[]).map(b=>button('useCleanse',`Cleanse Time Bomb 0:0${b.ticks}`,`data-status="timeBomb" data-index="${b.id}"`)):[button('useCleanse',`Cleanse ${statusLabel(status)}`,`data-status="${status}"`)]),
-    ...Array.from({length:tokens.boost},(_,i)=>button('boostChi',`Spend ${i+1} Chi · +${i+1} damage`,`data-amount="${i+1}"`)),
-    ...Array.from({length:tokens.prevent},(_,i)=>button('preventChi',`Spend ${i+1} Chi · prevent ${i+1}`,`data-amount="${i+1}"`))
+      renderButton('bloodPower',`${cost} Blood Power · ${label}`,`data-choice="${index}"`)),
+    ...(tokens.flight?[renderButton('flight',tokens.flight==='attack'?'Flight · make the attack undefendable':'Flight · avoid incoming damage')]:[]),
+    ...tokens.seedling.map((v,i)=>renderButton('seedling',`Seedling · reroll die ${i+1} (${v})`,`data-index="${i}"`)),
+    ...(tokens.sapling?[renderButton('sapling','Sapling · heal 1 and gain 1 CP')]:[]),
+    ...(tokens.saplingDraw?[renderButton('saplingDraw','Sapling · draw for 1 CP')]:[]),
+    ...(tokens.dryad?[renderButton('dryad','Dryad · add 3 damage')]:[]),
+    ...tokens.dryadPrevent.map(status=>renderButton('dryadPrevent',`Dryad · prevent ${statusLabel(status)}`,`data-status="${status}"`)),
+    ...(tokens.wellspring?[renderButton('wellspring','Spend Wellspring')]:[]),
+    ...(tokens.smoke?[renderButton('smoke','Spend Smoke Bomb')]:[]),
+    ...(tokens.ninjutsu?[renderButton('ninjutsu','Spend Ninjutsu')]:[]),
+    ...(tokens.evadeSide?[renderButton('evadeSide','Spend Evasive')]:[]),
+    ...paladinBuffs.filter(key=>tokens[key]).map(key=>renderButton(key,`Spend ${statusLabel(key)}`)),
+    ...tokens.cleanse.flatMap(status=>status==='spellbound'?(state.players[responding].boundAbilities??[]).map(b=>renderButton('useCleanse',`Cleanse Spellbound · ${b.key}`,`data-status="spellbound" data-index="${b.id}"`)):status==='bagOfTricks'?(state.players[responding].trickBags??[]).map(b=>renderButton('useCleanse',`Cleanse Bag of Tricks from ${names[b.owner]}`,`data-status="bagOfTricks" data-index="${b.id}"`)):status==='timeBomb'?(state.players[responding].timeBombTimers??[]).map(b=>renderButton('useCleanse',`Cleanse Time Bomb 0:0${b.ticks}`,`data-status="timeBomb" data-index="${b.id}"`)):[renderButton('useCleanse',`Cleanse ${statusLabel(status)}`,`data-status="${status}"`)]),
+    ...Array.from({length:tokens.boost},(_,i)=>renderButton('boostChi',`Spend ${i+1} Chi · +${i+1} damage`,`data-amount="${i+1}"`)),
+    ...Array.from({length:tokens.prevent},(_,i)=>renderButton('preventChi',`Spend ${i+1} Chi · prevent ${i+1}`,`data-amount="${i+1}"`))
   ];
   if(tokenActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · spend tokens</strong><div class="controls">${tokenActions.join('')}</div></div>`;
   const tithe=state.stage==='nyraDamage'||state.grimOverflow?{}:titheChoices(state,responding);
   const titheActions=[
-    ...(tithe.draw?[button('titheDraw',`Draw 1 card · ${titheDrawCost(state.players[responding])} CP`)]:[]),
-    ...(tithe.dice??[]).map((value,i)=>button('titheReroll',`Reroll die ${i+1} (${value}) · 1 CP`,`data-index="${i}"`))
+    ...(tithe.draw?[renderButton('titheDraw',`Draw 1 card · ${titheDrawCost(state.players[responding])} CP`)]:[]),
+    ...(tithe.dice??[]).map((value,i)=>renderButton('titheReroll',`Reroll die ${i+1} (${value}) · 1 CP`,`data-index="${i}"`))
   ];
   if(titheActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · ${state.players[responding].upgrades?.Tithe?'Tithe II':'Tithe'}</strong><div class="controls">${titheActions.join('')}</div></div>`;
   }
   }
-  return `<section class="arena" aria-label="Match actions">
-    <div class="phase"><span>Turn ${state.turn} · ${phase}</span><span>${state.stage==='offence' ? `Roll ${state.attempts}/${state.budget}` : ''}</span></div>
-    <h2 tabindex="-1" id="action-title">${heading}</h2><p>Active hero · ${activeName}</p>
-    ${detail?`<p>${detail}</p>`:''}
-    ${state.pending?.paralyzePrevented?.length?`<p>Paralyze prevented: ${state.pending.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}${content}
-    <details class="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
-    </section>`;
+  return content;
+}
+
+function cardTimingReminder() {
+  if (!state.cards || ['discard','nyraDamage','finished'].includes(state.stage)) return '';
+  const hand = state.response ? `${names[state.response.seat]}’s Hand` : 'either hero’s Hand';
+  const cards = rollPhase(state) ? 'Instant and Roll Phase' : 'Instant';
+  return `<p class="card-timing">Open ${hand} to play eligible ${cards} cards now.</p>`;
+}
+
+function matchTools(responding) {
+  if (!state.cards || state.stage === 'finished') return '';
+  return `<nav class="match-tools" aria-label="Match references">
+    ${button('inspect-board','Board',`class="quick-board" data-index="${responding}" aria-label="Open ${names[responding]}’s board" aria-haspopup="dialog"`)}
+    <div class="match-tool-buttons">${state.players.map((player, seat) =>
+      button('open-hand',`<span>${names[seat]}</span><small>Hand (${player.hand.length})</small>`,`data-index="${seat}" data-responding="${seat === responding}" aria-label="Open ${names[seat]}’s hand" aria-haspopup="dialog"`)
+    ).join('')}</div>
+  </nav>`;
 }
 function render() {
-  const openShoot=new Set([...match.querySelectorAll('.deadpool-shoot[open]')].map(el=>el.dataset.seat));
-  const logOpen=match.querySelector('.action-log')?.open;
-  const openForge=new Set([...match.querySelectorAll('.forge-inventory[open]')].map(el=>el.dataset.seat));
-  const openUpgrades=new Set([...match.querySelectorAll('.board-upgrades[open]')].map(el=>el.dataset.seat));
-  const selected=boardOverride ?? cardActor(state);
-  match.innerHTML=hero(0)+arena()+hero(1)+`<section class="mobile-board" aria-label="Hero boards"><div class="tabs">${names.map((name,i)=>button('board',`${name} board`,`data-index="${i}" aria-pressed="${selected===i}"`)).join('')}</div>${board(selected)}</section>`;
-  match.querySelector('.action-log').open=!!logOpen;
-  for(const details of match.querySelectorAll('.deadpool-shoot'))details.open=openShoot.has(details.dataset.seat);
-  for(const details of match.querySelectorAll('.forge-inventory'))details.open=openForge.has(details.dataset.seat);
-  for(const details of match.querySelectorAll('.board-upgrades'))details.open=openUpgrades.has(details.dataset.seat);
+  const open = new Set(Array.from(match.querySelectorAll('details[data-disclosure][open]'), detail => detail.dataset.disclosure));
+  if (!state || rollRequest?.setup) {
+    match.innerHTML = rollRequest ? rollRequestPanel(rollRequest) :
+      '<section class="arena"><h2 id="action-title">Set up a match</h2><p>Choose both heroes in Match setup.</p></section>';
+  } else {
+    const seat = actor(state);
+    const responding = cardActor(state);
+    const decisionSeat = diceEdit?.seat ?? (state.response ? responding : seat);
+    match.innerHTML = hero(0, decisionSeat, responding) + hero(1, decisionSeat, responding) +
+      (rollRequest ? rollRequestPanel(rollRequest) : diceEdit ? diceEditorPanel(diceEdit) : arena(seat, responding, decisionSeat));
+  }
+  for (const detail of match.querySelectorAll('details[data-disclosure]')) {
+    if (open.has(detail.dataset.disclosure)) detail.open = true;
+  }
   if(handDialog.open)renderHand();
-  try { localStorage.setItem(storageKey,JSON.stringify(state)); } catch {}
+  try {
+    if (state || rollRequest) {
+      const saved = rollRequest ? {...state, uiRollRequest: rollRequest} : state;
+      localStorage.setItem(storageKey, JSON.stringify(saved));
+    }
+  } catch {}
 }
 function renderHand() {
-  const seat=cardActor(state);
+  const seat=handSeat;
   handTitle.textContent=`${names[seat]}’s hand · ${state.players[seat].hand.length}`;
   handContent.innerHTML=handPanel();
 }
@@ -1448,8 +2026,18 @@ function handleAction(event) {
   const target=event.target.closest('button[data-action]');
   if (!target) return;
   const type=target.dataset.action, index=Number(target.dataset.index);
+  if (type==='roll-request' && rollRequest && !rollRequest.initiative && !rollRequest.reveal) {
+    resolveRollRequest();
+    return;
+  }
+  if (type==='advance-roll' && (rollRequest?.initiative || rollRequest?.reveal)) {
+    advanceRollRequest();
+    return;
+  }
+  if (!state || rollRequest?.setup) return;
   if(type==='open-hand') {
-    if(index!==cardActor(state)||state.stage==='finished')return;
+    if(!state.cards||![0,1].includes(index)||state.stage==='finished')return;
+    handSeat=index;
     selectedCard=null;
     renderHand();
     handDialog.showModal();
@@ -1510,34 +2098,74 @@ function handleAction(event) {
     target.setAttribute('aria-expanded',String(!note.hidden));
     return;
   }
-  if (type==='board') {
-    boardOverride=index;
-    render();
-    match.querySelector(`button[data-action="board"][data-index="${index}"]`).focus();
+  if (diceEdit) {
+    handleDiceEditor(type,index,target.dataset.choice);
     return;
   }
+  if (rollRequest) return;
+  if (type==='select-potion'||type==='back-to-potions') {
+    const potion=target.dataset.status, task=state.alchemistTask;
+    if (state.stage!=='alchemistChoices'||task?.queue[0]?.kind!=='attach'||
+        type==='select-potion'&&!alchemist.taskChoices(state).some(choice=>choice.key===potion)) return;
+    selectedPotion=type==='select-potion'?potion:undefined;
+    render();
+    focusRollAction();
+    return;
+  }
+  if (type==='pick-retry-die') {
+    if (!state.retry || !diceOwnedBy(rollContext(state),state.retry.seat,state)[index]) return;
+    retryPick=retryPick===index?undefined:index;
+    render();
+    match.querySelector(`button[data-action="pick-retry-die"][data-index="${index}"]`)?.focus({preventScroll:true});
+    return;
+  }
+  retryPick=undefined;
+  if (type==='sell' && (handSeat!==state.active || !canPlayFromHand(state, handSeat))) return;
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
-    choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
+    choice:Number(target.dataset.choice??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
+  if(target.dataset.attackerEffect)action.attackerEffect=true;
+  if(type==='playCard') {
+    if(!canPlayFromHand(state, handSeat))return;
+    action.seat=handSeat;
+    action.choice=Number(handContent.querySelector('input[name="card-choice"]:checked')?.value
+      ?? document.getElementById('card-choice')?.value ?? 0);
+    const plan=cardDicePlan(handSeat,index,cardChoices(state,handSeat,index));
+    if(plan){
+      diceEdit={...plan,picks:new Map()};
+      handDialog.close();
+      render();
+      document.getElementById('action-title')?.focus();
+      return;
+    }
+  }
   if(type==='mysticWildReroll')action.indices=[...match.querySelectorAll('input[name="mystic-wild-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='deadpoolLuckyHope')action.amount=Number(document.getElementById('deadpool-lucky-hope').value);
-  if(type==='deadpoolFourth')action.choice=Number(document.getElementById('deadpool-fourth').value);
-  if(type==='resolveSantaRemoval')action.choice=Number(document.getElementById('santa-removal-choice').value);
-  if(type==='alchemistChoice')action.choice=Number(document.getElementById('alchemist-choice').value);
-  if(type==='alchemistLab')action.choice=Number(document.getElementById('alchemist-lab').value);
+  if(type==='alchemistLab')action.choice=Number(document.getElementById(`alchemist-lab-${action.attackerEffect?state.active:oldSeat}`).value);
   if(type==='stormOppReroll')action.indices=action.status==='both'?[0,1]:action.status==='first'?[0]:[1];
   if(type==='spiderSenseReroll')action.indices=[...match.querySelectorAll('input[name="spider-sense-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='widowDefenceReroll')action.indices=[...match.querySelectorAll('input[name="widow-defence-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='abilityReroll')action.indices=[...match.querySelectorAll('input[name="ability-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='extraDefence')action.indices=[...match.querySelectorAll('input[name="defence-reroll"]:checked')].map(input=>Number(input.value));
-  state=transition(state,action,roll);
+  const rollTitle = type === 'playCard' ? seatCard(state, handSeat, action.id).name : target.textContent?.trim();
+  const safeTitle = rollTitle?.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  state = applyMatchAction(action, safeTitle || 'Roll dice');
+  if(state!==oldState)selectedPotion=undefined;
+  if (rollRequest) {
+    if (handDialog.open) handDialog.close();
+    selectedCard = null;
+    render();
+    focusRollAction();
+    return;
+  }
   if(oldStage!==state.stage || oldSeat!==cardActor(state) || type==='playCard' || type==='sell')selectedCard=null;
   if(handDialog.open && (oldStage!==state.stage || oldSeat!==cardActor(state) || (!oldState.retry&&state.retry) || (!oldState.cardRoll&&state.cardRoll) || (!oldState.mainAction&&state.mainAction)))handDialog.close();
-  if (oldStage!==state.stage) boardOverride=null;
   render();
-  const focus=oldStage!==state.stage ? document.getElementById('action-title')
+  const decisionChanged = oldStage!==state.stage || oldState.response?.seat!==state.response?.seat
+    || type==='alchemistChoice'&&state!==oldState;
+  const focus=decisionChanged ? document.getElementById('action-title')
     : type==='hold' ? match.querySelector(`button[data-index="${index}"][data-action="hold"]`) : match.querySelector('button[data-action="roll"]:enabled');
-  if (focus && !handDialog.open) focus.focus({preventScroll:true});
+  if (focus && !handDialog.open) focus.focus({preventScroll:!decisionChanged||type==='defend'});
   else if(handDialog.open) {
     const nextCard=handContent.querySelector('button[data-action="select-card"]');
     (nextCard??handDialog.querySelector('button')).focus({preventScroll:true});
@@ -1551,10 +2179,19 @@ const viewerScroll = document.getElementById('viewer-scroll');
 const front = document.getElementById('leaflet-front');
 const back = document.getElementById('leaflet-back');
 let viewerSeat, viewerLeaflet, viewerCard, zoom=1, pinch=null;
+const desktopLeaflet = window.matchMedia('(hover: hover) and (pointer: fine)');
 function setZoom(value) {
   zoom=bounded(value-1,3)+1;
-  viewerImage.style.width=`${(viewerCard?Math.min(460,viewerScroll.clientWidth):viewerScroll.clientWidth)*zoom}px`;
+  const width=viewerScroll.clientWidth;
+  let fit=viewerCard?Math.min(460,width):width;
+  if(viewerLeaflet&&desktopLeaflet.matches&&viewerImage.naturalHeight){
+    fit=Math.min(width,viewerScroll.clientHeight*viewerImage.naturalWidth/viewerImage.naturalHeight);
+  }
+  viewerImage.style.width=`${fit*zoom}px`;
 }
+viewerImage.addEventListener('load',()=>{
+  if(viewer.open&&viewerLeaflet)setZoom(zoom);
+});
 function showScan(side) {
   const reference = viewerLeaflet ? `leaflet, ${side ? 'back' : 'front'}` : 'board';
   viewerImage.alt=`${names[viewerSeat]} ${reference}`;
@@ -1599,7 +2236,19 @@ viewerScroll.addEventListener('touchmove',event=>{
 },{passive:false});
 for(const type of ['touchend','touchcancel']) viewerScroll.addEventListener(type,()=>{pinch=null;});
 window.addEventListener('resize',()=>{if(viewer.open)setZoom(zoom);});
-const setupHeroes=state.players.map((_,seat)=>heroId(state,seat));
+// In-progress phase rolls from Preview 3 already have their final dice saved.
+if (rollRequest?.reveal && rollsOnCurrentScreen(state, rollRequest.rollType)) {
+  state = rollRequest.next;
+  names = heroNames(state);
+  rollRequest = null;
+}
+
+// Resume an old pre-defence response on the unrolled tray.
+if (!rollRequest && state?.stage === 'defence' && state.response?.action?.type === 'defend') {
+  state.response = null;
+}
+
+const setupHeroes = rollRequest?.setup?.heroes.slice() ?? (state ? state.players.map((_,seat)=>heroId(state,seat)) : [0,1]);
 const setupHeroNames=setupHeroes.map((_,seat)=>document.getElementById(`setup-hero-${seat}`));
 const heroPicker=document.getElementById('hero-picker');
 const heroPickerTitle=document.getElementById('hero-picker-title');
@@ -1669,11 +2318,21 @@ heroGroups.addEventListener('click',event=>{
 });
 
 document.getElementById('reset').addEventListener('click',()=>{
-  if ((state.attempts || state.turn>1) && state.stage!=='finished' && !confirm('Start a new match and replace the current one?')) return;
-  for(const details of match.querySelectorAll('.deadpool-shoot'))details.open=false;
-  state=createMatch(roll,{promo:document.getElementById('promos').checked,heroes:setupHeroes});
-  names=heroNames(state);
-  selectedCard=null;boardOverride=null;render();
+  if (state && (state.attempts || state.turn>1) && state.stage!=='finished' &&
+      !confirm('Start a new match and replace the current one?')) return;
+  if (handDialog.open) handDialog.close();
+  diceEdit=undefined;
+  retryPick=undefined;
+  selectedPotion=undefined;
+  rollRequest = {
+    setup: {promo: document.getElementById('promos').checked, heroes: setupHeroes.slice()},
+    description: 'Decide who starts', count: 2, owners: [0,1]
+  };
+  selectedCard = null;
+  document.getElementById('match-setup').open = false;
+  render();
+  match.querySelector('button[data-action="roll-request"]')?.focus();
 });
-document.getElementById('promos').checked=state.promo;
+document.getElementById('promos').checked = rollRequest?.setup?.promo ?? state?.promo ?? false;
+if (!state && !rollRequest) document.getElementById('match-setup').open = true;
 render();
