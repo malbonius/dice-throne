@@ -453,6 +453,8 @@ main {
   color: #b1babe;
 }
 
+.ability small.ability-effect { color: var(--ink); }
+
 .match-effects {
   margin-top: 14px;
   border: 1px solid var(--line);

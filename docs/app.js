@@ -23,7 +23,7 @@ let names = state ? heroNames(state) : [];
 let selectedCard=null;
 let handSeat;
 let diceEdit;
-let retryPick;
+const rerollPicks = new Map();
 let selectedPotion;
 const handDialog=document.getElementById('hand-dialog');
 const handTitle=document.getElementById('hand-title');
@@ -445,12 +445,6 @@ function incomeSummary(income) {
   }
   return `<div class="income-note" role="status"><strong>Income Phase</strong> · ${message}</div>`;
 }
-function rerollDice(dice,max,filter=()=>true){
-  const label=`Select up to ${max} ${max===1?'die':'dice'} to reroll`;
-  return `<div class="defence-choice" role="group" aria-label="${label}">
-    ${dice.map((v,i)=>`<label><input type="checkbox" name="ability-reroll" value="${i}" ${filter(v)?'':'disabled'}> Die ${i+1} (${v})</label>`).join('')}
-    </div>${button('abilityReroll',`Reroll up to ${max}`)}`;
-}
 function orderedDice(dice, owners, first) {
   return dice.map((value, index) => ({value, owner: owners[index], index}))
     .sort((left, right) => Number(right.owner === first) - Number(left.owner === first));
@@ -497,14 +491,37 @@ function selectableRoll(context, renderDie) {
     `<div class="dice">${renderDie(index,owner)}</div>`);
 }
 
-function selectableDie(context, index, seat, action, enabled, selected, face, open = false) {
+function selectableDie(context, index, seat, action, enabled, selected, face, open = false, attrs = '') {
   const {label,picture} = dieFace(context.dice,seat,index,state,face);
   const frozen = iceman.contextLocked(state,context,index);
   const classes = `class="die${selected?' kept':''}${open?' face-picker-open':''}${enabled?'':' unavailable-die'}${frozen?' frozen':''}"`;
   const description = `aria-label="Die ${index+1}, ${label}${frozen?', frozen':''}"`;
   if (!enabled) return `<span ${classes} ${description}>${picture}${frozen?'<small>Frozen</small>':''}</span>`;
   const expanded = action==='pick-card-die' && diceEdit?.mode==='change' ? ` aria-expanded="${open}"` : '';
-  return button(action,picture,`${classes} ${description} data-index="${index}" aria-pressed="${selected}"${expanded}`);
+  return button(action,picture,`${classes} ${description} data-index="${index}" aria-pressed="${selected}"${expanded} ${attrs}`);
+}
+
+function rerollTray(context, options) {
+  if (!options.length) return rollDisplay(context);
+  const group = options[0].type;
+  const picks = rerollPicks.get(group) ?? new Set();
+  const max = Math.max(...options.map(option=>option.limit));
+  const permits = (option,index) => option.canPick?.(context.dice[index],index) ?? true;
+  const dice = selectableRoll(context,(index,owner)=>{
+    const selected = picks.has(index);
+    const enabled = selected || options.some(option=>permits(option,index) &&
+      (max===1 || picks.size<option.limit && [...picks].every(pick=>permits(option,pick))));
+    return selectableDie(context,index,owner,'pick-reroll-die',enabled,selected,undefined,false,
+      `data-reroll-group="${group}" data-limit="${max}"`);
+  });
+  const actions = options.map(option=>{
+    const ready = picks.size>0 && picks.size<=option.limit && [...picks].every(index=>permits(option,index));
+    const label = option.label ?? (options.length>1 ? `Ability reroll · up to ${option.limit}`
+      : option.limit===1 ? 'Reroll selected die' : 'Reroll selected dice');
+    return button(option.type,label,`data-reroll-group="${group}" ${option.type==='retryDie'?'class="primary"':''} ${ready?'':'disabled'}`);
+  }).join('');
+  const description = max===1 ? 'Select a die to reroll.' : `Select up to ${max} dice to reroll.`;
+  return `<p>${description}</p>${dice}<div class="controls">${actions}</div>`;
 }
 
 function faceChoices(editor, index) {
@@ -529,7 +546,10 @@ function diceEditorPanel(editor) {
     ${picks.has(open)?button('undo-card-face','Undo change'):''}</div></div>`;
   const ready=activeDiceOptions(editor).find(option=>option.dice.length===picks.size);
   const confirm=changing?'Confirm changes':mode==='reroll'?'Reroll selected dice':'Confirm target';
-  const instruction=changing?'Select a die, then choose its new face.':mode==='reroll'?'Tap the dice you want to reroll.':'Choose a die to target.';
+  const instruction=changing?'Select a die, then choose its new face.':mode==='reroll'
+    ? id===12 ? 'Select dice to reroll. If you roll one die, you can choose to reroll again after seeing the result.'
+      : 'Tap the dice you want to reroll.'
+    : 'Choose a die to target.';
   return `<section class="arena dice-editor" aria-label="Choose dice">
     <div class="phase"><span>${names[seat]} · ${picks.size} of ${limit} selected</span></div>
     <h2 tabindex="-1" id="action-title">${seatCard(state,seat,id).name}</h2>
@@ -675,8 +695,14 @@ function potionAttachmentChoices(seat, choices) {
 
 function offenceAbilities(seat, available = []) {
   return `<div class="abilities">${abilitiesFor(state,seat).map((a,i)=>{
-    const text = a.straight ? a.text.replace(/^(Small|Large|Six-number) straight · /i, '') : a.text;
-    return button('declare',`<strong>${a.label??a.name}</strong><small class="ability-requirement">${abilityRequirement(a)}</small><small>${text}</small>`,
+    // Legacy ability copy puts the printed roll requirement before the first middle dot.
+    const separator=a.text.indexOf(' · ');
+    const prefix=separator<0?'':a.text.slice(0,separator);
+    const usesMultipleCounts=/^\d+(?:\+|\s*(?:[–/]\s*|or\s+)\d)/.test(prefix);
+    const requirement=usesMultipleCounts?prefix:abilityRequirement(a);
+    const text=separator<0?a.text:a.text.slice(separator+3);
+    const effect=text.charAt(0).toUpperCase()+text.slice(1);
+    return button('declare',`<strong>${a.label??a.name}</strong><small class="ability-requirement">${requirement}</small><small class="ability-effect">${effect}</small>`,
       `class="ability" data-ability="${i}" ${available.includes(a.name)?'':'disabled'}`);
   }).join('')}</div>`;
 }
@@ -1183,11 +1209,9 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.retry) {
     const context=rollContext(state);
     phase=state.retry.remaining?'Tsunami!':'Try, Try Again!'; heading=state.retry.remaining?`${actingName} may reroll up to ${state.retry.remaining} more ${state.retry.remaining===1?"time":"times"}`:`${actingName} can reroll once more`;
-    detail='Select a die to reroll, or keep this roll.';
     const eligible=diceOwnedBy(context,state.retry.seat,state);
-    content=selectableRoll(context,(index,owner)=>selectableDie(context,index,owner,'pick-retry-die',!!eligible[index],retryPick===index))+
-      `<div class="controls">${button('retryDie','Reroll selected die',`class="primary" data-index="${retryPick ?? ''}" ${retryPick===undefined?'disabled':''}`)}
-      ${button('finishRetry','Keep this roll')}</div>`;
+    content=rerollTray(context,[{type:'retryDie',limit:1,canPick:(_,index)=>Boolean(eligible[index])}])+
+      button('finishRetry','Keep this roll');
   } else if(state.mainChoice) {
     const {seat,id}=state.mainChoice;
     phase='Main Phase action'; heading=seatCard(state,seat,id).name;
@@ -1222,7 +1246,12 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.cardRoll) {
     phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,seat,state.cardRoll.id).name;
     detail=`${names[seat]} can modify the roll before it resolves.`;
-    content=tray(state.cardRoll.dice,state.cardRoll.roller??seat,false)+(allowed.mysticWildReroll?`<div class="defence-choice"><p>Reroll up to ${mysticBrawler.wildLimit(state)} different dice, once.</p>${state.cardRoll.dice.map((v,i)=>`<label><input type="checkbox" name="mystic-wild-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+button('mysticWildReroll','Reroll selected Wild Strength dice'):'')+(allowed.abilityReroll?rerollDice(state.cardRoll.dice,state.cardRoll.ninjaRerolls,v=>heroId(state,seat)===paleLady.id||v!==4&&v!==5):'')+button('finishCardRoll','Resolve card roll','class="primary"');
+    const rerolls=[];
+    if (allowed.mysticWildReroll) rerolls.push({type:'mysticWildReroll',limit:mysticBrawler.wildLimit(state)});
+    if (allowed.abilityReroll) rerolls.push({type:'abilityReroll',limit:state.cardRoll.ninjaRerolls,
+      canPick:value=>heroId(state,seat)===paleLady.id||value!==4&&value!==5});
+    content=rerollTray({dice:state.cardRoll.dice,seat:state.cardRoll.roller??seat},rerolls)+
+      button('finishCardRoll','Resolve card roll','class="primary"');
   } else if(state.stage==='gunContest') {
     const contest=state.gunContest;
     const duel=contest.kind==='duel';
@@ -1639,7 +1668,12 @@ function arena(seat, responding, decisionSeat) {
       }
       phase='Ability roll'; heading=p.name;
       detail='Modify the ability roll or resolve it.';
-      content=effectRoll+(allowed.abilityReroll?rerollDice(p.effectDice,p.ninjaRerolls):'')+`<div class="controls">${allowed.effectRetry?p.effectDice.map((_,i)=>button('effectRetry',`${p.tempestChi?'Spend 1 Chi to reroll':'Reroll'} die ${i+1}`,`data-index="${i}"`)).join(''):''}${button('resolveEffect','Resolve effect roll','class="primary"')}</div>`; break;
+      const rerolls=[];
+      if (allowed.abilityReroll) rerolls.push({type:'abilityReroll',limit:p.ninjaRerolls});
+      if (allowed.effectRetry) rerolls.push({type:'effectRetry',limit:1,
+        label:p.tempestChi?'Spend 1 Chi to reroll':'Reroll selected die'});
+      content=rerollTray({dice:p.effectDice,seat:state.active},rerolls)+button('resolveEffect','Resolve effect roll','class="primary"');
+      break;
     case 'targeting':
       phase='Targeting'; heading=`${p.name} targets ${names[1-seat]}`;
       content=button('resolveTarget','Apply ability effects','class="primary"'); break;
@@ -1669,9 +1703,14 @@ function arena(seat, responding, decisionSeat) {
       phase='Defensive Roll'; heading=`${actingName} defends`;
       detail=`${p.name} brings ${p.damage} incoming damage.`;
       if(state.stage==='defenceResponse'){
-        content=effectRoll+tray(state.defenceDice,seat,false);
-        if(allowed.abilityReroll)content+=rerollDice(state.defenceDice,p.seraphDefenceReroll??p.ninjaDefenceRerolls);
-        if(allowed.extraDefence)content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="defence-reroll" value="${i}"> Die ${i+1}</label>`).join('')}</div>`+button('extraDefence','Reroll selected dice');
+        const rerolls=[];
+        if (allowed.abilityReroll) rerolls.push({type:'abilityReroll',limit:p.seraphDefenceReroll||p.ninjaDefenceRerolls});
+        if (allowed.extraDefence) rerolls.push({type:'extraDefence',limit:state.defenceDice.length,label:'Reroll · additional Roll Attempt'});
+        if (spiderMan.canSenseReroll(state,responding)) rerolls.push({type:'spiderSenseReroll',limit:state.defenceDice.length,
+          label:'Reroll with Spider-Sense · discard Invisibility'});
+        if (heroId(state,responding)===blackWidow.id&&blackWidow.count(state.players[responding])>=4&&!p.widowDefenceRerolled)
+          rerolls.push({type:'widowDefenceReroll',limit:state.defenceDice.length,label:'Reroll with Sabotage'});
+        content=effectRoll+rerollTray({dice:state.defenceDice,seat},rerolls);
         content+=`<div class="controls">${allowed.evade?button('evade','Spend Evasive before resolving defence'):''}
           ${button('resolveDefence','Resolve defence','class="primary"')}</div>`;
       } else {
@@ -1902,7 +1941,8 @@ function matchEffects(state, responding, renderButton = button) {
     if(sunElf.canDawn(state,state.active))content+=renderButton('spendSunDawn',`Use Dawn · +${player.sunDial} damage`);
   }
   if(spiderMan.canInvisibility(state,responding))content+=renderButton('spendInvisibility','Spend Invisibility · activate a Defensive Ability');
-  if(spiderMan.canSenseReroll(state,responding))content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="spider-sense-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+renderButton('spiderSenseReroll','Discard Invisibility · Spider-Sense additional Roll Attempt');
+  if(state.response&&spiderMan.canSenseReroll(state,responding))content+=rerollTray({dice:state.defenceDice,seat:responding},
+    [{type:'spiderSenseReroll',limit:state.defenceDice.length,label:'Reroll with Spider-Sense · discard Invisibility'}]);
   if(loki.canIllusion(state,responding))content+=renderButton('spendIllusion',`${names[responding]} · spend Illusion`);
   if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>previewableOption(state,state.active,id,renderButton('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`))).join('')}</div></div>`;
   if(doctorStrange.canDeja(state,state.active))content+=renderButton('spendDejaVu',`${names[state.active]} · spend Déjà Vu and restart the roll`);
@@ -1910,9 +1950,6 @@ function matchEffects(state, responding, renderButton = button) {
   for(const die of captainMarvel.radianceDice(state,responding))content+=renderButton('spendRadiance',`Spend Radiance · defence die ${die.index+1} (${die.value}) → 6`,`data-index="${die.index}"`);
   if(blackWidow.canCovert(state,responding))content+=renderButton('spendCovertOps','Spend Covert Ops');
   if(state.players[responding].agility&&blackWidow.incoming(state,responding))content+=renderButton('spendAgility','Spend Agility · roll to prevent half damage');
-  if(state.stage==='defenceResponse'&&!state.response&&!state.cardRoll&&heroId(state,1-state.active)===blackWidow.id&&blackWidow.count(state.players[1-state.active])>=4&&!state.pending.widowDefenceRerolled){
-    content+=`<div class="defence-choice">${state.defenceDice.map((v,i)=>`<label><input type="checkbox" name="widow-defence-reroll" value="${i}"> Die ${i+1} (${v})</label>`).join('')}</div>`+renderButton('widowDefenceReroll','Sabotage · additional Roll Attempt');
-  }
   if(state.players[responding].vibraniumSuit&&blackPanther.incoming(state,responding))
     content+=renderButton('spendVibraniumSuit','Spend Vibranium Suit · prevent 3 damage');
   const forgeActions=forgemaster.choices(state,responding).map(({label,card},i)=>{
@@ -2112,18 +2149,29 @@ function handleAction(event) {
     focusRollAction();
     return;
   }
-  if (type==='pick-retry-die') {
-    if (!state.retry || !diceOwnedBy(rollContext(state),state.retry.seat,state)[index]) return;
-    retryPick=retryPick===index?undefined:index;
+  const rerollGroup = target.dataset.rerollGroup;
+  if (type==='pick-reroll-die') {
+    const picks = rerollPicks.get(rerollGroup) ?? new Set();
+    if (picks.has(index)) picks.delete(index);
+    else {
+      if (Number(target.dataset.limit)===1) picks.clear();
+      picks.add(index);
+    }
+    rerollPicks.set(rerollGroup,picks);
     render();
-    match.querySelector(`button[data-action="pick-retry-die"][data-index="${index}"]`)?.focus({preventScroll:true});
+    match.querySelector(`button[data-action="pick-reroll-die"][data-index="${index}"][data-reroll-group="${rerollGroup}"]`)?.focus({preventScroll:true});
     return;
   }
-  retryPick=undefined;
   if (type==='sell' && (handSeat!==state.active || !canPlayFromHand(state, handSeat))) return;
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
+  if (rerollGroup) {
+    action.indices = [...(rerollPicks.get(rerollGroup) ?? [])].sort((a,b)=>a-b);
+    if (!action.indices.length) return;
+    action.index = action.indices[0];
+  }
+  rerollPicks.clear();
   if(target.dataset.attackerEffect)action.attackerEffect=true;
   if(type==='playCard') {
     if(!canPlayFromHand(state, handSeat))return;
@@ -2139,14 +2187,9 @@ function handleAction(event) {
       return;
     }
   }
-  if(type==='mysticWildReroll')action.indices=[...match.querySelectorAll('input[name="mystic-wild-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='deadpoolLuckyHope')action.amount=Number(document.getElementById('deadpool-lucky-hope').value);
   if(type==='alchemistLab')action.choice=Number(document.getElementById(`alchemist-lab-${action.attackerEffect?state.active:oldSeat}`).value);
   if(type==='stormOppReroll')action.indices=action.status==='both'?[0,1]:action.status==='first'?[0]:[1];
-  if(type==='spiderSenseReroll')action.indices=[...match.querySelectorAll('input[name="spider-sense-reroll"]:checked')].map(input=>Number(input.value));
-  if(type==='widowDefenceReroll')action.indices=[...match.querySelectorAll('input[name="widow-defence-reroll"]:checked')].map(input=>Number(input.value));
-  if(type==='abilityReroll')action.indices=[...match.querySelectorAll('input[name="ability-reroll"]:checked')].map(input=>Number(input.value));
-  if(type==='extraDefence')action.indices=[...match.querySelectorAll('input[name="defence-reroll"]:checked')].map(input=>Number(input.value));
   const rollTitle = type === 'playCard' ? seatCard(state, handSeat, action.id).name : target.textContent?.trim();
   const safeTitle = rollTitle?.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   state = applyMatchAction(action, safeTitle || 'Roll dice');
@@ -2322,7 +2365,7 @@ document.getElementById('reset').addEventListener('click',()=>{
       !confirm('Start a new match and replace the current one?')) return;
   if (handDialog.open) handDialog.close();
   diceEdit=undefined;
-  retryPick=undefined;
+  rerollPicks.clear();
   selectedPotion=undefined;
   rollRequest = {
     setup: {promo: document.getElementById('promos').checked, heroes: setupHeroes.slice()},
