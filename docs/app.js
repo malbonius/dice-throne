@@ -42,6 +42,9 @@ function board(seat) {
       ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}</figure>`;
 }
 const statusNotes = {
+  donut:'Positive, stack limit 2. When gaining Donut, choose any player to receive it. During your own Upkeep, spend one and roll: heal half the final value, rounded up. Healing uses the existing end-of-Upkeep timing.',
+  onomatopoeia:'Unique, stack limit 2; removable, never transferable. During any Roll Phase, say an onomatopoeia and spend one to change an owned die to Knife (4) or Joke (5). Frozen dice and accepted Ultimates cannot be changed. Curmudgeon coin waives the spoken requirement.',
+  rps:'Positive, stack limit 1. Once per global turn, spend while Attacking or being Attacked, excluding pure damage. Win RPS to add 2 Attack damage (3 with active Shoot) or prevent 2. Ties replay. Own Ultimates automatically win; opponents cannot act during an accepted Ultimate.',
   cheer:'Positive, stack limit 3. Spend 1 to reroll one of your own dice, or 3 to change one of your own dice to 6. Transferred Cheer belongs to its new owner. Cannot alter accepted Ultimate dice.',
   eggNog:'Positive, stack limit 5. Spend 3 at any time to roll a Santa die: Axe deals 2 separate undefendable damage; Bell heals 2 and gains 1 CP; Star heals 2 and draws 1. Spend existing tokens before collecting a new batch; the batch is gained together.',
   strengthOcean:'Unique, stack limit 3; removable, never transferable. Once per turn during your Upkeep, spend 1 for 1 CP, or 2 for 1 CP and healing 2. You may choose only one option. Sea Song! is a separate card effect.',
@@ -256,6 +259,7 @@ function hero(seat) {
     ...alchemist.types.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
     p.coal&&token(seat,'coal',`Coal ${p.coal}/4`),
     p.gift&&token(seat,'gift',`Gift ${p.gift}/3`),
+    ...['donut','onomatopoeia','rps'].map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
     ...['cheer','eggNog'].map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
     ...mysticBrawler.keys.map(key=>p[key]&&token(seat,key,`${statusLabel(key)} ${p[key]}/${mysticBrawler.caps[key]}`)),
     p.rage&&token(seat,'rage',`Rage ${p.rage}/3`),
@@ -303,6 +307,7 @@ function hero(seat) {
     p.concussion && token(seat,'concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && token(seat,'stun','Stun')].filter(Boolean).join('') || 'No status effects'}</div></div>
     ${board(seat)}<div class="inventory"><span class="deck">${(p.deck.length??p.deck) ? `<img src="${art.back}" alt="">` : ''} Draw ${p.deck.length??p.deck} · Discard ${p.discard?.length??0}</span><span class="hand-tools"><span class="hand-count">${p.hand.length??p.hand} in hand</span>
       ${button('open-hand','Hand',`data-index="${seat}" aria-label="Open ${names[seat]}’s hand" aria-haspopup="dialog" ${seat===cardActor(state)&&!['finished','nyraDamage'].includes(state.stage)?'':'disabled'}`)}</span>${button('inspect-leaflet','Leaflet',`class="leaflet" data-index="${seat}" aria-label="${names[seat]} leaflet"`)}${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}</div>
+    ${heroId(state,seat)===deadpool.id?`<div class="token-actions"><strong>Shoot · ${p.shootActive?'Active':'Inactive'}</strong><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="Shoot ${p.shootActive?'Active':'Inactive'}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}${seat===cardActor(state)&&seat===state.active&&isMain(state)?button('toggleCurmudgeon',`Curmudgeon coin · ${p.curmudgeon?'On':'Off'}`):''}</div><p>The Shoot card is separate from the draw deck. Curmudgeon coin waives Deadpool’s spoken bonus requirements.</p></div>`:''}
     ${p.spellBook?`<div class="forge-inventory"><strong>Book of Vishanti · ${p.spellBook.length} prepared</strong><div class="controls">${p.spellBook.map(id=>button('inspect-card',doctorStrange.spells[id],`data-index="${id}" data-seat="${seat}"`)).join('')||'No prepared Spells'}</div></div>`:''}
     ${p.forgeOre?`<details class="forge-inventory" data-seat="${seat}"><summary>The Forge · ${p.forgeOre.length} Ore</summary>
       <div class="controls">${[19,28,34].map(id=>{
@@ -382,8 +387,26 @@ function arena() {
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
-  if(state.santaRemoval&&!state.santaNogRoll&&!state.sideDamage&&!state.retry){
-    phase='Status effect response';heading=state.santaRemoval.choosing?`${names[state.santaRemoval.source]} resolves the removal`:`${names[state.santaRemoval.seat]} may spend tokens first`;detail='Resolve the committed removal after spending existing Cheer or Egg Nog if desired. If the chosen effect has gone, another available status effect must be selected.';content=state.santaRemoval.choosing?`<label>Remove <select id="santa-removal-choice">${santa.removalChoices(state).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('resolveSantaRemoval','Resolve status removal','class="primary"'):button('santaRemovalReady','Finish token response','class="primary"');
+  if(state.deadpoolRps){
+    const r=state.deadpoolRps;phase='Rock, Paper, Scissors';
+    if(['first','second'].includes(r.step)){heading=`${names[responding]} · choose privately`;detail='The first choice stays hidden until both choices are committed. A tied round is replayed.';content=deadpool.hands.map((hand,i)=>button('deadpoolRpsPick',`<img src="${art.deadpoolRps[i]}" alt="${hand}" style="max-width:110px;width:100%">${hand}`,`data-status="${hand}"`)).join('')+(r.step==='second'?button('deadpoolRpsRandom','Draw a random opponent RPS card'):'');}
+    if(r.step==='reveal'){heading=r.winner===null?'Tie · play again':`${names[r.winner]} wins the round`;content=r.picks.map((hand,i)=>`<figure><figcaption>${names[i===0?r.seat:1-r.seat]} · ${hand}</figcaption><img src="${art.deadpoolRps[deadpool.hands.indexOf(hand)]}" alt="${hand}" style="max-width:130px;width:100%"></figure>`).join('')+button('deadpoolRpsReveal',r.winner===null?'Play the tied round again':'Continue RPS result','class="primary"');}
+    if(r.step==='shoot'){heading=`${names[responding]} may use Shoot`;detail='Flip the active Shoot card to win this round, or accept the result. Once Shoot is used, the other player cannot use a second Shoot.';content=button('deadpoolShoot','Use Shoot · flip to Inactive','data-status="yes"')+button('deadpoolShoot','Keep Shoot Active · accept the result','data-status="no"');}
+  } else if(state.deadpoolTask&&state.stage==='deadpoolChoices'){
+    const t=state.deadpoolTask,h=t.queue[0];phase='Deadpool';heading=names[t.seat];
+    if(h.kind==='donuts'){heading=`Give Donut · ${h.left} remaining`;detail='Choose any player for each token. The whole batch is allocated before tokens are gained; excess is lost at each player’s limit of 2.';content=names.map((name,target)=>button('deadpoolDonutTarget',`${name} · ${(state.players[target].donut??0)+h.allocation[target]}/2`,`data-target="${target}"`)).join('');}
+    if(h.kind==='gain'){heading=`Gain ${h.amount} ${statusLabel(h.key)}`;detail='Spend existing eligible tokens before collecting the whole batch if desired. Excess is lost.';content=button('deadpoolCollect','Collect the whole batch','class="primary"');}
+    if(h.kind==='speechCP'||h.kind==='speechTaco'){heading=h.kind==='speechCP'?'Finger Guns · spoken bonus':'Taco Truck · spoken bonus';detail=h.kind==='speechCP'?'Say “Pew, Pew” while pointing finger guns to gain 1 CP, or skip the bonus.':'The straight can use a 1 or 6. Shout “Taco Tuesday!” to add 1 damage, or skip the bonus.';content=button('deadpoolSpeech','Claim the spoken bonus','data-status="yes"')+button('deadpoolSpeech','Skip the spoken bonus','data-status="no"');}
+    if(h.kind==='fourth'){heading='Fourth Wall! · choose a Positive status';content=`<label>Gain <select id="deadpool-fourth">${deadpool.fourthChoices(state,t.seat).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('deadpoolFourth','Gain the chosen status','class="primary"');}
+  } else if(state.deadpoolDonutRoll&&!state.response&&!state.retry){
+    phase='Donut';heading='Roll for Donut healing';detail='Heal half the final die value, rounded up. Healing is accumulated with the existing end-of-Upkeep effects.';content=rollDisplay(rollContext(state))+button('resolveDonut','Resolve Donut healing','class="primary"');
+  } else if(state.deadpoolLucky&&!state.response&&!state.retry){
+    const r=state.deadpoolLucky;phase='Do You Feel Lucky?!';heading=`${names[r.target]} · hope for a number`;
+    if(r.step==='hope'){content=`<label>Hope for <select id="deadpool-lucky-hope">${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${n===6?'selected':''}>${n}</option>`).join('')}</select></label>`+button('deadpoolLuckyHope','Commit the hoped-for number','class="primary"');}
+    if(r.step==='ready'){detail=`Hope: ${r.hope}. Match it to heal 3; otherwise receive 3 isolated damage.`;content=button('deadpoolLuckyRoll','Roll the opponent’s die','class="primary"');}
+    if(r.step==='roll'){detail=`Hope: ${r.hope}. The final die belongs to ${names[r.target]} and can be altered before resolution.`;content=rollDisplay(rollContext(state))+button('deadpoolLuckyResolve','Resolve the hoped-for roll','class="primary"');}
+  } else if(state.santaRemoval&&!state.santaNogRoll&&!state.sideDamage&&!state.retry){
+    phase='Status effect response';heading=state.santaRemoval.choosing?`${names[state.santaRemoval.source]} resolves the removal`:`${names[state.santaRemoval.seat]} may spend tokens first`;detail='Resolve the committed removal after spending eligible existing tokens if desired. If the chosen effect has gone, another available status effect must be selected.';content=state.santaRemoval.choosing?`<label>Remove <select id="santa-removal-choice">${santa.removalChoices(state).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('resolveSantaRemoval','Resolve status removal','class="primary"'):button('santaRemovalReady','Finish token response','class="primary"');
   } else if(state.santaGift){
     const g=state.santaGift;phase='White Elephant Gift';heading=g.stage==='hide'?'Santa · conceal the gift':'Opponent · choose a hand';detail=g.stage==='hide'?'Privately choose which hand holds Cheer and 3 Egg Nog from the supply, then let the opponent guess.':'Choose a hand. If it is empty, Santa gains the gift; otherwise no tokens are gained.';content=['left','right'].map(hand=>button(g.stage==='hide'?'santaGiftHide':'santaGiftGuess',`${hand==='left'?'Left':'Right'} hand`,`data-status="${hand}"`)).join('');
   } else if(state.santaTask&&state.stage==='santaChoices'){
@@ -1157,6 +1180,12 @@ function arena() {
       content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
+    case 'deadpoolAbility':
+      phase='Deadpool';heading=p.name;content=button('finishDeadpoolAbility','Resolve Deadpool’s printed effects','class="primary"');break;
+    case 'deadpoolPrepared':
+      phase='Deadpool';heading='Continue the activated ability';content=button('finishDeadpoolPrepared','Continue ability','class="primary"');break;
+    case 'deadpoolResolved':
+      phase='Deadpool';heading='Finish the ability’s effect roll';content=button('finishDeadpoolResolved','Continue ability','class="primary"');break;
     case 'santaAbility':
       phase='Santa';heading='Resolve Santa’s printed effects';content=button('finishSantaAbility','Continue Santa’s ability','class="primary"');break;
     case 'santaTarget':
@@ -1263,6 +1292,9 @@ function arena() {
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
   if(!state.psyReveal){
+  for(const [choice,c] of deadpool.onomChoices(state,responding).entries())content+=button('spendOnomatopoeia',c.label,`data-choice="${choice}"`);
+  if(deadpool.canRps(state,responding))content+=button('spendRps','Spend RPS · play Rock, Paper, Scissors');
+  if(deadpool.canDonut(state,responding))content+=button('spendDonut','Spend Donut · roll for healing');
   for(const [choice,c] of santa.cheerChoices(state,responding).entries())content+=button('spendCheer',c.label,`data-choice="${choice}"`);
   if(santa.canNog(state,responding))content+=button('spendEggNog','Spend 3 Egg Nog · roll for a benefit');
   for(const n of mysticBrawler.oceanChoices(state,responding))content+=button('spendOcean',n===1?'Spend 1 Ocean · gain 1 CP':'Spend 2 Ocean · gain 1 CP and heal 2',`data-amount="${n}"`);
@@ -1272,7 +1304,7 @@ function arena() {
   if(lab.length)content+=`<div class="token-actions"><label>The Lab <select id="alchemist-lab">${lab.map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>${button('alchemistLab','Remove Potion and reroll')}</div>`;
   for(const [i,c] of wolverine.rageChoices(state,responding).entries())content+=button('spendRage',c.label,`data-choice="${i}"`);
   }
-  if(!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!state.deadpoolRps&&!(state.deadpoolTask&&state.stage==='deadpoolChoices')&&!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
   if(storm.canTornado(state,responding))content+=button('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
   if(storm.canWind(state,responding))content+=button('spendWindShear',state.players[responding].ragingWindsTurn===state.turn?'Spend Wind Shear · prevent 4 and deal 4 isolated damage':'Spend Wind Shear · prevent 2 and deal 2 isolated damage');
   if(storm.oppReroll(state,responding))content+=`<div class="controls">${button('stormOppReroll','Reroll effect die 1','data-status="first"')}${button('stormOppReroll','Reroll effect die 2','data-status="second"')}${button('stormOppReroll','Reroll both effect dice','data-status="both"')}</div>`;
@@ -1281,7 +1313,7 @@ function arena() {
   if(rogue.canSkyward(state,responding))content+=button('spendSkyward','Spend Skyward · both players roll');
   if(rogue.boostLeach(state,responding))content+=button('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
   }
-  if(!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
+  if(!state.deadpoolRps&&!(state.deadpoolTask&&state.stage==='deadpoolChoices')&&!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
   for(const c of psylocke.swaps(state,responding))content+=button('manifestSwap',c.label,`data-index="${c.index}"`);
   if(psylocke.canBoost(state,responding))content+=button('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
   for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=button('spendInfiltration',c.label,`data-choice="${i}"`);
@@ -1429,6 +1461,9 @@ function handleAction(event) {
     handContent.querySelector(`button[data-action="select-card"][data-index="${index}"]`)?.focus();
     return;
   }
+  if(type==='inspect-shoot'){
+    viewerSeat=index;viewerCard=null;viewerLeaflet=false;front.hidden=back.hidden=true;viewerImage.alt=`${names[index]} · Shoot ${state.players[index].shootActive?'Active':'Inactive'}`;viewerImage.src=art.deadpoolShoot[state.players[index].shootActive?0:1];document.getElementById('viewer-title').textContent=viewerImage.alt;viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);return;
+  }
   if(type==='inspect-reject'){
     viewerSeat=Number(target.dataset.seat);viewerCard=null;viewerLeaflet=false;front.hidden=back.hidden=true;viewerImage.alt=krampus.names[index];viewerImage.src=art.krampusRejects[index];document.getElementById('viewer-title').textContent=viewerImage.alt;viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);return;
   }
@@ -1481,6 +1516,8 @@ function handleAction(event) {
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
   if(type==='mysticWildReroll')action.indices=[...match.querySelectorAll('input[name="mystic-wild-reroll"]:checked')].map(input=>Number(input.value));
+  if(type==='deadpoolLuckyHope')action.amount=Number(document.getElementById('deadpool-lucky-hope').value);
+  if(type==='deadpoolFourth')action.choice=Number(document.getElementById('deadpool-fourth').value);
   if(type==='resolveSantaRemoval')action.choice=Number(document.getElementById('santa-removal-choice').value);
   if(type==='alchemistChoice')action.choice=Number(document.getElementById('alchemist-choice').value);
   if(type==='alchemistLab')action.choice=Number(document.getElementById('alchemist-lab').value);
