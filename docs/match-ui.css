@@ -76,6 +76,10 @@ header small {
   box-shadow: 0 14px 30px #05090c8c;
 }
 
+@media (width > 800px) {
+  .match-setup { justify-content: stretch; }
+}
+
 .setup-seats,
 .setup-actions {
   min-width: 0;

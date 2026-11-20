@@ -638,13 +638,21 @@ function attachedPotions(seat) {
     }).join('')}${legacy.map(potion=>tokenChoiceLabel(state,{key:potion.key,label:alchemist.tokenLabel(potion)},seat)).join('')}</div></details>`;
 }
 
+const potionLeafletText = {
+  punchify: 'May only be Attached to an Offensive Ability. When spent, add 2 dmg to your Attack. Attack Modifier.',
+  bolsterate: 'May only be Attached to a Defensive Ability. When spent, prevent 2 incoming dmg.',
+  cleansitude: 'May be Attached to any Ability. When spent, the Alchemist chooses one: Remove 1 status effect from yourself or Heal 1.',
+  toxification: 'May be Attached to any Ability. When spent, inflict Poison on a chosen player.'
+};
+
 function potionAttachmentChoices(seat, choices) {
   const slots=choices.map((choice,index)=>({...choice,choiceIndex:index})).filter(choice=>choice.key===selectedPotion);
   if (!slots.length) {
     return `<div class="potion-picker" role="group" aria-label="Potion types">${alchemist.types.map(key=>{
       const available=choices.some(choice=>choice.key===key);
       return button('select-potion',`${tokenChoiceLabel(state,{key,label:`<strong>${statusLabel(key)}</strong>`},seat)}
-        <small>${statusNotes[key]}</small>${available?'':'<small>Unavailable for this attachment</small>'}`,
+        <small>Limit ${alchemist.limits[key]} · ${potionLeafletText[key]}</small>
+        ${available?'':'<small>Unavailable for this attachment</small>'}`,
         `class="potion-type" data-status="${key}" ${available?'':'disabled'}`);
     }).join('')}</div>`;
   }
