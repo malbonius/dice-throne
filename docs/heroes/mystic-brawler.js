@@ -91,7 +91,7 @@ const mysticBrawler=(()=>{
    if(a.type==='mysticStrength'){const q=s.mysticTask.queue[0];q.left--;q.allocation[a.status]=(q.allocation[a.status]??0)+1;}
    if(a.type==='mysticTectonic'){s.mysticTask.queue.shift();if(a.status==='gain')psylocke.withAbility(s,()=>grantStatus(p,'strengthMountain'));else{removeStatus(p,'strengthMountain');s.pending.damage+=3;}}
    if(a.type==='spendOcean'){p.strengthOcean-=a.amount;p.oceanUsedTurn=s.turn;gainCP(p,1);if(a.amount===2)s.upkeepOceanHeal=(s.upkeepOceanHeal??0)+2;}
-   if(a.type==='rollMysticContest'){s.pending.mysticTargeted=true;s.mysticContest={seat,dice:[roll(),roll()]};s.stage='mysticContest';}
+   if(a.type==='rollMysticContest'){s.pending.mysticTargeted=true;s.mysticContest={seat,dice:rollBatch(roll,2,[seat,1-seat])};s.stage='mysticContest';}
    if(a.type==='resolveMysticContest'){const r=s.mysticContest,win=dieValue(r.dice[0],s.players[r.seat])>=dieValue(r.dice[1],s.players[1-r.seat]);s.pending.damage+=win?0:1;s.pending.mystic.strengths=win?1:0;s.pending.mystic.contestDone=true;delete s.mysticContest;s.stage='mysticAbility';}
    if(a.type==='mysticWildReroll'){for(const i of a.indices)s.cardRoll.dice[i]=roll();s.cardRoll.mysticWildUsed=true;}
    pump(s,random);return s;

@@ -27,7 +27,7 @@ const wolverine=(()=>{
  }
  function gain(s,seat,n=1,exclude){if(!n||psylocke.block(s,s.players[seat],'rage',n))return;const p=s.players[seat];if((p.rage??0)+n>3&&rageChoices(s,seat).length){s.wolverineGain={seat,amount:n,...(exclude!==undefined?{exclude}:{})};return;}grantStatus(p,'rage',n);}
  function damage(s,n){const h=s.pending;if(h.grossDamage===undefined){h.damage+=n;h.wolverineModifiers=(h.wolverineModifiers??0)+n;}else{h.grossDamage+=n;updateDamage(h);}}
- function inflictAlpha(s,target,source,roll,resume=s.stage){const p=s.players[target];if(p.alpha||psylocke.block(s,p,'alpha'))return false;grantStatus(p,'alpha');s.alphaRoll={seat:source,target,dice:[roll(),roll()],resume,locked:!!attackLocked(s)};s.stage='alphaRoll';return true;}
+ function inflictAlpha(s,target,source,roll,resume=s.stage){const p=s.players[target];if(p.alpha||psylocke.block(s,p,'alpha'))return false;grantStatus(p,'alpha');s.alphaRoll={seat:source,target,dice:rollBatch(roll,2,[source,target]),resume,locked:!!attackLocked(s)};s.stage='alphaRoll';return true;}
  function ability(s){const h=s.pending;if(!h.wolverine||h.wolverine.ready)return false;h.wolverine.ready=true;s.stage='wolverineAbility';return true;}
  function printed(s,roll,random){const r=s.pending.wolverine,p=s.players[s.active];
   if(!r.healed){r.healed=true;p.hp=bounded(p.hp+(r.heal??0),60);if(r.draw&&!r.drawAfter)drawCards(p,r.draw,random);}
@@ -86,7 +86,7 @@ const wolverine=(()=>{
     if(choice.kind==='draw'){p.rage-=3;drawCards(p,1,random,s.wolverineGain?.exclude);}
     else {p.rage--;p.hand.splice(p.hand.indexOf(choice.card),1);p.discard.push(choice.card);damage(s,heroId(s,seat)===id&&choice.card===32?4:3);
      if(heroId(s,seat)===id&&[30,31,32].includes(choice.card))psylocke.withoutAbility(s,()=>gain(s,seat));
-     if(heroId(s,seat)===id&&[27,28,29].includes(choice.card)){s.wolverineRageRoll={seat,id:choice.card,dice:[roll(),roll()],locked:!!attackLocked(s)};if(s.wolverineRageRoll.locked)resolveRecovery(s,random);}
+     if(heroId(s,seat)===id&&[27,28,29].includes(choice.card)){s.wolverineRageRoll={seat,id:choice.card,dice:rollBatch(roll,2),locked:!!attackLocked(s)};if(s.wolverineRageRoll.locked)resolveRecovery(s,random);}
     }
    }
    if(a.type==='collectRage'){grantStatus(p,'rage',s.wolverineGain.amount);delete s.wolverineGain;}

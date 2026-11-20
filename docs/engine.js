@@ -673,7 +673,7 @@ function applyCard(s,seat,id,choice,roll,random,add,bypassSanta=false) {
  if (rules.applyCard?.(card)) return;
  const rollSize = id === 3 || id === 33 && hero!==cursedPirate.id && hero!==artificer.id && hero!==seraph.id && hero!==vampireLord.id && hero!==gunslinger.id && hero!==samurai.id && hero!==tactician.id && hero!==huntress.id && hero!==headlessHorseman.id && hero!==necromancer.id&&hero!==paleLady.id&&hero!==raveness.id&&hero!==druid.id&&hero!==duelist.id&&hero!==forgemaster.id&&hero!==sunElf.id&&hero!==blackPanther.id&&hero!==blackWidow.id&&hero!==captainMarvel.id&&hero!==doctorStrange.id&&hero!==loki.id&&hero!==scarletWitch.id&&hero!==spiderMan.id&&hero!==thor.id&&hero!==cyclops.id&&hero!==gambit.id&&hero!==iceman.id&&hero!==jeanGrey.id&&hero!==psylocke.id&&hero!==rogue.id&&hero!==storm.id&&hero!==wolverine.id&&hero!==alchemist.id&&hero!==krampus.id&&hero!==mysticBrawler.id&&hero!==santa.id&&hero!==deadpool.id ? 1 : rules.cardRollSize?.(id,{s,seat}) ?? 0;
  if(rollSize){
-  s.cardRoll={seat,id,dice:Array.from({length:rollSize},()=>roll()),ninjaRerolls:hero===6&&id===28||hero===paleLady.id&&id===20?5:0};
+  s.cardRoll={seat,id,dice:rollBatch(roll,rollSize),ninjaRerolls:hero===6&&id===28||hero===paleLady.id&&id===20?5:0};
   if(hero===gunslinger.id&&id===30||hero===huntress.id&&id===32||hero===sunElf.id&&id===34)s.cardRoll.target=choice.target;
   // During an Ultimate, the ability's dice and subsidiary rolls are final.
   if((s.stage==='locked'||[jeanGrey.id,psylocke.id,rogue.id,storm.id,wolverine.id,alchemist.id,krampus.id,mysticBrawler.id,deadpool.id].includes(hero)&&attackLocked(s))&&s.pending.ultimate&&!(hero===6&&id===28)&&!(hero===paleLady.id&&id===20)&&!(hero===mysticBrawler.id&&id===28))completeCardRoll(s,roll,random,add);
@@ -1061,11 +1061,11 @@ function legal(state) {
   }
 }
 function startSeraphRoll(s,seat,kind,count,roll){
- s.seraphRoll={seat,kind,dice:Array.from({length:count},()=>roll()),resume:s.stage};
+ s.seraphRoll={seat,kind,dice:rollBatch(roll,count),resume:s.stage};
  s.stage='seraphRoll';
 }
 function startArtRoll(s,seat,kind,count,roll) {
- s.artRoll={seat,kind,dice:Array.from({length:count},()=>roll()),resume:s.stage};
+ s.artRoll={seat,kind,dice:rollBatch(roll,count),resume:s.stage};
  s.stage='artRoll';
 }
 function transition(previous, action, roll, random=Math.random, bypassResponse=false){
@@ -1321,7 +1321,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         s.log.unshift('Grim Pursuit grants an additional Roll Attempt.');
       } else {
         p.grimDamageTurn=s.turn;
-        s.horseRoll={seat,dice:Array.from({length:5},()=>roll()),resume:s.stage};
+        s.horseRoll={seat,dice:rollBatch(roll,5),resume:s.stage};
         s.stage='horseRoll';
       }
       return s;
@@ -2772,7 +2772,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       }
       if(attacker.bleed&&!state.bleedChecked){
         state.bleedChecked=true;
-        state.bleedRoll=Array.from({length:attacker.bleed},()=>roll());
+        state.bleedRoll=rollBatch(roll,attacker.bleed);
         break;
       }
       if(attacker.holyPresence&&!state.holyPresenceChecked){
@@ -2943,7 +2943,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     }
     case 'resolveTarget':
       if(state.pending.showdown){
-        state.gunContest={seat:state.active,kind:'showdown',dice:[roll(),roll()]};
+        state.gunContest={seat:state.active,kind:'showdown',dice:rollBatch(roll,2,[state.active,1-state.active])};
         state.stage='gunContest';
       } else activate();
       break;
@@ -3264,7 +3264,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     case 'rollEffect': {
       const p=state.pending;
-      p.effectDice=Array.from({length:effectDiceCount(p,attacker)},()=>roll());
+      p.effectDice=rollBatch(roll,effectDiceCount(p,attacker));
       add(`${p.name} rolls ${p.effectDice.join(', ')} for its effect.`);
       if(state.cards){state.stage='effectResponse';break;}
       // The card-free scenarios resolve effect rolls immediately.
@@ -3380,13 +3380,13 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       if(hero===3&&action.defence&& !['shadowDefence','counterStrike'].includes(action.defence))return previous;
       if(hero===gunslinger.id){
         state.defenceKind='defence';
-        state.gunContest={seat,kind:'duel',dice:[roll(),roll()]};
+        state.gunContest={seat,kind:'duel',dice:rollBatch(roll,2,[seat,1-seat])};
         state.stage='gunContest';
         break;
       }
       state.defenceKind=hero===spiderMan.id?(action.defence??'counterpunch'):hero===3?(action.defence??'shadowDefence'):'defence';
       const diceCount = heroRoster[hero].defenceDiceCount(defender,state.defenceKind);
-      state.defenceDice = Array.from({length:diceCount},()=>roll());
+      state.defenceDice = rollBatch(roll,diceCount);
       if(hero===seraph.id&&defender.upgrades?.defence===28)state.pending.seraphDefenceReroll=1;
       if(hero===6)state.pending.ninjaDefenceRerolls=defender.upgrades?.defence?2:1;
       if(state.cards){state.stage='defenceResponse';break;}
@@ -3526,7 +3526,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         const count=(used.rolled??0)-(used.resolved??0);
         if(count)attacker.undeadUsed={...used,resolved:used.rolled};
         if(count&&attacker.undeadFreeTurn!==state.turn){
-          state.undeadRoll={seat:state.active,dice:Array.from({length:count},()=>roll()),resume:state.stage};
+          state.undeadRoll={seat:state.active,dice:rollBatch(roll,count),resume:state.stage};
           state.stage='undeadRoll';
           break;
         }
@@ -3648,7 +3648,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         if(event.woundCheck){state.woundRoll=[roll()];state.stage='woundRoll';}
         if(event.ravenActivation)finishNevermore(state.ravenActivation);
         if(event.ravage){
-          state.cardRoll={seat:event.seat,id:20,dice:Array.from({length:5},()=>roll()),ninjaRerolls:5};
+          state.cardRoll={seat:event.seat,id:20,dice:rollBatch(roll,5),ninjaRerolls:5};
         }
         if(event.terrorize){
           gainGrim(state,state.active,1);

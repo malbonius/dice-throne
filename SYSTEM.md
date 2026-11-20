@@ -1,8 +1,18 @@
 # Dice Throne offline engine — current handover
 
-Version: Playtest 0.52.0 · UI preview 1. Base: the merged architecture release.
+Version: Playtest 0.52.0 · UI preview 2. Base: the merged architecture release.
 
 ## Match interface preview
+
+### Preview 2 · Player-initiated rolls
+
+Fresh rolls in the match interface show blank dice before the roll. Existing Roll controls handle Offensive and Defensive Roll Phases and the explicitly prompted effect rolls. When a card, status effect or ability would roll automatically, the interface records the pending action and offers a Roll button. The user can reload with that roll pending. The engine resumes the action with the chosen batch on confirmation. Initiative also has its own Roll button, with another press for each tie.
+
+Opposed rolls use a single press for both dice. The slots show the hero names in active-player order before and after rolling. The engine keeps each die's original owner and opens the existing response window after both results appear. The current opposed rolls include Gunslinger's Showdown and Duel, Santa's Fireside Chat, Mystic Brawler's Strong Arm, Rogue's Skyward and Wolverine's Alpha.
+
+Automated UI tests cover initiative ties, a reload during a pending Evasive roll, Showdown and Duel. The rules suite passed all 30,932 comparisons against the original 0.51.1, and the offline cache simulation served all 103 assets. Browser and touch verification of this preview remains open.
+
+### Preview 1 · Match layout
 
 The `ui/match-screen` branch starts from Playtest 0.52.0. The match shows both players' Health, CP and a short status summary, then identifies who is making the current decision. The Hand button follows the player who can play cards. Hero details expand to show statuses, decks and hero-specific resources. Board and Leaflet use the existing zoomable viewer. Ability descriptions stay in the Offensive Roll Phase list. Extra effects sit in a labelled disclosure below the current action.
 
@@ -82,7 +92,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.1.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.52.0-match-ui.2.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility

@@ -10,12 +10,16 @@ const match = document.getElementById('match');
 const storageKey = 'dice-throne-card-pilot-v2';
 const roll = () => 1 + Math.floor(Math.random()*6);
 let state;
+let rollRequest;
 try {
   const saved = JSON.parse(localStorage.getItem(storageKey));
-  if (saved?.version === 2 && saved.cards && saved.players?.length === 2 && Array.isArray(saved.log)) state = saved;
+  if (saved?.version === 2 && saved.cards && saved.players?.length === 2 && Array.isArray(saved.log)) {
+    const {uiRollRequest, ...matchState} = saved;
+    state = matchState;
+    if (uiRollRequest?.action || uiRollRequest?.setup) rollRequest = uiRollRequest;
+  } else if (saved?.uiRollRequest?.setup) rollRequest = saved.uiRollRequest;
 } catch {}
-state ??= createMatch(roll,{});
-let names=heroNames(state);
+let names = state ? heroNames(state) : [];
 let selectedCard=null;
 const handDialog=document.getElementById('hand-dialog');
 const handTitle=document.getElementById('hand-title');
@@ -404,8 +408,94 @@ function rerollDice(dice,max,filter=()=>true){
 }
 function rollDisplay(context){
   if(!context.owners)return tray(context.dice,context.seat,false);
-  return context.dice.map((value,i)=>`<div><strong>${names[dieOwner(context,i)]}</strong>${tray([value],dieOwner(context,i),false)}</div>`).join('');
+  const sorted = context.dice.map((value, index) => ({value, owner: dieOwner(context, index)}))
+    .sort((left, right) => Number(right.owner === state.active) - Number(left.owner === state.active));
+  return `<div class="opposed-dice">${sorted.map(({value, owner}) =>
+    `<div><strong>${names[owner]}</strong>${tray([value],owner,false)}</div>`).join('')}</div>`;
 }
+function blankRoll(count, owners, playerNames = names) {
+  const blankDie = '<span class="die empty" aria-hidden="true">·</span>';
+  if (owners) {
+    return `<div class="opposed-dice" role="group" aria-label="Unrolled dice">${owners.map(owner =>
+      `<div><strong>${playerNames[owner]}</strong>${blankDie}</div>`).join('')}</div>`;
+  }
+  return `<div class="dice" role="group" aria-label="Unrolled dice">${blankDie.repeat(count)}</div>`;
+}
+
+function rollRequestPanel(request) {
+  const playerNames = request.setup ? request.setup.heroes.map((id, seat) => {
+    const name = HEROES[id].name;
+    return request.setup.heroes[0] === request.setup.heroes[1] ? `${name} (P${seat + 1})` : name;
+  }) : names;
+  const owners = request.owners && state && !request.setup
+    ? request.owners.slice().sort((left, right) => Number(right === state.active) - Number(left === state.active))
+    : request.owners;
+  const label = request.setup ? 'Roll for initiative' : owners ? 'Roll both dice' : request.count === 1 ? 'Roll die' : 'Roll dice';
+  const tie = request.tied?.map((value, seat) => `${playerNames[seat]} rolled ${value}`).join(' · ');
+  return `<section class="arena" aria-label="Pending roll">
+    <div class="phase"><span>${request.setup?'Match setup':`Turn ${state.turn} · Pending roll`}</span></div>
+    <h2 tabindex="-1" id="action-title">${request.description}</h2>
+    ${tie?`<p>${tie}. Roll again to break the tie.</p>`:''}
+    ${blankRoll(request.count,owners,playerNames)}
+    ${button('roll-request',label,'class="primary"')}
+  </section>`;
+}
+
+const manualRollActions = new Set([
+  'roll', 'defend', 'rollEffect', 'rollMysticContest', 'rollSantaAbility',
+  'deadpoolLuckyRoll', 'rollTrickBag', 'widowBombRoll', 'rollPrey',
+  'rerollDuel', 'rerollSkyward', 'gambitMagicReroll', 'mysticWildReroll',
+  'spiderSenseReroll', 'widowDefenceReroll', 'abilityReroll', 'effectRetry',
+  'retryDie', 'extraDefence', 'stormOppReroll'
+]);
+
+function applyMatchAction(action, description) {
+  if (manualRollActions.has(action.type)) return transition(state, action, roll);
+  const stop = Symbol('manual roll');
+  const randomPrefix = [];
+  const before = structuredClone(state);
+  const waitForRoll = () => waitForRoll.requestBatch(1);
+  waitForRoll.requestBatch = (count, owners) => {
+    const title = owners ? state.pending?.name ?? description : description;
+    rollRequest = {action, description: title, count, owners, randomPrefix};
+    throw stop;
+  };
+  try {
+    const next = transition(before, action, waitForRoll, () => {
+      const value = Math.random();
+      randomPrefix.push(value);
+      return value;
+    });
+    return next === before ? state : next;
+  } catch (error) {
+    if (error !== stop) throw error;
+    return state;
+  }
+}
+
+function resolveRollRequest() {
+  const request = rollRequest;
+  if (request.setup) {
+    const dice = [roll(), roll()];
+    if (dice[0] === dice[1]) {
+      rollRequest = {...request, tied: dice};
+    } else {
+      let index = 0;
+      state = createMatch(() => dice[index++], request.setup);
+      names = heroNames(state);
+      rollRequest = null;
+    }
+  } else {
+    let index = 0;
+    const random = () => request.randomPrefix[index++] ?? Math.random();
+    state = transition(state, request.action, roll, random);
+    rollRequest = null;
+  }
+  selectedCard = null;
+  render();
+  document.getElementById('action-title')?.focus();
+}
+
 function arena(seat, responding, decisionSeat) {
   const allowed=legal(state), p=state.pending;
   const activeName=names[state.active], actingName=names[seat];
@@ -428,7 +518,7 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.deadpoolLucky&&!state.response&&!state.retry){
     const r=state.deadpoolLucky;phase='Do You Feel Lucky?!';heading=`${names[r.target]} · hope for a number`;
     if(r.step==='hope'){content=`<label>Hope for <select id="deadpool-lucky-hope">${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${n===6?'selected':''}>${n}</option>`).join('')}</select></label>`+button('deadpoolLuckyHope','Commit the hoped-for number','class="primary"');}
-    if(r.step==='ready'){detail=`Hope: ${r.hope}. Match it to heal 3; otherwise receive 3 isolated damage.`;content=button('deadpoolLuckyRoll','Roll the opponent’s die','class="primary"');}
+    if(r.step==='ready'){detail=`Hope: ${r.hope}. Match it to heal 3; otherwise receive 3 isolated damage.`;content=blankRoll(1)+button('deadpoolLuckyRoll','Roll the opponent’s die','class="primary"');}
     if(r.step==='roll'){detail=`Hope: ${r.hope}. The final die belongs to ${names[r.target]} and can be altered before resolution.`;content=rollDisplay(rollContext(state))+button('deadpoolLuckyResolve','Resolve the hoped-for roll','class="primary"');}
   } else if(state.santaRemoval&&!state.santaNogRoll&&!state.sideDamage&&!state.retry){
     phase='Status effect response';heading=state.santaRemoval.choosing?`${names[state.santaRemoval.source]} resolves the removal`:`${names[state.santaRemoval.seat]} may spend tokens first`;detail='Resolve the committed removal after spending eligible existing tokens if desired. If the chosen effect has gone, another available status effect must be selected.';content=state.santaRemoval.choosing?`<label>Remove <select id="santa-removal-choice">${santa.removalChoices(state).map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>`+button('resolveSantaRemoval','Resolve status removal','class="primary"'):button('santaRemovalReady','Finish token response','class="primary"');
@@ -599,7 +689,7 @@ function arena(seat, responding, decisionSeat) {
     }
   } else if(!state.response&&allowed.rollTrickBag){
     phase='Upkeep · Bag of Tricks';heading=`${activeName} resolves a Bag of Tricks`;detail='Resolve each token separately. Choose which to remove and roll first.';
-    content=(state.players[state.active].trickBags??[]).map(b=>button('rollTrickBag',`Roll Bag of Tricks from ${names[b.owner]}`,`data-index="${b.id}"`)).join('');
+    content=blankRoll(1)+(state.players[state.active].trickBags??[]).map(b=>button('rollTrickBag',`Roll Bag of Tricks from ${names[b.owner]}`,`data-index="${b.id}"`)).join('');
   } else if(state.premonitionTask){
     const t=state.premonitionTask,player=state.players[t.seat];phase='Income Phase';heading=`${actingName} uses Premonition`;
     if(t.kind==='choose'){
@@ -656,7 +746,7 @@ function arena(seat, responding, decisionSeat) {
     content=tray(state.widowBombRoll.dice,seat,false)+button('widowBombResolve','Resolve bomb roll','class="primary"');
   } else if(allowed.widowBombRoll){
     phase='Upkeep · Time Bombs';heading=`${actingName} checks Time Bombs`;
-    content=(state.players[state.active].timeBombTimers??[]).filter(b=>!(state.widowBombChecked??[]).includes(b.id)).map(b=>button('widowBombRoll',`Roll for bomb · 0:0${b.ticks}`,`data-index="${b.id}"`)).join('');
+    content=blankRoll(1)+(state.players[state.active].timeBombTimers??[]).filter(b=>!(state.widowBombChecked??[]).includes(b.id)).map(b=>button('widowBombRoll',`Roll for bomb · 0:0${b.ticks}`,`data-index="${b.id}"`)).join('');
   } else if(allowed.collectShapeShift){
     phase='Status effect';heading='Collect Shape Shift';
     detail='You may spend an existing Shape Shift to make room for incoming tokens.';
@@ -980,7 +1070,7 @@ function arena(seat, responding, decisionSeat) {
     case 'prey':
       phase='Attack modifier';heading='Prey';
       content=state.preyRoll?tray(state.preyRoll,state.active,false)+button('resolvePrey','Resolve Prey roll','class="primary"'):
-        (allowed.rollPrey?button('rollPrey','Roll for Prey','class="primary"'):'')+button('skipPrey','Continue attack');
+        (allowed.rollPrey?blankRoll(1)+button('rollPrey','Roll for Prey','class="primary"'):'')+button('skipPrey','Continue attack');
       break;
     case 'petulant':
       phase='Main Phase action';heading='Petulant!';
@@ -1135,7 +1225,7 @@ function arena(seat, responding, decisionSeat) {
     case 'effect':
       phase='Ability roll'; heading=p.name;
       detail=`${actingName} rolls ${effectDiceCount(p,state.players[state.active])} separate effect dice to determine the ability’s effects.`;
-      content=button('rollEffect','Roll for effect','class="primary"'); break;
+      content=blankRoll(effectDiceCount(p,state.players[state.active]))+button('rollEffect','Roll for effect','class="primary"'); break;
     case 'effectResponse':
       if(p.effect==='thorChain'){
         phase='Chain Lightning';heading='Choose any two dice';detail=`Their total becomes the attack damage. The separate ${p.thor.chain} collateral damage resolves first.`;
@@ -1181,7 +1271,11 @@ function arena(seat, responding, decisionSeat) {
       {
         const defences=heroId(state,seat)===spiderMan.id?['counterpunch','spiderSense']:heroId(state,seat)===3?['shadowDefence','counterStrike']:['defence'];
         const options=allowed.defend?defences.map(kind=>button('defend',`Roll ${defenceName(state,seat,kind)}`,`class="primary" data-defence="${kind}"`)).join(''):'';
-        content=effectRoll+`<div class="controls">${options}${button('skipDefence',allowed.defend?'Decline defence':'Continue with Shadows')}</div>`;
+        const defender = heroRoster[heroId(state,seat)];
+        const readyDice = !allowed.defend ? '' : defender.id === gunslinger.id
+          ? blankRoll(2,[state.active,seat])
+          : defences.length === 1 ? blankRoll(defender.defenceDiceCount(state.players[seat],defences[0])) : '';
+        content=effectRoll+readyDice+`<div class="controls">${options}${button('skipDefence',allowed.defend?'Decline defence':'Continue with Shadows')}</div>`;
       } break;
     case 'nyraDamage': {
       phase='Damage assignment'; heading='Huntress and Nyra';
@@ -1214,7 +1308,7 @@ function arena(seat, responding, decisionSeat) {
     case 'santaAbility':
       phase='Santa';heading='Resolve Santa’s printed effects';content=button('finishSantaAbility','Continue Santa’s ability','class="primary"');break;
     case 'santaTarget':
-      phase=state.pending.santa.contest?'Fireside Chat':'Naughty or Nice';heading=`Target ${names[1-state.active]}`;detail='The opponent is targeted before the subsidiary dice are rolled.';content=button('rollSantaAbility','Confirm target and roll','class="primary"');break;
+      phase=state.pending.santa.contest?'Fireside Chat':'Naughty or Nice';heading=`Target ${names[1-state.active]}`;detail='The opponent is targeted before the subsidiary dice are rolled.';content=(p.santa.contest?blankRoll(2,[state.active,1-state.active]):blankRoll(1))+button('rollSantaAbility',p.santa.contest?'Roll both dice':'Roll die','class="primary"');break;
     case 'santaPrepared':
       phase='Santa';heading='Continue the activated ability';content=button('finishSantaPrepared','Continue ability','class="primary"');break;
     case 'santaExtraRoll':
@@ -1222,7 +1316,7 @@ function arena(seat, responding, decisionSeat) {
     case 'mysticAbility':
       phase='Mystic Brawler';heading=p.name;content=button('finishMysticAbility','Resolve ability effects','class="primary"');break;
     case 'mysticStrongTarget':
-      phase='Targeting · Strong Arm';heading=`Strong Arm targets ${names[1-state.active]}`;detail='Both players roll one die after targeting.';content=button('rollMysticContest','Roll both players’ dice','class="primary"');break;
+      phase='Targeting · Strong Arm';heading=`Strong Arm targets ${names[1-state.active]}`;detail='Both players roll one die after targeting.';content=blankRoll(2,[state.active,1-state.active])+button('rollMysticContest','Roll both dice','class="primary"');break;
     case 'mysticPrepared':
       phase='Mystic Brawler';heading=p.name;content=button('finishMysticPrepared','Continue ability','class="primary"');break;
     case 'mysticResolved':
@@ -1466,15 +1560,26 @@ function arena(seat, responding, decisionSeat) {
 }
 function render() {
   const open = new Set(Array.from(match.querySelectorAll('details[data-disclosure][open]'), detail => detail.dataset.disclosure));
-  const seat = actor(state);
-  const responding = cardActor(state);
-  const decisionSeat = state.response ? responding : seat;
-  match.innerHTML = hero(0, decisionSeat, responding) + hero(1, decisionSeat, responding) + arena(seat, responding, decisionSeat);
+  if (!state || rollRequest?.setup) {
+    match.innerHTML = rollRequest ? rollRequestPanel(rollRequest) :
+      '<section class="arena"><h2 id="action-title">Set up a match</h2><p>Choose both heroes in Match setup.</p></section>';
+  } else {
+    const seat = actor(state);
+    const responding = cardActor(state);
+    const decisionSeat = state.response ? responding : seat;
+    match.innerHTML = hero(0, decisionSeat, responding) + hero(1, decisionSeat, responding) +
+      (rollRequest ? rollRequestPanel(rollRequest) : arena(seat, responding, decisionSeat));
+  }
   for (const detail of match.querySelectorAll('details[data-disclosure]')) {
     if (open.has(detail.dataset.disclosure)) detail.open = true;
   }
   if(handDialog.open)renderHand();
-  try { localStorage.setItem(storageKey,JSON.stringify(state)); } catch {}
+  try {
+    if (state || rollRequest) {
+      const saved = rollRequest ? {...state, uiRollRequest: rollRequest} : state;
+      localStorage.setItem(storageKey, JSON.stringify(saved));
+    }
+  } catch {}
 }
 function renderHand() {
   const seat=cardActor(state);
@@ -1485,7 +1590,13 @@ function handleAction(event) {
   const target=event.target.closest('button[data-action]');
   if (!target) return;
   const type=target.dataset.action, index=Number(target.dataset.index);
+  if (type==='roll-request' && rollRequest) {
+    resolveRollRequest();
+    return;
+  }
+  if (!state || rollRequest?.setup) return;
   if(type==='open-hand') {
+    if (rollRequest) return;
     if(index!==cardActor(state)||state.stage==='finished')return;
     selectedCard=null;
     renderHand();
@@ -1547,6 +1658,7 @@ function handleAction(event) {
     target.setAttribute('aria-expanded',String(!note.hidden));
     return;
   }
+  if (rollRequest) return;
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??document.getElementById('card-choice')?.value??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
@@ -1561,7 +1673,16 @@ function handleAction(event) {
   if(type==='widowDefenceReroll')action.indices=[...match.querySelectorAll('input[name="widow-defence-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='abilityReroll')action.indices=[...match.querySelectorAll('input[name="ability-reroll"]:checked')].map(input=>Number(input.value));
   if(type==='extraDefence')action.indices=[...match.querySelectorAll('input[name="defence-reroll"]:checked')].map(input=>Number(input.value));
-  state=transition(state,action,roll);
+  const rollTitle = type === 'playCard' ? seatCard(state, oldSeat, action.id).name : target.textContent?.trim();
+  const safeTitle = rollTitle?.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  state = applyMatchAction(action, safeTitle || 'Roll dice');
+  if (rollRequest) {
+    if (handDialog.open) handDialog.close();
+    selectedCard = null;
+    render();
+    match.querySelector('button[data-action="roll-request"]')?.focus();
+    return;
+  }
   if(oldStage!==state.stage || oldSeat!==cardActor(state) || type==='playCard' || type==='sell')selectedCard=null;
   if(handDialog.open && (oldStage!==state.stage || oldSeat!==cardActor(state) || (!oldState.retry&&state.retry) || (!oldState.cardRoll&&state.cardRoll) || (!oldState.mainAction&&state.mainAction)))handDialog.close();
   render();
@@ -1630,7 +1751,7 @@ viewerScroll.addEventListener('touchmove',event=>{
 },{passive:false});
 for(const type of ['touchend','touchcancel']) viewerScroll.addEventListener(type,()=>{pinch=null;});
 window.addEventListener('resize',()=>{if(viewer.open)setZoom(zoom);});
-const setupHeroes=state.players.map((_,seat)=>heroId(state,seat));
+const setupHeroes = rollRequest?.setup?.heroes.slice() ?? (state ? state.players.map((_,seat)=>heroId(state,seat)) : [0,1]);
 const setupHeroNames=setupHeroes.map((_,seat)=>document.getElementById(`setup-hero-${seat}`));
 const heroPicker=document.getElementById('hero-picker');
 const heroPickerTitle=document.getElementById('hero-picker-title');
@@ -1700,13 +1821,18 @@ heroGroups.addEventListener('click',event=>{
 });
 
 document.getElementById('reset').addEventListener('click',()=>{
-  if ((state.attempts || state.turn>1) && state.stage!=='finished' && !confirm('Start a new match and replace the current one?')) return;
-  for(const details of match.querySelectorAll('.deadpool-shoot'))details.open=false;
-  state=createMatch(roll,{promo:document.getElementById('promos').checked,heroes:setupHeroes});
-  names=heroNames(state);
-  selectedCard=null;
-  document.getElementById('match-setup').open=false;
+  if (state && (state.attempts || state.turn>1) && state.stage!=='finished' &&
+      !confirm('Start a new match and replace the current one?')) return;
+  if (handDialog.open) handDialog.close();
+  rollRequest = {
+    setup: {promo: document.getElementById('promos').checked, heroes: setupHeroes.slice()},
+    description: 'Decide who starts', count: 2, owners: [0,1]
+  };
+  selectedCard = null;
+  document.getElementById('match-setup').open = false;
   render();
+  match.querySelector('button[data-action="roll-request"]')?.focus();
 });
-document.getElementById('promos').checked=state.promo;
+document.getElementById('promos').checked = rollRequest?.setup?.promo ?? state?.promo ?? false;
+if (!state && !rollRequest) document.getElementById('match-setup').open = true;
 render();

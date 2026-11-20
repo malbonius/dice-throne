@@ -235,3 +235,11 @@ function cardActor(state) {
       hasResponse(state, state.active)) return state.active;
   return actor(state);
 }
+
+// The app can pause an action at the first roll while the engine and its tests
+// continue to accept an ordinary synchronous die roller.
+function rollBatch(roll, count, owners) {
+  if (!count) return [];
+  if (roll.requestBatch) return roll.requestBatch(count, owners);
+  return Array.from({length: count}, () => roll());
+}

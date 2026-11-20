@@ -423,3 +423,26 @@ main {
     padding-block: 6px;
   }
 }
+
+.opposed-dice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 320px;
+  margin-block: 12px;
+}
+
+.opposed-dice strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.opposed-dice .dice {
+  display: block;
+  margin-block: 5px 0;
+}
+
+.opposed-dice .die {
+  width: min(100%, 64px);
+  margin-top: 5px;
+}
