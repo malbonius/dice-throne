@@ -36,9 +36,10 @@ header > div {
   flex-direction: row;
 }
 
-header h1 {
-  font-size: clamp(1.55rem, 3.7vw, 2.15rem);
-  letter-spacing: -.035em;
+.header-logo {
+  display: block;
+  width: clamp(86px, 10vw, 114px);
+  height: auto;
 }
 
 header small {
