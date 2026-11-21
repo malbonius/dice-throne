@@ -353,7 +353,7 @@ function hero(seat, decisionSeat, responding) {
         ${button('inspect-leaflet','Leaflet',`data-index="${seat}" aria-label="Open ${names[seat]}’s leaflet" aria-haspopup="dialog"`)}
       </div>
       ${heroId(state,seat)===deadpool.id&&seat===responding&&seat===state.active&&isMain(state)&&!state.cardRoll&&!state.mainAction&&!rollRequest?
-        button('toggleCurmudgeon',`Curmudgeon coin · ${p.curmudgeon?'On':'Off'}`,`class="curmudgeon-toggle" aria-pressed="${!!p.curmudgeon}" title="Waive Deadpool’s spoken bonus requirements"`):''}
+        button('toggleCurmudgeon',`<img src="${art.curmudgeonCoin}" alt="" width="24" height="24"><span>Curmudgeon coin · ${p.curmudgeon?'On':'Off'}</span>`,`class="curmudgeon-toggle" aria-pressed="${!!p.curmudgeon}" title="Waive Deadpool’s spoken bonus requirements"`):''}
     </div>
     <details class="hero-information" data-disclosure="hero-${seat}">
       <summary>${statusSummary}</summary>

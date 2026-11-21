@@ -189,11 +189,16 @@ main {
 }
 
 .curmudgeon-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   justify-self: start;
   padding-inline: 8px;
   font-size: .82rem;
   text-align: start;
 }
+
+.curmudgeon-toggle img { flex: none; }
 
 .curmudgeon-toggle[aria-pressed="true"] { border-color: var(--gold); }
 
