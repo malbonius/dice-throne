@@ -646,6 +646,82 @@ function defenceKinds(seat) {
   return heroRoster[heroId(state,seat)].defenceKinds ?? ['defence'];
 }
 
+// Bounds as percentages of each full board scan, in roster order.
+const defenceBoardBounds = [
+  [84, 71, 98, 75],
+  [84, 73, 99, 85],
+  [84, 73, 99, 81],
+  [84, 73, 99, 81],
+  [84, 73, 99, 80], // 5
+  [84, 72, 99, 83],
+  [84, 73, 99, 87],
+  [84, 72, 99, 80],
+  [81, 69, 94, 84],
+  [84, 70, 99, 77], // 10
+  [84, 70, 99, 81],
+  [84, 71, 99, 80],
+  [81, 69, 94, 84],
+  [84, 70, 98, 88],
+  [84, 71, 98, 83], // 15
+  [84, 71, 99, 83],
+  [84, 71, 99, 87],
+  [85, 72, 99, 80],
+  [84, 72, 99, 80],
+  [84, 72, 99, 82], // 20
+  [84, 72, 99, 85],
+  [84, 72, 99, 81],
+  [84, 70, 99, 85],
+  [84, 72, 99, 82],
+  [84, 73, 98, 76], // 25
+  [84, 71, 99, 85],
+  [84, 72, 99, 82],
+  [84, 72, 99, 82],
+  [84, 71, 99, 81],
+  [84, 71, 99, 84], // 30
+  [84, 72, 99, 83],
+  [84, 71, 99, 84],
+  [84, 72, 98, 81],
+  [84, 72, 99, 81],
+  [84, 72, 99, 88], // 35
+  [84, 70, 98, 85],
+  [84, 73, 99, 82],
+  [81, 70, 94, 82],
+  [84, 71, 98, 82],
+  [84, 71, 99, 79], // 40
+  [85, 73, 98, 77],
+  [84, 71, 99, 82],
+  [84, 72, 99, 82],
+  [84, 71, 98, 80],
+  [83, 72, 99, 83], // 45
+];
+const alternateDefenceBounds = {
+  shadowDefence:[85,33,99,48],
+  counterpunch:[68,73,82,77],
+  werewolf:[84,71,99,83]
+};
+// A few upgrades have printed effects further down the card.
+const defenceUpgradeBottom = {
+  5:{28:70}, 6:{26:68}, 7:{26:68}, 10:{28:73}, 12:{19:71},
+  15:{27:69}, 16:{25:74}, 25:{25:69}, 29:{26:87}, 32:{24:75}, 34:{24:72}
+};
+
+function printedDefence(seat, kind, name) {
+  const hero = heroId(state,seat), player = state.players[seat], upgrade = player.upgrades?.[kind];
+  const hasUpgrade = Number.isInteger(upgrade);
+  const bounds = hasUpgrade ? [9, 26, 93, defenceUpgradeBottom[hero]?.[upgrade] ?? 65]
+    : alternateDefenceBounds[player.werewolf ? 'werewolf' : kind] ?? defenceBoardBounds[hero];
+  const [left, top, right, bottom] = bounds;
+  const width = right - left, height = bottom - top;
+  const scale = hasUpgrade ? .635 : 1.64;
+  const scan = `<span class="defence-scan" style="aspect-ratio:${width * scale}/${height}">
+    <img data-defence-scan data-seat="${seat}" data-upgrade="${upgrade ?? ''}" alt="Printed ${name} effects"
+      style="width:${10000 / width}%;height:${10000 / height}%;left:${-100 * left / width}%;top:${-100 * top / height}%">
+    </span>`;
+  return hasUpgrade
+    ? previewCard(state,seat,upgrade,scan)
+    : button('inspect-board',scan,`data-index="${seat}" aria-label="View ${name} on ${names[seat]}’s board" aria-haspopup="dialog"`);
+}
+
 function defenceReference() {
   const {stage, gunContest, pending} = state;
   const choosing = stage === 'defence';
@@ -659,8 +735,9 @@ function defenceReference() {
   return `<div class="defence-reference" role="group" aria-label="Defensive ability effects">${kinds.map(kind=>{
     const count = hero.defenceDiceCount(player,kind);
     const dice = hero.id===gunslinger.id ? '1 die each' : count===1 ? '1 die' : `${count} dice`;
-    return `<div><div>${abilityName(defenceName(state,seat,kind),'strong')}<small>${dice}</small></div>
-      <p>${hero.defenceEffect(player,kind,pending)}</p></div>`;
+    const name = defenceName(state,seat,kind);
+    return `<div><div>${abilityName(name,'strong')}<small>${dice}</small></div>
+      ${printedDefence(seat,kind,name)}</div>`;
   }).join('')}</div>`;
 }
 
@@ -2069,6 +2146,10 @@ function render() {
     const decisionSeat = diceEdit?.seat ?? (state.response ? responding : seat);
     match.innerHTML = hero(0, decisionSeat, responding) + hero(1, decisionSeat, responding) +
       (rollRequest ? rollRequestPanel(rollRequest) : diceEdit ? diceEditorPanel(diceEdit) : arena(seat, responding, decisionSeat));
+  }
+  for (const image of match.querySelectorAll('[data-defence-scan]')) {
+    const seat = Number(image.dataset.seat), upgrade = image.dataset.upgrade;
+    image.src = upgrade ? cardArtwork(state,seat,Number(upgrade)) : boardImage(state,seat,true);
   }
   for (const detail of match.querySelectorAll('details[data-disclosure]')) {
     if (open.has(detail.dataset.disclosure)) detail.open = true;

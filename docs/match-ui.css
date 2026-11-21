@@ -321,6 +321,7 @@ main {
 }
 
 .abilities {
+  --requirement-ink: #ffe6ad;
   grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: 7px;
 }
@@ -339,7 +340,7 @@ main {
 .ability .ability-requirement,
 .ability:disabled .ability-requirement {
   margin-top: 4px;
-  color: var(--gold);
+  color: var(--requirement-ink, var(--gold));
   font-weight: 650;
 }
 
@@ -371,19 +372,27 @@ main {
 
 .defence-reference small { color: var(--muted); }
 
-.arena .defence-reference p {
-  margin: 3px 0 0;
-  color: var(--ink);
-  line-height: 1.4;
-  font-size: .85rem;
+.defence-reference > div > button {
+  display: block;
+  width: min(100%, 310px);
+  min-height: 44px;
+  padding: 0;
+  margin-top: 5px;
+  overflow: hidden;
 }
 
-button.primary[data-action="defend"] {
-  background: #2b353c;
-  color: var(--ink);
+.defence-scan {
+  position: relative;
+  display: block;
+  overflow: hidden;
 }
 
-button.primary[data-action="defend"]:hover { background: #37454d; }
+.defence-scan img {
+  position: absolute;
+  max-width: none;
+}
+
+button.primary[data-action="defend"] .ability-name { color: inherit; }
 
 .card-option {
   display: inline-flex;
