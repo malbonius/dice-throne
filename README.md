@@ -1,6 +1,6 @@
 # Dice Throne Offline Engine
 
-**Playtest 0.53.4**
+**Playtest 0.53.5**
 
 An offline Dice Throne engine for playing and testing two-hero matches. Play both sides in a browser or install the game as a web app on supported Windows and Android browsers. The roster includes 45 heroes from Season One Rerolled, Season Two, Outcasts, Vanguard, Marvel, X-Men and Singles.
 
@@ -13,6 +13,12 @@ python -m http.server 8000 --directory docs
 ```
 
 Open [http://localhost:8000/](http://localhost:8000/), choose both heroes in **Match setup** and select **Set up initiative**. Wait for **Ready for offline play** before disconnecting. If your browser offers **Install app**, you can install from an HTTPS deployment or localhost. The game saves your current match automatically. Open the same address with the same browser profile to resume it after an update.
+
+## What changed in 0.53.5
+
+- Each hand button shows the total cards and how many are playable at the current timing window. Both hands can still be opened to inspect cards.
+- The hero picker shows the complexity rating from each hero’s leaflet on a scale of 1 to 6.
+- Ability names use the same gold in roll and choice screens. The defence reference lists the current effects and dice count before rolling and while editing or responding to the result.
 
 ## What changed in 0.53.4
 
