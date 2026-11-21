@@ -1,6 +1,6 @@
 # Dice Throne offline engine — current handover
 
-Current version is Playtest 0.53.10.
+Current version is Playtest 0.53.12.
 
 ## Card resolution
 
@@ -13,6 +13,14 @@ Playtest 0.53.3 fixes Wild Shadow! resolving as Concuss! through a legacy branch
 Regression checks cover Mighty Blow against Shadow Defense, a single change with and without enough Daggers for Poison, two changes while in Shadows and Barbarian's Concuss!.
 
 ## Match interface
+
+### Playtest 0.53.12
+
+The shared View button uses an outlined style. Card choices place the action and preview in two columns, with one card per row. Where a card offers multiple actions, they share the left column.
+
+### Playtest 0.53.11
+
+The deck viewer looks up the current location of each card ID and counts copies by location. Cards with every copy in discard appear in the Discard pile section. Split copies stay on one row in their card-type section. The viewer does not display the order of either pile.
 
 ### Playtest 0.53.10
 
@@ -192,7 +200,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.10.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.12.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
