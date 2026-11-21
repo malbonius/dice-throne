@@ -103,6 +103,13 @@ function shuffle(cards,random) {
  }
  return result;
 }
+function pendingRollCard(s,seat) {
+ return s.cardRoll?.seat===seat?s.cardRoll.id:undefined;
+}
+function hasCardsToDraw(s,seat) {
+ const {deck,discard}=s.players[seat], excluded=pendingRollCard(s,seat);
+ return deck.length>0||discard.some(id=>id!==excluded);
+}
 function drawCards(p,count,random,excluded) {
  if(p.resurrected)return;
  while(count-->0){
@@ -183,7 +190,7 @@ function cardChoices(s,seat,id) {
  if(s.sideDamage?.endTurn&&c.phase!=='instant'&&!(hero===thor.id&&id===29)&&!(hero===cyclops.id&&id===28))return [];
  if(price(s,seat,id)>p.cp) return [];
  if(s.mesmerizeRoll&&![5,6,8,9,11,12,13,14,16,18].includes(id))return [];
- if(s.cardRoll && !(hero===deadpool.id&&id===30&&s.cardRoll.id===29)&& !(hero===santa.id&&id===32)&& !(hero===mysticBrawler.id&&[31,32,33].includes(id))&& !(hero===blackWidow.id&&c.phase==='upgrade'&&rollPhase(s))&&!(hero===headlessHorseman.id&&[31,32].includes(id))&&!(hero===huntress.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===artificer.id&&[28,29].includes(id)) && !([8,9].includes(id) || (hero===sunElf.id&&([32,33].includes(id)||id===31&&rollPhase(s))) || (c.phase==='roll' && rollPhase(s) && ([11,12,13,14,16,18].includes(id)||hero===3&&id===29||hero===cursedPirate.id&&id===29||hero===thor.id&&id===28||hero===cyclops.id&&id===27||hero===gambit.id&&id===29)))) return [];
+ if(s.cardRoll && !(hero===deadpool.id&&id===30&&pendingRollCard(s,seat)===29)&& !(hero===santa.id&&id===32)&& !(hero===mysticBrawler.id&&[31,32,33].includes(id))&& !(hero===blackWidow.id&&c.phase==='upgrade'&&rollPhase(s))&&!(hero===headlessHorseman.id&&[31,32].includes(id))&&!(hero===huntress.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===artificer.id&&[28,29].includes(id)) && !([8,9].includes(id) || (hero===sunElf.id&&([32,33].includes(id)||id===31&&rollPhase(s))) || (c.phase==='roll' && rollPhase(s) && ([11,12,13,14,16,18].includes(id)||hero===3&&id===29||hero===cursedPirate.id&&id===29||hero===thor.id&&id===28||hero===cyclops.id&&id===27||hero===gambit.id&&id===29)))) return [];
  if(attackLocked(s) && (seat!==s.active || s.pending.ultimate && ![5,6,9,30,31].includes(id)&&!(hero===vampireLord.id&&[32,33].includes(id))&&!(hero===gunslinger.id&&id===27)&&!(hero===samurai.id&&id===28)&&!(hero===tactician.id&&id===32)&&!(hero===huntress.id&&[28,29].includes(id))&&!(hero===headlessHorseman.id&&[27,31,32].includes(id))&&!(hero===necromancer.id&&[32,33].includes(id))&&!(hero===paleLady.id&&[19,20,21,23].includes(id))&&!(hero===raveness.id&&[29,30,31].includes(id))&&!(hero===druid.id&&[27,32].includes(id))&&!(hero===duelist.id&&[28,29,30].includes(id))&&!(hero===sunElf.id&&[32,33].includes(id))&&!(hero===deadpool.id&&[25,27,29,30].includes(id))&&!(hero===santa.id&&[26,27,29,30,32].includes(id))&&!(hero===mysticBrawler.id&&[28,29,30,32,33].includes(id))&&!(hero===krampus.id&&[28,29,30,31].includes(id))&&!(hero===alchemist.id&&id===32)&&!(hero===wolverine.id&&id===26)&&!(hero===storm.id&&[27,28,30].includes(id))&&!(hero===rogue.id&&[29,30,32].includes(id))&&!(hero===psylocke.id&&[27,28,30,32].includes(id))&&!(hero===jeanGrey.id&&[29,31,32].includes(id))&&!(hero===iceman.id&&[28,30,31,32].includes(id))&&!(hero===gambit.id&&[30,31].includes(id))&&!(hero===cyclops.id&&[25,26,27,28,29,30,31,32,33].includes(id))&&!(hero===thor.id&&[29,30,31,33].includes(id))&&!(hero===spiderMan.id&&[26,28,31].includes(id))&&!(hero===scarletWitch.id&&id===29)&&!(hero===loki.id&&[29,30].includes(id))&&!(hero===doctorStrange.id&&[29,30,32].includes(id))&&!(hero===captainMarvel.id&&[29,32].includes(id))&&!(hero===blackWidow.id&&(c.phase==='upgrade'||[30,32].includes(id)))&&!(hero===blackPanther.id&&[30,31,32].includes(id)) && !(hero===2&&id===32) && !(hero===6&&id===28&&s.stage==='locked')&&!(hero===7&&id===31&&s.stage==='locked')&&!(hero===cursedPirate.id&&[30,31,32,33].includes(id)&&s.stage==='locked')&&!(id===10&&vineDamage(s)))) return [];
  if(c.phase==='roll' && !(hero===cyclops.id&&id===28&&[0,1].some(target=>blackPanther.incoming(s,target))) && !(thor.isolated(s)&&thor.isolatedCard(s,seat,id)) && !(hero===thor.id&&id===29&&thor.incoming(s,seat)) && !(s.widowAgility||s.widowBombRoll||s.santaNogRoll||s.deadpoolDonutRoll||s.deadpoolLucky) && !rollPhase(s) && !((s.stage==='locked'||s.gunReload)&&seat===s.active) && !(id===10&&s.stage==='sideDamage'&&['Barbed Vine','Powder Keg','Swashbuckle!','Scurvy!','Cursed Cards!','Nanobot','Ravage!','Absorb Vitality','Kinetic Energy','Time Bomb','Outwit!','Webbed','Mjölnir','Chain Lightning','Freeze the Day!','Phoenix Burn','Shattered!','Lightning','Wind Shear','Intimidate!','Fastball Special!','Potion Explosion!','Tonic!','Give a Little!','Explosive Flex!','Egg Nog','Santa’s Helper!','Extremely Naughty!','Do You Feel Lucky?!'].includes(s.sideDamage.source))) return [];
  if(['main','upgrade'].includes(c.phase) && !(hero===blackWidow.id&&c.phase==='upgrade'&&rollPhase(s)&&!s.mainAction&&!s.widowAgility&&!s.widowBombRoll) && (!isMain(s)||seat!==s.active||s.cardRoll||s.mainAction||s.ravenFeathers||s.shapeOverflow)) return [];
@@ -320,7 +327,7 @@ function titheChoices(s,seat) {
  if(!s.cards||heroId(s,seat)!==5||s.retry||s.growth||s.mainChoice||s.pirateChoice||s.mainAction||s.stage==='finished'||
     (seat!==s.active&&attackLocked(s)))return {};
  const ctx=rollContext(s);
- return {draw:p.cp>=titheDrawCost(p)&&(p.deck.length||p.discard.some(id=>id!==s.cardRoll?.id)),
+ return {draw:p.cp>=titheDrawCost(p)&&hasCardsToDraw(s,seat),
    dice:p.cp>0?diceOwnedBy(ctx,seat,s):[]};
 }
 function bloodPowerChoices(s,seat){
@@ -341,7 +348,7 @@ function bloodPowerChoices(s,seat){
      }
    }
  });
- if(total>=3&&!used[3]&&(p.deck.length||p.discard.some(card=>card!==s.cardRoll?.id)))options.push({cost:3,label:'Draw 2 cards'});
+ if(total>=3&&!used[3]&&hasCardsToDraw(s,seat))options.push({cost:3,label:'Draw 2 cards'});
  if(total>=4&&!used[4]&&seat===s.active&&(rollPhase(s)||s.stage==='locked')&&s.stage!=='postHit')
    options.push({cost:4,label:'Heal equal to damage dealt by your attack'});
  return options;
@@ -367,7 +374,7 @@ function tokenChoices(s,seat) {
  const ctx=rollContext(s);
  if(canSpendSpirit(p,'seedling')&&!attackLocked(s))options.seedling=diceOwnedBy(ctx,seat,s);
  options.sapling=canSpendSpirit(p,'sapling');
- options.saplingDraw=!!(options.sapling&&p.cp&&(p.deck.length||p.discard.some(id=>id!==s.cardRoll?.id)));
+ options.saplingDraw=!!(options.sapling&&p.cp&&hasCardsToDraw(s,seat));
  if(s.cardRoll||s.cosmicRayRoll)return options;
  options.wellspring=!!(p.wellspring&&active&&isMain(s)&&!s.mainAction);
  options.dryad=canSpendSpirit(p,'dryad')&&active&&hit&&!hit.pure&&!hit.evaded&&
@@ -427,7 +434,7 @@ function tacticalChoices(s,seat){
  if(p.cp<15&&!p.resurrected)options.push({kind:'cp',cost:1,label:'Gain 1 CP'});
  diceOwnedBy(context,seat,s).forEach((value,index)=>options.push({kind:'reroll',cost:1,index,label:`Reroll die ${index+1} (${value})`}));
  if(p.tactical>=3){
-   if(p.deck.length||p.discard.some(card=>card!==s.cardRoll?.id))options.push({kind:'draw',cost:3,label:'Draw 1 card'});
+   if(hasCardsToDraw(s,seat))options.push({kind:'draw',cost:3,label:'Draw 1 card'});
    if(!s.players[other].targeted)options.push({kind:'targeted',cost:3,target:other,label:`Inflict Targeted on ${names[other]}`});
  }
  if(p.tactical>=4){
@@ -470,7 +477,7 @@ function applyTactical(s,seat,option,roll,random){
      s.log.unshift(`${names[seat]} rerolls die ${option.index+1} to ${ctx.dice[option.index]}.`);
      break;
    }
-   case 'draw': drawCards(p,1,random,s.cardRoll?.id);break;
+   case 'draw': drawCards(p,1,random,pendingRollCard(s,seat));break;
    case 'targeted': {
      const target=s.players[option.target], hit=s.pending;
      if(seat===s.active&&hit?.attack&&['defence','defenceResponse','damage','locked','gunContest','gunDuelChoice','purify'].includes(s.stage)){
@@ -1407,7 +1414,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       p.bloodSpent={...vampireLord.usage(s,seat),[option.cost]:true};
       if(option.cost===1){hit.grossDamage+=3;updateDamage(hit);}
       else if(option.cost===2)removeMatchStatus(s,option.target,option.status,option.tokenId);
-      else if(option.cost===3)drawCards(p,2,random,s.cardRoll?.id);
+      else if(option.cost===3)drawCards(p,2,random,pendingRollCard(s,seat));
       else s.bloodHealPlanned=true;
       s.log.unshift(`${heroNames(s)[seat]} spends ${option.cost} Blood Power. ${option.label}.`);
       return s;
@@ -1476,7 +1483,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       const s=structuredClone(previous),p=s.players[seat];
       if(draw){
         p.cp-=titheDrawCost(p);
-        drawCards(p,1,random,s.cardRoll?.id);
+        drawCards(p,1,random,pendingRollCard(s,seat));
       } else {
         p.cp--;
         const ctx=rollContext(s),before=ctx.dice.slice();
@@ -1514,7 +1521,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         s.cardRoll={seat,id:null,dice:[roll()]};
       } else {
         spendSpirit(p,'sapling');
-        if(action.type==='saplingDraw'){p.cp--;drawCards(p,1,random,s.cardRoll?.id);}
+        if(action.type==='saplingDraw'){p.cp--;drawCards(p,1,random,pendingRollCard(s,seat));}
         else {p.hp=bounded(p.hp+1,60);gainCP(p,1);}
       }
       const label=action.type==='saplingDraw'?'sapling':action.type==='dryadPrevent'?'dryad':action.type;
