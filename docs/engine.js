@@ -700,10 +700,7 @@ function applyCard(s,seat,id,choice,roll,random,add,bypassSanta=false) {
  }
  if(id===17){s.extraDefence=(s.extraDefence??0)+1;return;}
  if (rules.applyCardAfterShared?.(card)) return;
- if (id === 29) {
-  grantStatus(opponent,'concussion');
-  return;
- }
+ if(!Number.isInteger(choice?.i))return;
  const ctx=rollContext(s);
  if(!ctx)return;
  const {dice}=ctx, before=dice.slice();
