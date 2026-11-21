@@ -188,7 +188,7 @@ const statusNotes = {
   entangle: 'One fewer attempt in your next Offensive Roll Phase. Remove at the end of that Roll Phase. Stack limit 1.',
   blind: 'Check before resolving your next offensive ability. A 1 or 2 cancels it. Remove Blind if you end the phase without an ability. Stack limit 1.'
 };
-function tokenImage(view,seat,key) {
+function tokenImage(view,seat,key,bombId) {
   if (!key) return '';
   const hero=heroId(view,seat), player=view.players[seat];
   const tokenArt=hero===mysticBrawler.id&&key==='concussion'?'mysticConcussion':hero===alchemist.id&&key==='poison'?'alchemistPoison':hero===psylocke.id&&key==='agility'?'psylockeAgility':hero===thor.id&&key==='guardBreak'?'thorGuardBreak':hero===gunslinger.id&&key==='evasive'?'gunslingerEvasive':
@@ -197,27 +197,33 @@ function tokenImage(view,seat,key) {
     hero===tactician.id&&key==='protect'?'tacticianProtect':
     hero===seraph.id&&key==='cleanse'?'seraphCleanse':
     hero===seraph.id&&key==='blessing'?'seraphBlessing':key;
-  const image=key==='manifestDie'?art.manifestDice[(player.manifestDie||1)-1]:key==='sunDial'?(player.sunDawn?art.dialSun:art.dialDusk):key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[(player.moonShard||1)-1]:art[tokenArt];
+  let image=key==='manifestDie'?art.manifestDice[(player.manifestDie||1)-1]:key==='sunDial'?(player.sunDawn?art.dialSun:art.dialDusk):key==='regenerate1'?art.regenerate:key==='regenerate'?art.regenerate2:key==='moonShard'?art.moonShards[(player.moonShard||1)-1]:art[tokenArt];
+  if (key==='timeBomb') {
+    const timers = player.timeBombTimers ?? [];
+    const timer = bombId===undefined ? timers[0] : timers.find(bomb=>bomb.id===bombId);
+    if (bombId===undefined && timers.some(bomb=>bomb.ticks!==timer?.ticks)) return '';
+    if (timer?.ticks===1) image=art.timeBomb1;
+  }
   return image?`<img class="token-icon" src="${image}" alt="">`:'';
 }
 
 function tokenChoiceLabel(view, choice, seat) {
-  const image = tokenImage(view,choice.target??seat,choice.status??choice.key);
+  const image = tokenImage(view,choice.target??seat,choice.status??choice.key,choice.bombId??choice.tokenId);
   return image?`<span class="token-choice">${image}<span>${choice.label}</span></span>`:choice.label;
 }
 
-const token = (seat,key,label,suffix=key) => {
+const token = (seat,key,label,suffix=key,bombId) => {
   const id = `status-${seat}-${suffix}`;
-  return `<span class="token-help">${button('status',`<span class="token">${tokenImage(state,seat,key)}${label}</span>`,
+  return `<span class="token-help">${button('status',`<span class="token">${tokenImage(state,seat,key,bombId)}${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
 function hero(seat, decisionSeat, responding) {
   const p = state.players[seat];
   const drawCount = p.deck.length ?? p.deck;
   const statusLabels = [];
-  const status = (key, label, suffix) => {
+  const status = (key, label, suffix, bombId) => {
     statusLabels.push(label);
-    return token(seat, key, label, suffix);
+    return token(seat, key, label, suffix, bombId);
   };
   const statuses = [p.evasive && status('evasive',`Evasive ×${p.evasive}`),p.entangle && status('entangle','Entangle'),p.blind && status('blind','Blind'),p.targeted && status('targeted','Targeted'),
     p.pirateCoins?.[seat]&&status('doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`),
@@ -249,7 +255,7 @@ function hero(seat, decisionSeat, responding) {
     p.radiance>0&&status('radiance',`Radiance ×${p.radiance}`),
     p.covertOps>0&&status('covertOps',`Covert Ops ×${p.covertOps}`),
     p.agility>0&&status('agility',`Agility ×${p.agility}`),
-    ...(p.timeBombTimers??[]).map((b,i)=>status('timeBomb',`Time Bomb ${i+1} · 0:0${b.ticks}`,`timeBomb-${b.id}`)),
+    ...(p.timeBombTimers??[]).map((b,i)=>status('timeBomb',`Time Bomb ${i+1} · 0:0${b.ticks}`,`timeBomb-${b.id}`,b.id)),
     p.kineticEnergy>0&&status('kineticEnergy',`Kinetic Energy ${p.kineticEnergy}/${statusCap(p,'kineticEnergy')}`),
     p.vibraniumSuit&&status('vibraniumSuit','Vibranium Suit'),
     p.sunDial!==undefined&&status('sunDial',`${p.sunDawn?'Dawn':'Dusk'} · ${p.sunDial}/5`),
@@ -1273,7 +1279,8 @@ function arena(seat, responding, decisionSeat) {
     content=tray(state.widowBombRoll.dice,seat,false)+button('widowBombResolve','Resolve bomb roll','class="primary"');
   } else if(allowed.widowBombRoll){
     phase='Upkeep · Time Bombs';heading=`${actingName} checks Time Bombs`;
-    content=blankRoll(1)+(state.players[state.active].timeBombTimers??[]).filter(b=>!(state.widowBombChecked??[]).includes(b.id)).map(b=>button('widowBombRoll',`Roll for bomb · 0:0${b.ticks}`,`data-index="${b.id}"`)).join('');
+    content=blankRoll(1)+(state.players[state.active].timeBombTimers??[]).filter(b=>!(state.widowBombChecked??[]).includes(b.id)).map(b=>button('widowBombRoll',
+      tokenChoiceLabel(state,{key:'timeBomb',bombId:b.id,label:`Roll for bomb · 0:0${b.ticks}`},state.active),`data-index="${b.id}"`)).join('');
   } else if(allowed.collectShapeShift){
     phase='Status effect';heading='Collect Shape Shift';
     detail='You may spend an existing Shape Shift to make room for incoming tokens.';
@@ -2084,8 +2091,11 @@ function matchEffects(state, responding, renderButton = button) {
       renderButton('spendFeather',`${option.cost} Feather · ${option.label}`,`data-target="${owner}" data-status="${option.kind}"`)).join('')}</div></div>`;
   }
   const tokens=tokenChoices(state,responding);
-  const tacticalActions=tacticalChoices(state,responding).map(({cost,label},index)=>
-    renderButton('spendTactical',`${cost} Tactical Advantage · ${label}`,`data-choice="${index}"`));
+  const tacticalActions=tacticalChoices(state,responding).map((choice,index)=>{
+    const label = `${choice.cost} Tactical Advantage · ${choice.label}`;
+    return renderButton('spendTactical',choice.status==='timeBomb'
+      ? tokenChoiceLabel(state,{...choice,label},choice.from) : label,`data-choice="${index}"`);
+  });
   const grimActions=grimChoices(state,responding).map(kind=>renderButton('spendGrim',
     kind==='attempt'?'Grim Pursuit · extra Roll Attempt':'Grim Pursuit · roll for attack damage',`data-status="${kind}"`));
   const tokenActions=state.grimOverflow?grimActions:state.stage==='nyraDamage'?[]:state.tacticalOverflow||state.tacticalRemoval?tacticalActions:[
@@ -2113,7 +2123,7 @@ function matchEffects(state, responding, renderButton = button) {
     ...(tokens.ninjutsu?[renderButton('ninjutsu','Spend Ninjutsu')]:[]),
     ...(tokens.evadeSide?[renderButton('evadeSide','Spend Evasive')]:[]),
     ...paladinBuffs.filter(key=>tokens[key]).map(key=>renderButton(key,`Spend ${statusLabel(key)}`)),
-    ...tokens.cleanse.flatMap(status=>status==='spellbound'?(state.players[responding].boundAbilities??[]).map(b=>renderButton('useCleanse',`Cleanse Spellbound · ${b.key}`,`data-status="spellbound" data-index="${b.id}"`)):status==='bagOfTricks'?(state.players[responding].trickBags??[]).map(b=>renderButton('useCleanse',`Cleanse Bag of Tricks from ${names[b.owner]}`,`data-status="bagOfTricks" data-index="${b.id}"`)):status==='timeBomb'?(state.players[responding].timeBombTimers??[]).map(b=>renderButton('useCleanse',`Cleanse Time Bomb 0:0${b.ticks}`,`data-status="timeBomb" data-index="${b.id}"`)):[renderButton('useCleanse',`Cleanse ${statusLabel(status)}`,`data-status="${status}"`)]),
+    ...tokens.cleanse.flatMap(status=>status==='spellbound'?(state.players[responding].boundAbilities??[]).map(b=>renderButton('useCleanse',`Cleanse Spellbound · ${b.key}`,`data-status="spellbound" data-index="${b.id}"`)):status==='bagOfTricks'?(state.players[responding].trickBags??[]).map(b=>renderButton('useCleanse',`Cleanse Bag of Tricks from ${names[b.owner]}`,`data-status="bagOfTricks" data-index="${b.id}"`)):status==='timeBomb'?(state.players[responding].timeBombTimers??[]).map(b=>renderButton('useCleanse',tokenChoiceLabel(state,{key:'timeBomb',bombId:b.id,label:`Cleanse Time Bomb 0:0${b.ticks}`},responding),`data-status="timeBomb" data-index="${b.id}"`)):[renderButton('useCleanse',`Cleanse ${statusLabel(status)}`,`data-status="${status}"`)]),
     ...Array.from({length:tokens.boost},(_,i)=>renderButton('boostChi',`Spend ${i+1} Chi · +${i+1} damage`,`data-amount="${i+1}"`)),
     ...Array.from({length:tokens.prevent},(_,i)=>renderButton('preventChi',`Spend ${i+1} Chi · prevent ${i+1}`,`data-amount="${i+1}"`))
   ];
