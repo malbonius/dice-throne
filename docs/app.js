@@ -865,14 +865,24 @@ const rerollActions = new Set([
   'rerollMesmerized', 'nyraReroll', 'titheReroll'
 ]);
 
+// These effects already show both the empty tray and their own resolution controls.
+const inlineEffectRolls = new Set([
+  'deadpoolLuckyRoll', 'rollTrickBag', 'widowBombRoll', 'rollPrey', 'rollNevermore',
+]);
+
 const manualRollActions = new Set([
   'roll', 'defend', 'rollEffect', 'rollMysticContest', 'rollSantaAbility',
-  'deadpoolLuckyRoll', 'rollTrickBag', 'widowBombRoll', 'rollPrey', 'rollNevermore',
+  ...inlineEffectRolls,
   ...rerollActions
 ]);
 
+function effectRollOnCurrentScreen(view, type) {
+  return inlineEffectRolls.has(type) || type === 'rollEffect' && view.cards ||
+    type === 'rollSantaAbility' && !view.pending?.santa?.contest;
+}
+
 function rollsOnCurrentScreen(view, type) {
-  if (type === 'roll' || type === 'defend' || type === 'retryDie') return true;
+  if (type === 'roll' || type === 'defend' || type === 'retryDie' || effectRollOnCurrentScreen(view,type)) return true;
   if (!rerollActions.has(type)) return false;
   const context = rollContext(view);
   return !!context && (context.dice === view.dice || context.dice === view.defenceDice ||
@@ -1008,6 +1018,7 @@ function arena(seat, responding, decisionSeat) {
   const pendingAbility=p?.name ? abilityName(p.name) : '';
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
+  const naughtyOrNiceDetail='The final die determines whether the opponent is naughty or nice. Dice can be altered before resolution.';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
   if(state.deadpoolRps){
@@ -1027,8 +1038,11 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.deadpoolLucky&&!state.response&&!state.retry){
     const r=state.deadpoolLucky;phase='Do You Feel Lucky?!';heading=`${names[r.target]} · hope for a number`;
     if(r.step==='hope'){content=`<label>Hope for <select id="deadpool-lucky-hope">${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${n===6?'selected':''}>${n}</option>`).join('')}</select></label>`+button('deadpoolLuckyHope','Commit the hoped-for number','class="primary"');}
-    if(r.step==='ready'){detail=`Hope: ${r.hope}. Match it to heal 3; otherwise receive 3 isolated damage.`;content=blankRoll(1)+button('deadpoolLuckyRoll','Roll the opponent’s die','class="primary"');}
-    if(r.step==='roll'){detail=`Hope: ${r.hope}. The final die belongs to ${names[r.target]} and can be altered before resolution.`;content=rollDisplay(rollContext(state))+button('deadpoolLuckyResolve','Resolve the hoped-for roll','class="primary"');}
+    else {
+      detail=`Hope: ${r.hope}. Match it to heal 3; otherwise receive 3 isolated damage. The die belongs to ${names[r.target]} and can be altered before resolution.`;
+      content=r.step==='ready'?blankRoll(1)+button('deadpoolLuckyRoll','Roll the opponent’s die','class="primary"'):
+        rollDisplay(rollContext(state))+button('deadpoolLuckyResolve','Resolve the hoped-for roll','class="primary"');
+    }
   } else if(state.santaRemoval&&!state.santaNogRoll&&!state.sideDamage&&!state.retry){
     const removal=state.santaRemoval;
     phase='Status effect response';heading=removal.choosing?`${names[removal.source]} resolves the removal`:`${names[removal.seat]} may spend tokens first`;
@@ -1046,7 +1060,10 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.santaNogRoll&&!state.response&&!state.retry){
     phase='Egg Nog';heading='Resolve the Egg Nog die';detail='Axe: 2 isolated undefendable damage. Bell: heal 2 and gain 1 CP. Star: heal 2 and draw 1. This die uses Santa’s symbols regardless of its owner’s hero.';content=rollDisplay(rollContext(state))+button('resolveEggNog','Resolve Egg Nog','class="primary"');
   } else if(state.santaRoll&&!state.cardRoll&&!state.response&&!state.retry){
-    phase=state.pending.santa.contest?'Fireside Chat':'Naughty or Nice';heading='Resolve the ability roll';detail=state.pending.santa.contest?'Each die belongs to its actual roller. Equal or greater wins, including ties. Dice can be altered before comparison.':'The final die determines whether the opponent is naughty or nice. Dice can be altered before resolution.';content=rollDisplay(rollContext(state))+button('resolveSantaRoll','Resolve the roll','class="primary"');
+    const contest=state.pending.santa.contest;
+    phase=contest?'Fireside Chat':'Naughty or Nice';heading=contest?'Resolve the ability roll':`Target ${names[1-state.active]}`;
+    detail=contest?'Each die belongs to its actual roller. Equal or greater wins, including ties. Dice can be altered before comparison.':naughtyOrNiceDetail;
+    content=rollDisplay(rollContext(state))+button('resolveSantaRoll','Resolve the roll','class="primary"');
   } else if(state.mysticTask&&state.stage==='mysticChoices'){
     const t=state.mysticTask,h=t.queue[0];phase='Mystic Brawler';heading=names[t.seat];
     if(h.kind==='strengths'){heading=`Choose Strengths · ${h.left} remaining`;detail='Allocate the whole batch before the tokens are gained. Each type has its own stack limit.';content=mysticBrawler.gainOptions(state).map(key=>button('mysticStrength',`${statusLabel(key)} · ${(state.players[t.seat][key]??0)+(h.allocation[key]??0)}/${mysticBrawler.caps[key]}`,`data-status="${key}"`)).join('');}
@@ -1202,18 +1219,17 @@ function arena(seat, responding, decisionSeat) {
       heading=loki.illusionNames[t.result];detail=`${incomingDamage(state)} attack damage remains. Your Defensive Ability can still resolve.`;
       content=`<img src="${art.lokiIllusions[t.result]}" alt="${loki.illusionNames[t.result]}" style="max-width:230px;width:100%;display:block">`+button('finishIllusion','Continue attack','class="primary"');
     }
-  } else if(!state.response&&state.lokiBag&&!state.cardRoll&&!state.retry){
-    const t=state.lokiBag;phase=t.outwit?'Outwit!':'Upkeep · Bag of Tricks';
-    if(t.kind==='roll'){
-      heading=`${names[t.seat]} rolls for ${t.outwit?'Outwit!':'Bag of Tricks'}`;detail=t.outwit?'On 1–5, Loki chooses heal 3, gain 3 CP or receive 3 damage. On 6, gain 4 CP.':'On 1 lose 1 CP; on 2–5 its original Loki chooses heal 2, gain 1 CP or receive 2 damage; on 6 gain 2 CP.';
-      content=tray(t.dice,t.seat,false)+button('resolveTrickBag','Resolve roll','class="primary"');
-    } else {
+  } else if(!state.response&&(allowed.rollTrickBag||state.lokiBag&&!state.cardRoll&&!state.retry)){
+    const t=state.lokiBag;phase=t?.outwit?'Outwit!':'Upkeep · Bag of Tricks';
+    if(t?.kind==='choose'){
       heading=`${names[t.owner]} chooses the result`;detail=`Choose for ${names[t.seat]}.${t.outwit?'':' Healing and damage apply together at the end of Upkeep.'}`;
       content=button('chooseTrickBag',`Heal ${t.amount}`, 'data-status="heal"')+button('chooseTrickBag',`Gain ${t.outwit?3:1} CP`,'data-status="cp"')+button('chooseTrickBag',`Receive ${t.amount} damage`,'data-status="damage"');
+    } else {
+      heading=`${names[t?.seat??state.active]} rolls for ${t?.outwit?'Outwit!':'Bag of Tricks'}`;
+      detail=t?.outwit?'On 1–5, Loki chooses heal 3, gain 3 CP or receive 3 damage. On 6, gain 4 CP.':'On 1 lose 1 CP; on 2–5 its original Loki chooses heal 2, gain 1 CP or receive 2 damage; on 6 gain 2 CP.';
+      content=t?tray(t.dice,t.seat,false)+button('resolveTrickBag','Resolve roll','class="primary"'):
+        blankRoll(1)+(state.players[state.active].trickBags??[]).map(b=>button('rollTrickBag',`Roll Bag of Tricks from ${names[b.owner]}`,`data-index="${b.id}"`)).join('');
     }
-  } else if(!state.response&&allowed.rollTrickBag){
-    phase='Upkeep · Bag of Tricks';heading=`${activeName} resolves a Bag of Tricks`;detail='Resolve each token separately. Choose which to remove and roll first.';
-    content=blankRoll(1)+(state.players[state.active].trickBags??[]).map(b=>button('rollTrickBag',`Roll Bag of Tricks from ${names[b.owner]}`,`data-index="${b.id}"`)).join('');
   } else if(state.premonitionTask){
     const t=state.premonitionTask,player=state.players[t.seat];phase='Income Phase';heading=`${actingName} uses Premonition`;
     if(t.kind==='choose'){
@@ -1273,14 +1289,13 @@ function arena(seat, responding, decisionSeat) {
     phase='Agility';heading=`${actingName} rolls for Agility`;
     detail='On 1–3, prevent half incoming damage. Elude! may be played on a 5–6 before resolving this roll.';
     content=tray(state.widowAgility.dice,seat,false)+button('resolveAgility','Resolve Agility','class="primary"');
-  } else if(!state.response&&state.widowBombRoll&&!state.cardRoll&&!state.retry){
-    phase='Time Bomb';heading=`${actingName} attempts to defuse a bomb`;
-    detail='On a 6, remove the bomb. Otherwise advance its countdown.';
-    content=tray(state.widowBombRoll.dice,seat,false)+button('widowBombResolve','Resolve bomb roll','class="primary"');
-  } else if(allowed.widowBombRoll){
+  } else if(!state.response&&(allowed.widowBombRoll||state.widowBombRoll&&!state.cardRoll&&!state.retry)){
     phase='Upkeep · Time Bombs';heading=`${actingName} checks Time Bombs`;
-    content=blankRoll(1)+(state.players[state.active].timeBombTimers??[]).filter(b=>!(state.widowBombChecked??[]).includes(b.id)).map(b=>button('widowBombRoll',
-      tokenChoiceLabel(state,{key:'timeBomb',bombId:b.id,label:`Roll for bomb · 0:0${b.ticks}`},state.active),`data-index="${b.id}"`)).join('');
+    detail='On a 6, remove the bomb. Otherwise advance its countdown.';
+    content=state.widowBombRoll
+      ?tray(state.widowBombRoll.dice,seat,false)+button('widowBombResolve','Resolve bomb roll','class="primary"')
+      :blankRoll(1)+(state.players[state.active].timeBombTimers??[]).filter(b=>!(state.widowBombChecked??[]).includes(b.id)).map(b=>button('widowBombRoll',
+        tokenChoiceLabel(state,{key:'timeBomb',bombId:b.id,label:`Roll for bomb · 0:0${b.ticks}`},state.active),`data-index="${b.id}"`)).join('');
   } else if(allowed.collectShapeShift){
     phase='Status effect';heading='Collect Shape Shift';
     detail='You may spend an existing Shape Shift to make room for incoming tokens.';
@@ -1364,6 +1379,11 @@ function arena(seat, responding, decisionSeat) {
     phase='Upkeep'; heading='Bleed';
     detail='On 1–4, take 1 damage. On 5–6, remove one Bleed.';
     content=tray(state.bleedRoll,state.active,false)+button('resolveBleed','Resolve Bleed','class="primary"');
+  } else if(allowed.rollNevermore||state.stage==='ravenNevermoreRoll'&&!state.cardRoll){
+    phase='Upkeep';heading='Nevermore';detail=`${activeName} starts their upkeep with Nevermore.`;
+    content=state.nevermoreRoll
+      ?tray(state.nevermoreRoll.dice,seat,false)+button('resolveNevermore','Resolve Nevermore die','class="primary"')
+      :blankRoll(1)+button('rollNevermore','Roll the Nevermore die','class="primary"');
   } else if(state.cardRoll) {
     phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,seat,state.cardRoll.id).name;
     detail=`${names[seat]} can modify the roll before it resolves.`;
@@ -1594,10 +1614,6 @@ function arena(seat, responding, decisionSeat) {
         button('activateNevermore','Skip this activation','data-status="skip"');
       break;
     }
-    case 'ravenNevermoreRoll':
-      phase='Upkeep';heading='Nevermore Die Roll';
-      content=tray(state.nevermoreRoll.dice,seat,false)+button('resolveNevermore','Resolve Nevermore die','class="primary"');
-      break;
     case 'ravenDiscard':
       phase='Upkeep';heading='Nevermore forces a discard';
       content=state.players[seat].hand.map(id=>previewableOption(state,seat,id,button('ravenDiscard',seatCard(state,seat,id).name,`data-index="${id}"`))).join('');
@@ -1647,11 +1663,6 @@ function arena(seat, responding, decisionSeat) {
         break;
       }
       if(allowed.alchemistUpkeep){heading=state.players[state.active].upgrades['The Lab']?'The Lab II':'The Lab';detail='Resolve the mandatory Upkeep attachment before continuing.';content=button('alchemistUpkeep',state.players[state.active].upgrades['The Lab']?'Roll for The Lab II':'Attach 1 Potion','class="primary"');break;}
-      if(allowed.rollNevermore){
-        heading='Nevermore';detail=`${activeName} starts their upkeep with Nevermore.`;
-        content=blankRoll(1)+button('rollNevermore','Roll the Nevermore die','class="primary"');
-        break;
-      }
       if(allowed.unearth){
         heading='Unearth';detail='Choose a different ability to cover and gain its Corpses.';
         content=unearthChoices(hero).map(name=>button('unearth',`${abilityName(name)} · +${necromancer.unearth[name]+Number(!!hero.upgrades[name])} Corpses`,
@@ -1777,10 +1788,12 @@ function arena(seat, responding, decisionSeat) {
       detail=state.monkChoice.left>1?`Choose ${state.monkChoice.left} tokens, one at a time.`:'';
       content=`<div class="controls">${button('chooseMonkReward','Gain Evasive','data-status="evasive"')}${button('chooseMonkReward','Gain Cleanse','data-status="cleanse"')}</div>`;
       break;
-    case 'effect':
+    case 'effect': {
       phase='Ability roll'; heading=pendingAbility;
-      detail=`${actingName} rolls ${effectDiceCount(p,state.players[state.active])} separate effect dice to determine the ability’s effects.`;
-      content=blankRoll(effectDiceCount(p,state.players[state.active]))+button('rollEffect','Roll for effect','class="primary"'); break;
+      const count=effectDiceCount(p,state.players[state.active]);
+      detail=`${actingName} rolls ${count} separate effect ${count===1?'die':'dice'} to determine the ability’s effects.`;
+      content=blankRoll(count)+button('rollEffect','Roll for effect','class="primary"'); break;
+    }
     case 'effectResponse':
       if(p.effect==='thorChain'){
         phase='Chain Lightning';heading='Choose any two dice';detail=`Their total becomes the attack damage. The separate ${p.thor.chain} collateral damage resolves first.`;
@@ -1874,7 +1887,9 @@ function arena(seat, responding, decisionSeat) {
     case 'santaAbility':
       phase='Santa';heading='Resolve Santa’s printed effects';content=button('finishSantaAbility','Continue Santa’s ability','class="primary"');break;
     case 'santaTarget':
-      phase=state.pending.santa.contest?'Fireside Chat':'Naughty or Nice';heading=`Target ${names[1-state.active]}`;detail='The opponent is targeted before the subsidiary dice are rolled.';content=(p.santa.contest?blankRoll(2,[state.active,1-state.active]):blankRoll(1))+button('rollSantaAbility',p.santa.contest?'Roll both dice':'Roll die','class="primary"');break;
+      phase=p.santa.contest?'Fireside Chat':'Naughty or Nice';heading=`Target ${names[1-state.active]}`;
+      detail=p.santa.contest?'The opponent is targeted before the subsidiary dice are rolled.':naughtyOrNiceDetail;
+      content=(p.santa.contest?blankRoll(2,[state.active,1-state.active]):blankRoll(1))+button('rollSantaAbility',p.santa.contest?'Roll both dice':'Roll die','class="primary"');break;
     case 'santaPrepared':
       phase='Santa';heading='Continue the activated ability';content=button('finishSantaPrepared','Continue ability','class="primary"');break;
     case 'santaExtraRoll':
@@ -2272,38 +2287,30 @@ function handleAction(event) {
     return;
   }
   if(type==='inspect-shoot'){
-    viewerSeat=index;viewerCard=null;viewerLeaflet=false;front.hidden=back.hidden=true;viewerImage.alt=`${names[index]} · Shoot ${state.players[index].shootActive?'Active':'Inactive'}`;viewerImage.src=art.deadpoolShoot[state.players[index].shootActive?0:1];document.getElementById('viewer-title').textContent=viewerImage.alt;viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);return;
+    const active=state.players[index].shootActive;
+    openReference(art.deadpoolShoot[active?0:1],`${names[index]} · Shoot ${active?'Active':'Inactive'}`);
+    return;
   }
   if(type==='inspect-reject'){
-    viewerSeat=Number(target.dataset.seat);viewerCard=null;viewerLeaflet=false;front.hidden=back.hidden=true;viewerImage.alt=krampus.names[index];viewerImage.src=art.krampusRejects[index];document.getElementById('viewer-title').textContent=viewerImage.alt;viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);return;
+    openReference(art.krampusRejects[index],krampus.names[index]);
+    return;
   }
   if(type==='inspect-forging'){
     const key=target.dataset.status;
-    viewerSeat=index;viewerCard=null;viewerLeaflet=false;
-    front.hidden=back.hidden=true;
-    viewerImage.alt=key==='mining'?'Mining rules':'Crafting rules';
-    viewerImage.src=art[key];
-    document.getElementById('viewer-title').textContent=viewerImage.alt;
-    viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);
+    openReference(art[key],key==='mining'?'Mining rules':'Crafting rules');
     return;
   }
   if(type==='inspect-freezer'){
-    viewerSeat=index;viewerCard=null;viewerLeaflet=false;front.hidden=back.hidden=true;viewerImage.alt='The Freezer';viewerImage.src=art.icemanFreezer;
-    document.getElementById('viewer-title').textContent=viewerImage.alt;viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);return;
+    openReference(art.icemanFreezer,'The Freezer');
+    return;
   }
   if(type==='inspect-ace'){
-    viewerSeat=Number(target.dataset.seat);viewerCard=null;viewerLeaflet=false;front.hidden=back.hidden=true;
-    viewerImage.alt=`${names[viewerSeat]} · ${statusLabel(gambit.suits[index])} Ace`;viewerImage.src=art.gambitAces[index];
-    document.getElementById('viewer-title').textContent=viewerImage.alt;
-    viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);return;
+    const seat=Number(target.dataset.seat);
+    openReference(art.gambitAces[index],`${names[seat]} · ${statusLabel(gambit.suits[index])} Ace`);
+    return;
   }
   if(type==='inspect-undead'){
-    viewerSeat=index;viewerCard=null;viewerLeaflet=false;
-    front.hidden=back.hidden=true;
-    viewerImage.alt='Undead reference';
-    viewerImage.src=art.undeadLeaflet;
-    document.getElementById('viewer-title').textContent=viewerImage.alt;
-    viewer.showModal();setZoom(1);viewerScroll.scrollTo(0,0);
+    openReference(art.undeadLeaflet,'Undead reference');
     return;
   }
   if (type==='inspect-board' || type==='inspect-leaflet') {
@@ -2387,9 +2394,10 @@ function handleAction(event) {
   render();
   const decisionChanged = oldStage!==state.stage || oldState.response?.seat!==state.response?.seat
     || type==='alchemistChoice'&&state!==oldState;
-  const focus=decisionChanged ? document.getElementById('action-title')
+  const effectRoll=state!==oldState&&effectRollOnCurrentScreen(oldState,type);
+  const focus=decisionChanged||effectRoll ? document.getElementById('action-title')
     : type==='hold' ? match.querySelector(`button[data-index="${index}"][data-action="hold"]`) : match.querySelector('button[data-action="roll"]:enabled');
-  if (focus && !handDialog.open) focus.focus({preventScroll:!decisionChanged||type==='defend'});
+  if (focus && !handDialog.open) focus.focus({preventScroll:!decisionChanged||type==='defend'||effectRoll});
   else if(handDialog.open) {
     const nextCard=handContent.querySelector('button[data-action="select-card"]');
     (nextCard??handDialog.querySelector('button')).focus({preventScroll:true});
@@ -2403,38 +2411,48 @@ const viewerImage = document.getElementById('viewer-image');
 const viewerScroll = document.getElementById('viewer-scroll');
 const front = document.getElementById('leaflet-front');
 const back = document.getElementById('leaflet-back');
-let viewerSeat, viewerLeaflet, viewerCard, zoom=1, pinch=null;
-const desktopLeaflet = window.matchMedia('(hover: hover) and (pointer: fine)');
+let viewerSeat, viewerMode, zoom=1, pinch=null;
+const desktopViewer = window.matchMedia('(hover: hover) and (pointer: fine)');
 function setZoom(value) {
   zoom=bounded(value-1,3)+1;
   const width=viewerScroll.clientWidth;
-  let fit=viewerCard?Math.min(460,width):width;
-  if(viewerLeaflet&&desktopLeaflet.matches&&viewerImage.naturalHeight){
-    fit=Math.min(width,viewerScroll.clientHeight*viewerImage.naturalWidth/viewerImage.naturalHeight);
+  let fit=viewerMode==='card'?Math.min(460,width):width;
+  if(viewerMode!=='board'&&desktopViewer.matches&&viewerImage.complete&&viewerImage.naturalHeight){
+    fit=Math.min(fit,viewerScroll.clientHeight*viewerImage.naturalWidth/viewerImage.naturalHeight);
   }
   viewerImage.style.width=`${fit*zoom}px`;
 }
 viewerImage.addEventListener('load',()=>{
-  if(viewer.open&&viewerLeaflet)setZoom(zoom);
+  if(viewer.open&&viewerMode!=='board')setZoom(zoom);
 });
-function showScan(side) {
-  const reference = viewerLeaflet ? `leaflet, ${side ? 'back' : 'front'}` : 'board';
-  viewerImage.alt=`${names[viewerSeat]} ${reference}`;
-  viewerImage.src=viewerLeaflet ? art.leaflets[heroId(state,viewerSeat)][side] : boardImage(state,viewerSeat,true);
-  if(viewerCard){
-    viewerImage.alt=seatCard(state,viewerSeat,viewerCard).name;
-    viewerImage.src=cardArtwork(state,viewerSeat,viewerCard);
-  }
-  document.getElementById('viewer-title').textContent=viewerImage.alt;
-  front.setAttribute('aria-pressed',String(side===0));
-  back.setAttribute('aria-pressed',String(side===1));
+function showViewerImage(source, title) {
+  viewerImage.alt=title;
+  viewerImage.src=source;
+  document.getElementById('viewer-title').textContent=title;
   setZoom(1);
   viewerScroll.scrollTo(0,0);
 }
+function showScan(side) {
+  const leaflet=viewerMode==='leaflet';
+  const reference=leaflet?`leaflet, ${side?'back':'front'}`:'board';
+  front.setAttribute('aria-pressed',String(side===0));
+  back.setAttribute('aria-pressed',String(side===1));
+  showViewerImage(leaflet?art.leaflets[heroId(state,viewerSeat)][side]:boardImage(state,viewerSeat,true),
+    `${names[viewerSeat]} ${reference}`);
+}
+function openReference(source, title) {
+  viewerMode='card';
+  front.hidden=back.hidden=true;
+  viewer.showModal();
+  showViewerImage(source,title);
+}
 function openViewer(seat,leaflet,card=null) {
-  viewerCard=card;
+  if(card!==null){
+    openReference(cardArtwork(state,seat,card),seatCard(state,seat,card).name);
+    return;
+  }
   viewerSeat=seat;
-  viewerLeaflet=leaflet;
+  viewerMode=leaflet?'leaflet':'board';
   front.hidden=back.hidden=!leaflet;
   viewer.showModal();
   showScan(0);
@@ -2461,7 +2479,7 @@ viewerScroll.addEventListener('touchmove',event=>{
 },{passive:false});
 for(const type of ['touchend','touchcancel']) viewerScroll.addEventListener(type,()=>{pinch=null;});
 window.addEventListener('resize',()=>{if(viewer.open)setZoom(zoom);});
-// In-progress phase rolls from Preview 3 already have their final dice saved.
+// Older in-progress rolls that now use the match screen already have their final dice saved.
 if (rollRequest?.reveal && rollsOnCurrentScreen(state, rollRequest.rollType)) {
   state = rollRequest.next;
   names = heroNames(state);
