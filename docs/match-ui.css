@@ -460,20 +460,33 @@ button.draw-count:hover {
 button.primary[data-action="defend"] .ability-name { color: inherit; }
 
 .card-option {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  vertical-align: top;
-  gap: 5px;
-  max-width: 100%;
-  margin: 2px 5px 3px 0;
+  gap: 6px;
+  width: 100%;
+  margin-block: 3px;
 }
 
-.card-option > :not(:last-child) {
+.card-option > :first-child {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.card-option > :last-child { flex-shrink: 0; }
+.card-option > button:first-child {
+  text-align: start;
+}
+
+button.card-preview {
+  padding-inline: 10px;
+  background: transparent;
+  border-color: #738185;
+}
+
+button.card-preview:hover:not(:disabled) {
+  background: #283238;
+  border-color: var(--gold);
+}
 
 .token-choice {
   display: inline-flex;

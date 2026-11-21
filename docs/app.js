@@ -34,7 +34,8 @@ const deckContent = document.getElementById('deck-content');
 const button = (action,label,attrs='') => `<button type="button" data-action="${action}" ${attrs}>${label}</button>`;
 const abilityName = (name, tag = 'span') => `<${tag} class="ability-name">${name}</${tag}>`;
 function previewCard(state, seat, id, label = 'View') {
-  return button('inspect-card', label, `data-index="${id}" data-seat="${seat}" aria-label="View ${seatCard(state,seat,id).name}" aria-haspopup="dialog"`);
+  const style = label === 'View' ? 'class="card-preview" ' : '';
+  return button('inspect-card', label, `${style}data-index="${id}" data-seat="${seat}" aria-label="View ${seatCard(state,seat,id).name}" aria-haspopup="dialog"`);
 }
 function previewableOption(state, seat, id, controls) {
   return `<div class="card-option">${controls}${previewCard(state,seat,id)}</div>`;
@@ -2173,30 +2174,50 @@ function renderHand() {
   handContent.innerHTML=handPanel();
 }
 
-const deckPhases = {
+const deckSections = {
   main:'Main Phase', roll:'Roll Phase', instant:'Instant', upgrade:'Upgrades',
-  spell:'Spells', rage:'Rage', ore:'Ore'
+  spell:'Spells', rage:'Rage', ore:'Ore', discard:'Discard pile'
 };
 
 function openDeck(seat) {
   const hero = heroId(state,seat);
+  const player = state.players[seat];
   const {startingSpell, promoId = 33} = heroRoster[hero];
+  const locations = [
+    ['Draw pile', player.deck],
+    ['In hand', player.hand],
+    ['In discard', player.discard],
+    ['Equipped', Object.values(player.upgrades ?? {})],
+    ['Covered upgrade', player.coveredUpgrades ?? []],
+    ['Prepared', player.spellBook ?? []],
+    ['In the Forge', player.forgeOre ?? []]
+  ];
   const copies = new Map();
   for (const id of deckCardIds(hero,state.promo)) {
     const card = cardInfo(hero,id);
     const key = JSON.stringify([card.phase, card.name, card.cost]);
     const entry = copies.get(key);
-    if (entry) entry.count++;
-    else copies.set(key, {id, ...card, count:1});
+    if (entry) entry.ids.push(id);
+    else copies.set(key, {...card, ids:[id]});
   }
-  const cards = [...copies.values()].sort((a,b) => a.name.localeCompare(b.name));
+  const cards = [...copies.values()].map(({ids, name, phase}) => {
+    const count = ids.length;
+    const current = locations
+      .map(([label, pile]) => [label, ids.filter(id => pile.includes(id)).length])
+      .filter(([, quantity]) => quantity > 0);
+    const outside = count - current.reduce((total, [, quantity]) => total + quantity, 0);
+    if (outside > 0) current.push(['Outside draw pile', outside]);
+    const status = current.map(([label, quantity]) => count > 1 ? `${label} ×${quantity}` : label).join(' · ');
+    const section = ids.every(id => player.discard.includes(id)) ? 'discard' : phase;
+    return {id: ids[0], name, count, status, section};
+  }).sort((a,b) => a.name.localeCompare(b.name));
   deckTitle.textContent = `${names[seat]}’s deck list`;
-  deckContent.innerHTML = Object.entries(deckPhases).map(([phase, label]) => {
-    const entries = cards.filter(card => card.phase === phase);
+  deckContent.innerHTML = Object.entries(deckSections).map(([section, label]) => {
+    const entries = cards.filter(card => card.section === section);
     if (!entries.length) return '';
     return `<section class="deck-group"><h3>${label}</h3><ul role="list">
-      ${entries.map(({id, name, count}) => `<li class="deck-entry">
-        <span>${name}${count>1 ? ` ×${count}` : ''}${id===startingSpell ? '<small>Starts prepared</small>' : id===promoId ? '<small>Promo</small>' : ''}</span>
+      ${entries.map(({id, name, count, status}) => `<li class="deck-entry">
+        <span>${name}${count>1 ? ` ×${count}` : ''}<small>${status}</small>${id===startingSpell ? '<small>Starts prepared</small>' : id===promoId ? '<small>Promo</small>' : ''}</span>
         ${previewCard(state,seat,id)}
       </li>`).join('')}
     </ul></section>`;
