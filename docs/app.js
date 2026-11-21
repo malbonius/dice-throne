@@ -2225,12 +2225,12 @@ function openDeck(seat) {
   deckContent.innerHTML = Object.entries(deckSections).map(([section, label]) => {
     const entries = cards.filter(card => card.section === section);
     if (!entries.length) return '';
-    return `<section class="deck-group"><h3>${label}</h3><ul role="list">
+    return `<details class="deck-group"><summary>${label}</summary><ul role="list">
       ${entries.map(({id, name, count, status}) => `<li class="deck-entry">
         <span>${name}${count>1 ? ` ×${count}` : ''}<small>${status}</small>${id===startingSpell ? '<small>Starts prepared</small>' : id===promoId ? '<small>Promo</small>' : ''}</span>
         ${previewCard(state,seat,id)}
       </li>`).join('')}
-    </ul></section>`;
+    </ul></details>`;
   }).join('');
   deckDialog.showModal();
   deckContent.scrollTop = 0;

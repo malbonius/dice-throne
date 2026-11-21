@@ -263,8 +263,11 @@ button.draw-count:hover {
   overscroll-behavior: contain;
 }
 
-.deck-group h3 {
-  margin: 8px 0 0;
+.deck-group > summary {
+  min-height: 44px;
+  padding: 11px 4px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
   font-size: .9rem;
   color: var(--gold);
 }
