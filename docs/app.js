@@ -1,4 +1,7 @@
 const art = window.diceThroneArt;
+const portraitSource = id => `./portraits/${HEROES[id].name.toLowerCase().replaceAll(' ', '-')}.webp`;
+const heroPortrait = id => `<img class="hero-portrait" src="${portraitSource(id)}" alt="" width="179" height="323" loading="lazy">`;
+
 function cardArtwork(match,seat,cardId) {
   const hero=heroId(match,seat);
   if(cardId>18)return art.uniqueCards[hero][cardId-19];
@@ -345,9 +348,14 @@ function hero(seat, decisionSeat, responding) {
   const ready = seat === decisionSeat && state.stage !== 'finished';
   return `<section class="hero seat-${seat}" aria-label="${names[seat]}" data-deciding="${ready}" style="--hero:${seat ? '#89cbc5' : '#e9a987'}">
     <div class="hero-head">
-      <span class="seat-label">Player ${seat + 1}</span>
-      <h2>${names[seat]}</h2>
-      <div class="vitals"><span><strong>${p.hp}</strong> Health</span><span><strong>${p.cp}</strong> CP</span></div>
+      <div class="hero-identity">
+        ${heroPortrait(heroId(state,seat))}
+        <div>
+          <span class="seat-label">Player ${seat + 1}</span>
+          <h2>${names[seat]}</h2>
+          <div class="vitals"><span><strong>${p.hp}</strong> Health</span><span><strong>${p.cp}</strong> CP</span></div>
+        </div>
+      </div>
       <div class="hero-links">
         ${button('inspect-board','Board',`data-index="${seat}" aria-label="Open ${names[seat]}’s board" aria-haspopup="dialog"`)}
         ${button('inspect-leaflet','Leaflet',`data-index="${seat}" aria-label="Open ${names[seat]}’s leaflet" aria-haspopup="dialog"`)}
@@ -2493,6 +2501,7 @@ if (!rollRequest && state?.stage === 'defence' && state.response?.action?.type =
 
 const setupHeroes = rollRequest?.setup?.heroes.slice() ?? (state ? state.players.map((_,seat)=>heroId(state,seat)) : [0,1]);
 const setupHeroNames=setupHeroes.map((_,seat)=>document.getElementById(`setup-hero-${seat}`));
+const setupPortraits=setupHeroes.map((_,seat)=>document.getElementById(`setup-portrait-${seat}`));
 const heroPicker=document.getElementById('hero-picker');
 const heroPickerTitle=document.getElementById('hero-picker-title');
 const heroSearch=document.getElementById('hero-search');
@@ -2515,7 +2524,7 @@ function openHeroPicker(seat) {
       <div class="picker-heroes">
         ${set.heroes.map(id=>`
           <button type="button" class="picker-hero" data-hero="${id}" ${id===currentHero?'aria-current="true"':''}>
-            <span>${HEROES[id].name}</span><small>Complexity ${heroRoster[id].complexity}/6</small>
+            ${heroPortrait(id)}<span>${HEROES[id].name}</span><small>Complexity ${heroRoster[id].complexity}/6</small>
           </button>`).join('')}
       </div>
     </details>`).join('');
@@ -2524,8 +2533,14 @@ function openHeroPicker(seat) {
   if(!touchPicker.matches)heroSearch.focus();
 }
 
-for(const [seat,id] of setupHeroes.entries()){
+function renderSetupHero(seat) {
+  const id=setupHeroes[seat];
   setupHeroNames[seat].textContent=HEROES[id].name;
+  setupPortraits[seat].src=portraitSource(id);
+}
+
+for(const seat of setupHeroes.keys()){
+  renderSetupHero(seat);
   document.getElementById(`change-hero-${seat}`).addEventListener('click',()=>openHeroPicker(seat));
 }
 
@@ -2553,7 +2568,7 @@ heroSearch.addEventListener('input',()=>{
 
 function chooseSetupHero(id) {
   setupHeroes[pickerSeat]=id;
-  setupHeroNames[pickerSeat].textContent=HEROES[id].name;
+  renderSetupHero(pickerSeat);
   heroPicker.close();
 }
 

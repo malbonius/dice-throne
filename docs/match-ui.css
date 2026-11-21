@@ -107,6 +107,23 @@ header small {
   overflow-wrap: anywhere;
 }
 
+.setup-identity,
+.hero-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hero-portrait {
+  display: block;
+  width: var(--portrait-width, 26px);
+  height: auto;
+  border-radius: 5px;
+  background: #10121a;
+}
+
 .setup-actions {
   justify-content: space-between;
 }
@@ -149,6 +166,10 @@ main {
   gap: 5px;
   padding: clamp(10px, 1.4vw, 16px);
   border-top-width: 2px;
+}
+
+.hero-identity {
+  --portrait-width: clamp(40px, 4.2vw, 57px);
 }
 
 .seat-label {
@@ -719,6 +740,10 @@ button.card-preview:hover:not(:disabled) {
 
   main:has(.match-tools) {
     padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+
+  .hero-identity {
+    --portrait-width: clamp(28px, 7vw, 39px);
   }
 
   .hero .vitals {
