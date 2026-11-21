@@ -82,7 +82,7 @@ body:has(#hero-picker[open]){overflow:hidden}
 <body>
 <header>
  <div>
-  <div><h1>Dice Throne</h1><small>Playtest 0.53.7</small></div>
+  <div><h1>Dice Throne</h1><small>Playtest 0.53.8</small></div>
   <details class="setup-menu" id="match-setup">
    <summary>Match setup</summary>
    <div class="match-setup">
@@ -101,7 +101,10 @@ body:has(#hero-picker[open]){overflow:hidden}
  <div class="picker-head">
   <div class="viewer-head"><h2 id="hero-picker-title"></h2><form method="dialog"><button autofocus>Cancel</button></form></div>
   <label for="hero-search">Search by hero name</label>
-  <input id="hero-search" type="search" autocomplete="off">
+  <div class="picker-tools">
+   <input id="hero-search" type="search" autocomplete="off">
+   <button id="random-hero" type="button">Random hero</button>
+  </div>
  </div>
  <div class="picker-results">
   <div id="hero-groups"></div>
@@ -111,6 +114,10 @@ body:has(#hero-picker[open]){overflow:hidden}
 <dialog id="hand-dialog" aria-labelledby="hand-title">
  <div class="viewer-head"><h2 id="hand-title"></h2><form method="dialog"><button>Close hand</button></form></div>
  <div id="hand-content"></div>
+</dialog>
+<dialog id="deck-dialog" aria-labelledby="deck-title">
+ <div class="viewer-head"><h2 id="deck-title"></h2><form method="dialog"><button autofocus>Close deck</button></form></div>
+ <div id="deck-content"></div>
 </dialog>
 <dialog id="viewer" aria-labelledby="viewer-title">
  <div class="viewer-head"><h2 id="viewer-title"></h2><form method="dialog"><button>Close</button></form></div>

@@ -28,6 +28,9 @@ let selectedPotion;
 const handDialog=document.getElementById('hand-dialog');
 const handTitle=document.getElementById('hand-title');
 const handContent=document.getElementById('hand-content');
+const deckDialog = document.getElementById('deck-dialog');
+const deckTitle = document.getElementById('deck-title');
+const deckContent = document.getElementById('deck-content');
 const button = (action,label,attrs='') => `<button type="button" data-action="${action}" ${attrs}>${label}</button>`;
 const abilityName = (name, tag = 'span') => `<${tag} class="ability-name">${name}</${tag}>`;
 function previewCard(state, seat, id, label = 'View') {
@@ -209,6 +212,7 @@ const token = (seat,key,label,suffix=key) => {
 };
 function hero(seat, decisionSeat, responding) {
   const p = state.players[seat];
+  const drawCount = p.deck.length ?? p.deck;
   const statusLabels = [];
   const status = (key, label, suffix) => {
     statusLabels.push(label);
@@ -351,7 +355,8 @@ function hero(seat, decisionSeat, responding) {
         ${p.nyra?`<div class="tokens"><span class="token"><img src="${art.nyraDials[Number(p.nyra.downed)]}" alt="">Nyra · ${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health</span></div>`:''}
         <div class="tokens">${statuses.join('') || 'No status effects'}</div>
         <div class="inventory">
-          <span class="draw-count"><img src="${art.back}" alt="">Draw ${p.deck.length ?? p.deck}</span><span>Discard ${p.discard?.length ?? 0}</span>
+          ${button('open-deck',`<img src="${art.back}" alt="">Draw ${drawCount}`,`class="draw-count" data-index="${seat}" aria-label="Draw ${drawCount}. View ${names[seat]}’s deck list" aria-haspopup="dialog"`)}
+          <span>Discard ${p.discard?.length ?? 0}</span>
           <span>${p.hand.length ?? p.hand} in hand</span>
           ${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}
         </div>
@@ -2167,6 +2172,32 @@ function renderHand() {
   handTitle.textContent=`${names[seat]}’s hand · ${state.players[seat].hand.length}`;
   handContent.innerHTML=handPanel();
 }
+
+const deckPhases = {
+  main:'Main Phase', roll:'Roll Phase', instant:'Instant', upgrade:'Upgrades',
+  spell:'Spells', rage:'Rage', ore:'Ore'
+};
+
+function openDeck(seat) {
+  const hero = heroId(state,seat);
+  const {startingSpell, promoId = 33} = heroRoster[hero];
+  const cards = deckCardIds(hero,state.promo).map(id => ({id, ...cardInfo(hero,id)}))
+    .sort((a,b) => a.name.localeCompare(b.name));
+  deckTitle.textContent = `${names[seat]}’s deck list`;
+  deckContent.innerHTML = Object.entries(deckPhases).map(([phase, label]) => {
+    const entries = cards.filter(card => card.phase === phase);
+    if (!entries.length) return '';
+    return `<section class="deck-group"><h3>${label}</h3><ul role="list">
+      ${entries.map(({id, name}) => `<li class="deck-entry">
+        <span>${name}${id===startingSpell ? '<small>Starts prepared</small>' : id===promoId ? '<small>Promo</small>' : ''}</span>
+        ${previewCard(state,seat,id)}
+      </li>`).join('')}
+    </ul></section>`;
+  }).join('');
+  deckDialog.showModal();
+  deckContent.scrollTop = 0;
+}
+
 function handleAction(event) {
   const target=event.target.closest('button[data-action]');
   if (!target) return;
@@ -2180,6 +2211,10 @@ function handleAction(event) {
     return;
   }
   if (!state || rollRequest?.setup) return;
+  if(type==='open-deck') {
+    openDeck(index);
+    return;
+  }
   if(type==='open-hand') {
     if(!state.cards||![0,1].includes(index)||state.stage==='finished')return;
     handSeat=index;
@@ -2324,6 +2359,7 @@ function handleAction(event) {
 }
 match.addEventListener('click',handleAction);
 handContent.addEventListener('click',handleAction);
+deckContent.addEventListener('click',handleAction);
 const viewer = document.getElementById('viewer');
 const viewerImage = document.getElementById('viewer-image');
 const viewerScroll = document.getElementById('viewer-scroll');
@@ -2459,13 +2495,18 @@ heroSearch.addEventListener('input',()=>{
   heroGroups.parentElement.scrollTop=0;
 });
 
-heroGroups.addEventListener('click',event=>{
-  const option=event.target.closest('button[data-hero]');
-  if(!option)return;
-  const id=Number(option.dataset.hero);
+function chooseSetupHero(id) {
   setupHeroes[pickerSeat]=id;
   setupHeroNames[pickerSeat].textContent=HEROES[id].name;
   heroPicker.close();
+}
+
+heroGroups.addEventListener('click',event=>{
+  const option=event.target.closest('button[data-hero]');
+  if(option)chooseSetupHero(Number(option.dataset.hero));
+});
+document.getElementById('random-hero').addEventListener('click',()=>{
+  chooseSetupHero(Math.floor(Math.random() * HEROES.length));
 });
 
 document.getElementById('reset').addEventListener('click',()=>{

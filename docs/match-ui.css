@@ -83,6 +83,12 @@ header small {
   min-width: 0;
 }
 
+.picker-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
 .setup-seat {
   align-items: start;
   flex-direction: column;
@@ -212,11 +218,54 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 4px 8px;
 }
 .draw-count img {
   width: 21px;
   height: 33px;
   object-fit: contain;
+}
+
+#deck-dialog {
+  width: min(520px, 96vw);
+  max-height: 85dvh;
+  overflow: hidden;
+}
+
+#deck-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+#deck-content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.deck-group h3 {
+  margin: 8px 0 0;
+  font-size: .9rem;
+  color: var(--gold);
+}
+
+.deck-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deck-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding-block: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.deck-entry small {
+  display: block;
+  color: var(--muted);
 }
 
 .hero-information-body .inventory {

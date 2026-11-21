@@ -122,9 +122,13 @@ function drawCards(p,count,random,excluded) {
   p.hand.push(p.deck.pop());
  }
 }
+function deckCardIds(hero, includePromo) {
+ const promoId = heroRoster[hero].promoId ?? 33;
+ return Array.from({length: includePromo ? promoId : promoId - 1}, (_, index) => index + 1);
+}
 function cardsFor(seat,p,includePromo,random){
- const promoId=heroRoster[p.hero??seat].promoId??33;
- p.deck=shuffle(Array.from({length:includePromo?promoId:promoId-1},(_,i)=>i+1).filter(id=>id!==heroRoster[p.hero??seat].startingSpell),random);
+ const hero = p.hero ?? seat;
+ p.deck=shuffle(deckCardIds(hero,includePromo).filter(id=>id!==heroRoster[hero].startingSpell),random);
  p.hand=[];p.upgrades={};p.discard=[];
  drawCards(p,4,random);
 }
