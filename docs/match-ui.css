@@ -343,6 +343,48 @@ main {
   font-weight: 650;
 }
 
+.ability-name {
+  color: var(--gold);
+}
+
+.defence-reference {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+  gap: 7px;
+  margin-block: 10px;
+}
+
+.defence-reference > div {
+  padding: 8px 10px;
+  background: #192125;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.defence-reference > div > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.defence-reference small { color: var(--muted); }
+
+.arena .defence-reference p {
+  margin: 3px 0 0;
+  color: var(--ink);
+  line-height: 1.4;
+  font-size: .85rem;
+}
+
+button.primary[data-action="defend"] {
+  background: #2b353c;
+  color: var(--ink);
+}
+
+button.primary[data-action="defend"]:hover { background: #37454d; }
+
 .card-option {
   display: inline-flex;
   align-items: center;
@@ -526,6 +568,9 @@ main {
   color: var(--muted);
 }
 
+.playable-count { white-space: nowrap; }
+.playable-count[data-available="true"] { color: var(--gold); }
+
 .match-tools .quick-board { display: none; }
 
 .match-tools button {
@@ -569,8 +614,6 @@ main {
 .face-picker-options .die {
   width: clamp(44px, 11vw, 54px);
 }
-
-.arena .card-timing { font-size: .85rem; }
 
 @media (max-width: 840px) {
   main {

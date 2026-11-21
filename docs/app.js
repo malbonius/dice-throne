@@ -29,6 +29,7 @@ const handDialog=document.getElementById('hand-dialog');
 const handTitle=document.getElementById('hand-title');
 const handContent=document.getElementById('hand-content');
 const button = (action,label,attrs='') => `<button type="button" data-action="${action}" ${attrs}>${label}</button>`;
+const abilityName = (name, tag = 'span') => `<${tag} class="ability-name">${name}</${tag}>`;
 function previewCard(state, seat, id, label = 'View') {
   return button('inspect-card', label, `data-index="${id}" data-seat="${seat}" aria-label="View ${seatCard(state,seat,id).name}" aria-haspopup="dialog"`);
 }
@@ -408,14 +409,19 @@ function handCardChoices(choices, seat) {
   return `<label>Choose effect <select id="card-choice">${labels.map((label,index)=>`<option value="${index}">${label}</option>`).join('')}</select></label>`;
 }
 
+function handOptions(seat) {
+  const canPlay = !rollRequest && canPlayFromHand(state, seat);
+  return state.players[seat].hand.map(id => ({id, choices: canPlay ? cardChoices(state,seat,id) : []}));
+}
+
 function handPanel() {
   if(!state.cards || state.stage==='finished')return '';
-  const seat=handSeat, player=state.players[seat];
-  const canPlay = !rollRequest && canPlayFromHand(state, seat);
-  if(!player.hand.length)return '<p>No cards in hand.</p>';
+  const seat=handSeat, options=handOptions(seat);
+  const canSell = !rollRequest && canPlayFromHand(state, seat) && isSelling(state) && seat===state.active;
+  if(!options.length)return '<p>No cards in hand.</p>';
   const groups={playable:[],unavailable:[]};
-  for(const id of player.hand){
-    const c=seatCard(state,seat,id), choices=canPlay ? cardChoices(state,seat,id) : [];
+  for(const {id,choices} of options){
+    const c=seatCard(state,seat,id);
     const chosen=selectedCard===id;
     const detail=chosen&&!cardDicePlan(seat,id,choices)?handCardChoices(choices,seat):'';
     const entry=`<div class="hand-card">
@@ -423,7 +429,7 @@ function handPanel() {
       ${previewCard(state,seat,id)}
     </div>${chosen?`<div class="card-command">${detail}
       ${choices.length?button('playCard','Play card',`class="primary" data-index="${id}"`):'<small>Unavailable in this window.</small>'}
-      ${canPlay&&isSelling(state)&&seat===state.active?button('sell','Sell for 1 CP',`data-index="${id}"`):''}</div>`:''}`;
+      ${canSell?button('sell','Sell for 1 CP',`data-index="${id}"`):''}</div>`:''}`;
     groups[choices.length?'playable':'unavailable'].push(entry);
   }
   return [['Playable now',groups.playable],['Unavailable now',groups.unavailable]]
@@ -554,6 +560,7 @@ function diceEditorPanel(editor) {
     <div class="phase"><span>${names[seat]} · ${picks.size} of ${limit} selected</span></div>
     <h2 tabindex="-1" id="action-title">${seatCard(state,seat,id).name}</h2>
     <p>${instruction}${cost?` ${cost}`:''}</p>
+    ${defenceReference()}
     ${!context.owners&&context.seat!==seat?`<strong>${names[context.seat]}’s dice</strong>`:''}
     ${dice}${faces}
     <div class="controls">${button('confirm-card-dice',confirm,`class="primary" ${ready?'':'disabled'}`)}
@@ -635,6 +642,28 @@ function abilityRequirement(ability) {
   return Object.entries(ability.symbols).map(([symbol, count]) => `${count} × ${symbol}`).join(' + ');
 }
 
+function defenceKinds(seat) {
+  return heroRoster[heroId(state,seat)].defenceKinds ?? ['defence'];
+}
+
+function defenceReference() {
+  const {stage, gunContest, pending} = state;
+  const choosing = stage === 'defence';
+  const opposed = gunContest?.kind === 'duel' && stage === 'gunContest';
+  if (choosing ? pending?.parlayBlocked || shadowAvoids(state) : stage !== 'defenceResponse' && !opposed) return '';
+  const seat = 1 - state.active;
+  const player = state.players[seat];
+  const hero = heroRoster[heroId(state,seat)];
+  const options = defenceKinds(seat);
+  const kinds = choosing ? options : [state.defenceKind ?? options[0]];
+  return `<div class="defence-reference" role="group" aria-label="Defensive ability effects">${kinds.map(kind=>{
+    const count = hero.defenceDiceCount(player,kind);
+    const dice = hero.id===gunslinger.id ? '1 die each' : count===1 ? '1 die' : `${count} dice`;
+    return `<div><div>${abilityName(defenceName(state,seat,kind),'strong')}<small>${dice}</small></div>
+      <p>${hero.defenceEffect(player,kind,pending)}</p></div>`;
+  }).join('')}</div>`;
+}
+
 function potionSlotName(seat, slot, abilities) {
   if (slot==='defence') return defenceName(state,seat);
   const ability=abilities.find(ability=>(ability.upgradeSlot??ability.name)===slot);
@@ -651,7 +680,7 @@ function attachedPotions(seat) {
     <summary>Attached Potions (${potions.length})</summary>
     <div class="potion-inventory">${slots.map(([slot,capacity])=>{
       const attached=potions.filter(potion=>potion.slot===slot);
-      return `<div><strong>${potionSlotName(seat,slot,abilities)}</strong> · ${attached.length}/${capacity} slots
+      return `<div>${abilityName(potionSlotName(seat,slot,abilities),'strong')} · ${attached.length}/${capacity} slots
         ${attached.length?`<ul>${attached.map(potion=>`<li>${tokenChoiceLabel(state,{
           key:potion.key,label:`Slot ${potion.index+1} · ${statusLabel(potion.key)}`
         },seat)}</li>`).join('')}</ul>`:'<small>Empty</small>'}</div>`;
@@ -685,7 +714,7 @@ function potionAttachmentChoices(seat, choices) {
         ?? boardFor(state,seat).abilities.find(ability=>ability.name===slot);
       const requirement=slot==='defence'?defensiveRequirement:abilityRequirement(ability);
       const name=slot==='defence'?defenceName(state,seat):ability.label??ability.name;
-      return button('alchemistChoice',`<strong>${name} · slot ${index+1}</strong>
+      return button('alchemistChoice',`<strong>${abilityName(name)} · slot ${index+1}</strong>
         <small class="ability-requirement">${requirement}</small>`,
         `class="ability potion-slot" data-choice="${choiceIndex}"`);
     }).join('')}
@@ -702,7 +731,7 @@ function offenceAbilities(seat, available = []) {
     const requirement=usesMultipleCounts?prefix:abilityRequirement(a);
     const text=separator<0?a.text:a.text.slice(separator+3);
     const effect=text.charAt(0).toUpperCase()+text.slice(1);
-    return button('declare',`<strong>${a.label??a.name}</strong><small class="ability-requirement">${requirement}</small><small class="ability-effect">${effect}</small>`,
+    return button('declare',`${abilityName(a.label??a.name,'strong')}<small class="ability-requirement">${requirement}</small><small class="ability-effect">${effect}</small>`,
       `class="ability" data-ability="${i}" ${available.includes(a.name)?'':'disabled'}`);
   }).join('')}</div>`;
 }
@@ -733,6 +762,7 @@ function rollRequestPanel(request) {
     <div class="phase"><span>${phase}</span></div>
     <h2 tabindex="-1" id="action-title">${request.description}</h2>
     ${tied ? '<p>Tied initiative. Roll again to break the tie.</p>' : ''}
+    ${setup ? '' : defenceReference()}
     ${dice}
     ${button(readyToAdvance ? 'advance-roll' : 'roll-request',label,'class="primary"')}
     ${setup ? '' : matchTools(cardActor(state))}
@@ -886,6 +916,7 @@ function focusRollAction() {
 
 function arena(seat, responding, decisionSeat) {
   const allowed=legal(state), p=state.pending;
+  const pendingAbility=p?.name ? abilityName(p.name) : '';
   const activeName=names[state.active], actingName=names[seat];
   let heading, phase, detail='', content='';
   const effectRoll=p?.effectDice ? tray(p.effectDice,state.active,false) : '';
@@ -971,7 +1002,7 @@ function arena(seat, responding, decisionSeat) {
   } else if(!state.response&&state.wolverineGain){
     const t=state.wolverineGain;phase='Gain Rage';heading=`${names[t.seat]} gains ${t.amount} Rage`;detail='Spend existing Rage first if desired, then collect the whole batch. Tokens beyond the stack limit are lost.';content=button('collectRage','Collect incoming Rage','class="primary"');
   } else if(!state.response&&state.stormTask&&state.stage==='stormChoices'){
-    const t=state.stormTask,h=t.queue[0];phase='Lightning';heading=`${names[t.seat]} places Lightning`;detail=`${h.left} remaining. A second Lightning on an ability removes both and immediately deals 2 isolated damage.`;content=storm.places(state).map(key=>button('stormPlace',`${key}${state.players[t.seat].lightningCharges?.[key]?' · overload for 2 damage':' · Charge'}`,`data-status="${key}"`)).join('')+(allowed.stormPlaceDone?button('stormPlaceDone','Finish placing Lightning','class="primary"'):'');
+    const t=state.stormTask,h=t.queue[0];phase='Lightning';heading=`${names[t.seat]} places Lightning`;detail=`${h.left} remaining. A second Lightning on an ability removes both and immediately deals 2 isolated damage.`;content=storm.places(state).map(key=>button('stormPlace',`${abilityName(key)}${state.players[t.seat].lightningCharges?.[key]?' · overload for 2 damage':' · Charge'}`,`data-status="${key}"`)).join('')+(allowed.stormPlaceDone?button('stormPlaceDone','Finish placing Lightning','class="primary"'):'');
   } else if(!state.response&&state.rogueGain){
     const t=state.rogueGain;phase='Ionic Energy';heading=`${names[t.seat]} collects Ionic Energy`;detail=`${t.ones} Ionic (1) and ${t.twos} Ionic (2) are waiting. The two values share one stack limit. Spend existing tokens first if eligible, then choose what fits; excess is lost.`;content=rogue.collectChoices(state).map((c,i)=>button('rogueCollect',c.label,`data-choice="${i}"`)).join('');
   } else if(!state.response&&state.rogueRoll&&!state.cardRoll&&!state.retry){
@@ -1068,7 +1099,7 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.lokiTask){
     const t=state.lokiTask.queue[0];phase='Loki';heading=t.kind==='bind'?`Choose an ability to make Spellbound`:'Distribute Bags of Tricks';
     detail=`${names[state.lokiTask.seat]} chooses · ${t.left} remaining.${t.kind==='bind'?' An Ultimate cannot be covered.':' You may choose the same player more than once; stack limit 2.'}`;
-    content=loki.options(state).map((choice,i)=>button('lokiChoose',choice.label,`data-choice="${i}"`)).join('')+(t.optional?button('lokiSkip','Finish distributing','class="primary"'):'');
+    content=loki.options(state).map((choice,i)=>button('lokiChoose',t.kind==='bind'?abilityName(choice.label):choice.label,`data-choice="${i}"`)).join('')+(t.optional?button('lokiSkip','Finish distributing','class="primary"'):'');
   } else if(state.lokiIllusion){
     const t=state.lokiIllusion;phase='Illusion';
     if(t.kind==='arrange'){
@@ -1223,7 +1254,7 @@ function arena(seat, responding, decisionSeat) {
       ['defence','defenceResponse'].includes(state.stage)||state.gunContest?.kind==='duel'&&state.stage==='gunContest'?'Defensive Roll':'Response';
     heading=`${names[responding]} can respond`;
     const context=rollContext(state);
-    detail='Use an available effect or pass.';
+    detail=phase==='Defensive Roll' && pendingAbility ? `${pendingAbility} brings ${p.damage} incoming damage.` : 'Use an available effect or pass.';
     content=(context?rollDisplay(context):'')+`<div class="controls">
       ${allowed.evade?button('evade','Spend Evasive'):''}${allowed.evadeReturn?button('evadeReturn','Spend Evasive'):''}
       ${button('passResponse','Pass','class="primary"')}</div>`;
@@ -1256,8 +1287,8 @@ function arena(seat, responding, decisionSeat) {
     const contest=state.gunContest;
     const duel=contest.kind==='duel';
     phase=duel?'Defensive Roll':'Ability roll';
-    heading=duel?`${names[contest.seat]} defends`:p.name;
-    if(duel)detail=`${p.name} brings ${p.damage} incoming damage.`;
+    heading=duel?`${names[contest.seat]} defends`:pendingAbility;
+    if(duel)detail=`${pendingAbility} brings ${p.damage} incoming damage.`;
     content=(duel?effectRoll:'')+rollDisplay(rollContext(state))+
       `<div class="controls">${allowed.rerollDuel?button('rerollDuel','Reroll the defence die'):''}
       ${button('resolveGunContest','Resolve roll-off','class="primary"')}</div>`;
@@ -1302,37 +1333,37 @@ function arena(seat, responding, decisionSeat) {
       break;
     case 'announce':
       phase='Ability response'; heading=`${actingName} responds`;
-      detail=`${activeName} announces ${p.name}.`;
+      detail=`${activeName} announces ${pendingAbility}.`;
       content=tray(state.dice,state.active,false)+button('accept','Accept roll','class="primary"'); break;
     case 'blind':
       phase='Blind check'; heading=`${actingName} checks Blind`;
       detail='A 1 or 2 cancels the ability.';
       content=tray([state.effectDie],seat,false)+button('resolveBlind','Resolve Blind','class="primary"'); break;
     case 'gunDuelChoice':
-      phase='Defensive Roll'; heading=defenceName(state,seat);
+      phase='Defensive Roll'; heading=abilityName(defenceName(state,seat));
       content=button('chooseDuel','Deal 3 damage','data-choice="0"')+
         button('chooseDuel','Prevent half the incoming damage','data-choice="1"');
       break;
     case 'vampireSearch': {
-      phase='Ability choice'; heading=p.name;
+      phase='Ability choice'; heading=pendingAbility;
       detail='Choose one card to put into your hand. The rest of the deck will be shuffled.';
       const deck=state.players[state.active].deck.slice().sort((a,b)=>seatCard(state,seat,a).name.localeCompare(seatCard(state,seat,b).name));
       content=deck.map(id=>previewableOption(state,seat,id,button('searchVampireDeck',seatCard(state,seat,id).name,`data-index="${id}"`))).join('');
       break;
     }
     case 'vampireChoice':
-      phase='Ability choice'; heading=p.name;
+      phase='Ability choice'; heading=pendingAbility;
       content=p.possessChoice?button('chooseVampireBenefit','Inflict Bleed','data-choice="0"')+
         button('chooseVampireBenefit','Gain Mesmerize','data-choice="1"'):
         button('chooseVampireBenefit','Keep Mesmerize','data-choice="0"')+
         button('chooseVampireBenefit','Spend Mesmerize · make undefendable','data-choice="1"');
       break;
     case 'seraphTarget':
-      phase='Ability choice'; heading=p.name;
+      phase='Ability choice'; heading=pendingAbility;
       content=names.map((name,target)=>button('chooseSeraphTarget',name,`data-target="${target}"`)).join('');
       break;
     case 'purify':
-      phase='Ability choice'; heading=p.name;
+      phase='Ability choice'; heading=pendingAbility;
       detail=`Choose a status to remove from ${names[p.seraphTarget]}.`;
       content=statusKeys.filter(key=>state.players[p.seraphTarget][key]).map(status=>button('resolvePurify',
         tokenChoiceLabel(state,{status,label:`Remove ${statusLabel(status)}`},p.seraphTarget),`data-status="${status}"`)).join('')+
@@ -1353,7 +1384,7 @@ function arena(seat, responding, decisionSeat) {
         button('removeUndead',necromancer.undead[kind].name,`data-status="${kind}"`)).join('');
       break;
     case 'necroChoice': {
-      phase='Ability choice';heading=p.name;
+      phase='Ability choice';heading=pendingAbility;
       const player=state.players[state.active];
       if(p.explosion)content=Array.from({length:Math.min(p.explosion,player.corpses)+1},(_,n)=>
         button('necroChoice',`Spend ${n} Corpses`,`data-amount="${n}"`)).join('');
@@ -1370,12 +1401,12 @@ function arena(seat, responding, decisionSeat) {
       content=tray(state.horseRoll.dice,seat,false)+button('resolveGrimRoll','Apply Grim Pursuit','class="primary"');
       break;
     case 'horrifyChoice':
-      phase='Ability choice';heading=p.name;
+      phase='Ability choice';heading=pendingAbility;
       content=button('chooseHorrify','Gain 3 Dreadful','data-status="dreadful"')+
         button('chooseHorrify','Gain Grim Pursuit','data-status="grim"');
       break;
     case 'pantherAbility':
-      phase='Ability';heading=p.name;
+      phase='Ability';heading=pendingAbility;
       content=button('finishPantherAbility','Continue ability','class="primary"');
       break;
     case 'sunGemRoll':
@@ -1383,7 +1414,7 @@ function arena(seat, responding, decisionSeat) {
       content=tray(state.sunGemRoll.dice,state.active,false)+button('resolveChargedGem','Resolve Charged Gem','class="primary"');
       break;
     case 'sunBurstChoice':
-      phase='Ability choice';heading=p.name;
+      phase='Ability choice';heading=pendingAbility;
       content=button('sunBurstChoice','Gain Charged Gem','data-status="gem"')+
         button('sunBurstChoice','Inflict Sun Marked','data-status="mark"');
       break;
@@ -1413,11 +1444,11 @@ function arena(seat, responding, decisionSeat) {
         .map(id=>previewableOption(state,state.active,id,button('forgeSearch',`Forge ${seatCard(state,state.active,id).name}`,`data-index="${id}"`))).join('');
       break;
     case 'forgeAbility':
-      phase='Ability';heading=p.name;
+      phase='Ability';heading=pendingAbility;
       content=button('finishForgeAbility','Continue ability','class="primary"');
       break;
     case 'forgeMasterwork': {
-      phase='Defensive Roll';heading='Masterwork';
+      phase='Defensive Roll';heading=abilityName(defenceName(state,seat));
       detail=p.armorDoubleLimit===2?'Double up to two armour effects.':'Double one armour effect.';
       const slots=Object.keys(state.players[seat].armor).filter(slot=>state.players[seat].armor[slot]);
       content=forgemaster.selections(slots,p.armorDoubleLimit===2,p.armorDoubleLimit===2)
@@ -1438,7 +1469,7 @@ function arena(seat, responding, decisionSeat) {
       break;
     }
     case 'duelAbility':
-      phase='Ability';heading=p.name;
+      phase='Ability';heading=pendingAbility;
       content=button('finishDuelAbility','Continue ability','class="primary"');
       break;
     case 'guardOffer':
@@ -1451,7 +1482,7 @@ function arena(seat, responding, decisionSeat) {
       content=tray(state.guardBreakRoll,state.active,false)+button('resolveGuardBreak','Resolve Guard Break','class="primary"');
       break;
     case 'druidReady':
-      phase='Offensive Roll';heading=p.name;
+      phase='Offensive Roll';heading=pendingAbility;
       detail=p.druid.wildDraw?'Draw a card if you finish this ability in Druid Form.':p.damage?'Cat Form adds 2 damage and inflicts Wound.':'';
       content=button('finishDruidAbility','Continue ability','class="primary"');
       break;
@@ -1489,7 +1520,7 @@ function arena(seat, responding, decisionSeat) {
       break;
     }
     case 'ravenAbility':
-      phase='Ability';heading=p.name;
+      phase='Ability';heading=pendingAbility;
       content=button('finishRavenAbility','Continue ability','class="primary"');
       break;
     case 'prey':
@@ -1533,7 +1564,7 @@ function arena(seat, responding, decisionSeat) {
       }
       if(allowed.unearth){
         heading='Unearth';detail='Choose a different ability to cover and gain its Corpses.';
-        content=unearthChoices(hero).map(name=>button('unearth',`${name} · +${necromancer.unearth[name]+Number(!!hero.upgrades[name])} Corpses`,
+        content=unearthChoices(hero).map(name=>button('unearth',`${abilityName(name)} · +${necromancer.unearth[name]+Number(!!hero.upgrades[name])} Corpses`,
           `data-status="${name}"`)).join('');
         break;
       }
@@ -1553,15 +1584,15 @@ function arena(seat, responding, decisionSeat) {
       break;
     }
     case 'artSpanner':
-      phase='Ability roll'; heading=p.name;
+      phase='Ability roll'; heading=pendingAbility;
       content=button('chooseSpanner','Roll one die','data-choice="0"')+button('chooseSpanner','Spend 1 Synth to roll three dice','data-choice="1"');
       break;
     case 'artBuild':
-      phase='Ability choice'; heading=p.name;
+      phase='Ability choice'; heading=pendingAbility;
       content=artificer.buildChoices(state.players[state.active]).map(bot=>button('scratchBuild',`Make Advanced ${artificer.bots[bot]}`,`data-status="${bot}"`)).join('');
       break;
     case 'artFreeBots':
-      phase='Ability choice'; heading=p.name;
+      phase='Ability choice'; heading=pendingAbility;
       content=artificer.freeChoices(state).map(bot=>button('chooseFreeBot',`Activate ${artificer.bots[bot]}`,`data-status="${bot}"`)).join('')+
         (p.freeRequired?'':button('chooseFreeBot','Finish bot activation','data-status="done"'));
       break;
@@ -1615,11 +1646,11 @@ function arena(seat, responding, decisionSeat) {
       content=button('acceptStatuses','Apply ability effects','class="primary"');
       break;
     case 'spiritPayment':
-      phase='Ability choice'; heading=p.name;
+      phase='Ability choice'; heading=pendingAbility;
       content=spiritDiscards(state.players[state.active],p.spiritCost).map((choice,i)=>button('paySpirits',discardLabel(choice),`data-choice="${i}"`)).join('');
       break;
     case 'overgrowthWells':
-      phase='Ability choice'; heading=p.name;
+      phase='Ability choice'; heading=pendingAbility;
       content=button('finishOvergrowth','Continue with defendable damage','data-choice="0"')
         +(state.players[state.active].wellspring?button('finishOvergrowth','Spend Wellspring for undefendable damage','data-choice="1"'):'');
       break;
@@ -1633,7 +1664,7 @@ function arena(seat, responding, decisionSeat) {
       content=['Neither player',...names,'Both players'].map((name,i)=>button('harvestWells',name,`data-choice="${i}"`)).join('');
       break;
     case 'ninjaGain':
-      phase='Attack modifier'; heading=p.name;
+      phase='Attack modifier'; heading=pendingAbility;
       detail=`Gain ${p.ninjaTokens} Ninjutsu. You may spend existing Ninjutsu first.`;
       content=button('finishNinjaGain','Gain Ninjutsu','class="primary"'); break;
     case 'ninjutsuRoll':
@@ -1657,7 +1688,7 @@ function arena(seat, responding, decisionSeat) {
       content=`<div class="controls">${button('chooseMonkReward','Gain Evasive','data-status="evasive"')}${button('chooseMonkReward','Gain Cleanse','data-status="cleanse"')}</div>`;
       break;
     case 'effect':
-      phase='Ability roll'; heading=p.name;
+      phase='Ability roll'; heading=pendingAbility;
       detail=`${actingName} rolls ${effectDiceCount(p,state.players[state.active])} separate effect dice to determine the ability’s effects.`;
       content=blankRoll(effectDiceCount(p,state.players[state.active]))+button('rollEffect','Roll for effect','class="primary"'); break;
     case 'effectResponse':
@@ -1666,7 +1697,7 @@ function arena(seat, responding, decisionSeat) {
         const dice=effectiveDice(p.effectDice,state.players[state.active]);let choice=0;
         content=effectRoll;for(let i=0;i<dice.length;i++)for(let j=i+1;j<dice.length;j++)content+=button('chooseThorChain',`Dice ${i+1} + ${j+1} · ${dice[i]+dice[j]} damage`,`data-choice="${choice++}"`);break;
       }
-      phase='Ability roll'; heading=p.name;
+      phase='Ability roll'; heading=pendingAbility;
       detail='Modify the ability roll or resolve it.';
       const rerolls=[];
       if (allowed.abilityReroll) rerolls.push({type:'abilityReroll',limit:p.ninjaRerolls});
@@ -1675,10 +1706,10 @@ function arena(seat, responding, decisionSeat) {
       content=rerollTray({dice:p.effectDice,seat:state.active},rerolls)+button('resolveEffect','Resolve effect roll','class="primary"');
       break;
     case 'targeting':
-      phase='Targeting'; heading=`${p.name} targets ${names[1-seat]}`;
+      phase='Targeting'; heading=`${pendingAbility} targets ${names[1-seat]}`;
       content=button('resolveTarget','Apply ability effects','class="primary"'); break;
     case 'choice':
-      phase='Ability choice'; heading=p.name;
+      phase='Ability choice'; heading=pendingAbility;
       content=p.ninjaTarget?names.map((name,target)=>button('chooseEffect',`Give Smoke Bomb and Ninjutsu to ${name}`,`data-target="${target}"`)).join('')
         :p.retributionTarget?names.map((name,target)=>button('chooseEffect',`Give Retribution to ${name}`,`data-target="${target}"`)).join('')
         :p.grantEvasive?names.map((name,target)=>button('chooseEffect',`Give Evasive to ${name}`,`data-target="${target}"`)).join('')
@@ -1686,7 +1717,7 @@ function arena(seat, responding, decisionSeat) {
           tokenChoiceLabel(state,{key:k,label:`Remove ${statusLabel(k)}`},state.active),`data-status="${k}"`)).join('')+button('chooseEffect','Keep status effects');
       break;
     case 'preventStatus':
-      phase='Defensive Roll'; heading='Thick Skin II';
+      phase='Defensive Roll'; heading=abilityName(defenceName(state,seat));
       detail='You may prevent one incoming status effect.';
       content=p.incomingStatus.map(k=>button('preventStatus',`Prevent ${statusLabel(k)}`,`data-status="${k}"`)).join('')+button('preventStatus','Continue without prevention');
       break;
@@ -1695,13 +1726,13 @@ function arena(seat, responding, decisionSeat) {
       content=button('continueHit','Continue to Main Phase 2','class="primary"');break;
     case 'locked':
       phase=p.ultimate ? 'Ultimate damage' : 'Stunned defender';
-      heading=`${activeName} resolves ${p.name}`;
+      heading=`${activeName} resolves ${pendingAbility}`;
       detail=`${p.damage?`${p.damage} incoming damage. `:''}${names[1-state.active]} cannot respond.${vineDamage(state)?` Barbed Vine deals up to ${vineDamage(state)} to ${activeName}.`:''}`;
       content=(allowed.reopenPrey?button('reopenPrey','Use Prey'):'')+button('settle',footworkPending?'Apply Footwork bonus':p.damage?'Resolve damage':'Resolve ability','class="primary"'); break;
     case 'defenceResponse':
     case 'defence':
       phase='Defensive Roll'; heading=`${actingName} defends`;
-      detail=`${p.name} brings ${p.damage} incoming damage.`;
+      detail=`${pendingAbility} brings ${p.damage} incoming damage.`;
       if(state.stage==='defenceResponse'){
         const rerolls=[];
         if (allowed.abilityReroll) rerolls.push({type:'abilityReroll',limit:p.seraphDefenceReroll||p.ninjaDefenceRerolls});
@@ -1714,8 +1745,8 @@ function arena(seat, responding, decisionSeat) {
         content+=`<div class="controls">${allowed.evade?button('evade','Spend Evasive before resolving defence'):''}
           ${button('resolveDefence','Resolve defence','class="primary"')}</div>`;
       } else {
-        const defences=heroId(state,seat)===spiderMan.id?['counterpunch','spiderSense']:heroId(state,seat)===3?['shadowDefence','counterStrike']:['defence'];
-        const options=allowed.defend?defences.map(kind=>button('defend',`Roll ${defenceName(state,seat,kind)}`,`class="primary" data-defence="${kind}"`)).join(''):'';
+        const defences=defenceKinds(seat);
+        const options=allowed.defend?defences.map(kind=>button('defend',`Roll ${abilityName(defenceName(state,seat,kind))}`,`class="primary" data-defence="${kind}"`)).join(''):'';
         const defender = heroRoster[heroId(state,seat)];
         const readyDice = !allowed.defend ? '' : defender.id === gunslinger.id
           ? blankRoll(2,[state.active,seat])
@@ -1735,7 +1766,7 @@ function arena(seat, responding, decisionSeat) {
     }
     case 'damage':
       phase='Damage response'; heading=`${actingName} responds`;
-      detail=`${incomingDamage(state)} incoming damage${shadowAvoids(state)&&p.damage?' after Shadows':p.pure?' (pure)':p.undefendable?' (undefendable)':''}${returnDamageFor(state) ? ` · ${returnDamageFor(state)} return damage` : ''}.${p.recoil && incomingDamage(state) ? ` Reckless deals ${p.recoil} damage to Barbarian if this attack hits.` : ''}`;
+      detail=`${pendingAbility ? `${pendingAbility} · ` : ''}${incomingDamage(state)} incoming damage${shadowAvoids(state)&&p.damage?' after Shadows':p.pure?' (pure)':p.undefendable?' (undefendable)':''}${returnDamageFor(state) ? ` · ${returnDamageFor(state)} return damage` : ''}.${p.recoil && incomingDamage(state) ? ` Barbarian takes ${p.recoil} recoil damage if this attack hits.` : ''}`;
       content=(state.defenceDice.length ? tray(state.defenceDice,seat,false):'')
         +`<div class="controls">${allowed.evade?button('evade',`${actingName} spends Evasive`):''}${allowed.evadeReturn?button('evadeReturn',`${activeName} spends Evasive`):''}${allowed.reopenPrey?button('reopenPrey','Use Prey'):''}${button('settle',footworkPending?'Apply Footwork bonus':nyraIncoming(state)?'Assign damage':'Resolve damage','class="primary"')}</div>`; break;
     case 'evasion':
@@ -1745,7 +1776,7 @@ function arena(seat, responding, decisionSeat) {
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
     case 'deadpoolAbility':
-      phase='Deadpool';heading=p.name;content=button('finishDeadpoolAbility','Resolve Deadpool’s printed effects','class="primary"');break;
+      phase='Deadpool';heading=pendingAbility;content=button('finishDeadpoolAbility','Resolve Deadpool’s printed effects','class="primary"');break;
     case 'deadpoolPrepared':
       phase='Deadpool';heading='Continue the activated ability';content=button('finishDeadpoolPrepared','Continue ability','class="primary"');break;
     case 'deadpoolResolved':
@@ -1759,32 +1790,32 @@ function arena(seat, responding, decisionSeat) {
     case 'santaExtraRoll':
       phase='Comfort and Joy!';heading='Additional Offensive Roll Phase';detail='Target the same opponent again. Income is not repeated; effects that expire at the end of the previous Roll Phase have cleared.';content=button('startSantaRoll','Start the additional Roll Phase','class="primary"');break;
     case 'mysticAbility':
-      phase='Mystic Brawler';heading=p.name;content=button('finishMysticAbility','Resolve ability effects','class="primary"');break;
+      phase='Mystic Brawler';heading=pendingAbility;content=button('finishMysticAbility','Resolve ability effects','class="primary"');break;
     case 'mysticStrongTarget':
       phase='Targeting · Strong Arm';heading=`Strong Arm targets ${names[1-state.active]}`;detail='Both players roll one die after targeting.';content=blankRoll(2,[state.active,1-state.active])+button('rollMysticContest','Roll both dice','class="primary"');break;
     case 'mysticPrepared':
-      phase='Mystic Brawler';heading=p.name;content=button('finishMysticPrepared','Continue ability','class="primary"');break;
+      phase='Mystic Brawler';heading=pendingAbility;content=button('finishMysticPrepared','Continue ability','class="primary"');break;
     case 'mysticResolved':
-      phase='Mystic Brawler';heading=p.name;content=button('finishMysticResolved','Continue after the effect roll','class="primary"');break;
+      phase='Mystic Brawler';heading=pendingAbility;content=button('finishMysticResolved','Continue after the effect roll','class="primary"');break;
     case 'krampusAbility':
-      phase='Krampus';heading=p.name;content=button('finishKrampusAbility','Resolve ability effects','class="primary"');break;
+      phase='Krampus';heading=pendingAbility;content=button('finishKrampusAbility','Resolve ability effects','class="primary"');break;
     case 'krampusPrepared':
-      phase='Krampus';heading=p.name;content=button('finishKrampusPrepared','Continue ability','class="primary"');break;
+      phase='Krampus';heading=pendingAbility;content=button('finishKrampusPrepared','Continue ability','class="primary"');break;
     case 'krampusResolved':
-      phase='Krampus';heading=p.name;content=button('finishKrampusResolved','Continue after the effect roll','class="primary"');break;
+      phase='Krampus';heading=pendingAbility;content=button('finishKrampusResolved','Continue after the effect roll','class="primary"');break;
     case 'alchemistDefence':
       phase='Defensive Potions · attacker priority';heading=`${activeName} may respond`;detail='The defence attachments have resolved. The attacker may use legal effects before Alchemist spends these Potions.';content=button('alchemistDefenceReady','Continue to defensive Potions','class="primary"');break;
     case 'alchemistAbility':
-      phase='Alchemist';heading=p.name;detail='Resolve the printed attachments and other effects before spending Potions.';content=button('finishAlchemistAbility','Resolve ability effects','class="primary"');break;
+      phase='Alchemist';heading=pendingAbility;detail='Resolve the printed attachments and other effects before spending Potions.';content=button('finishAlchemistAbility','Resolve ability effects','class="primary"');break;
     case 'alchemistPotions':
       phase=state.alchemistSpend.defensive?'Defensive Potions':'End of Offensive Roll Phase';heading='Spend attached Potions';detail='Spend eligible Potions, or keep them for later. Potions removed for The Lab or a card do not activate their effects.';
       content=alchemist.spendChoices(state,responding).map((choice,i)=>
         button('spendPotion',tokenChoiceLabel(state,{key:choice.key,label:choice.label},responding),`data-choice="${i}"`)).join('')+
         button('finishAlchemistPotions','Finish spending Potions','class="primary"');break;
     case 'wolverineAbility':
-      phase='Wolverine';heading=p.name;detail='Resolve healing, card draws and Rage before the Attack continues.';content=button('finishWolverineAbility','Continue ability','class="primary"');break;
+      phase='Wolverine';heading=pendingAbility;detail='Resolve healing, card draws and Rage before the Attack continues.';content=button('finishWolverineAbility','Continue ability','class="primary"');break;
     case 'wolverineResolved':
-      phase='Wolverine';heading=p.name;content=button('finishWolverineResolved','Continue after the effect roll','class="primary"');break;
+      phase='Wolverine';heading=pendingAbility;content=button('finishWolverineResolved','Continue after the effect roll','class="primary"');break;
     case 'wolverineBarrage':
       phase='Barrage';heading='Choose the benefit';content=button('wolverineBarrage','Gain Rage','data-status="rage"')+button('wolverineBarrage','Inflict Alpha','data-status="alpha"');break;
     case 'wolverineSevere':
@@ -1794,51 +1825,51 @@ function arena(seat, responding, decisionSeat) {
         button('wolverineRemove',tokenChoiceLabel(state,{...choice,label:`Remove ${choice.label}`},state.active),`data-choice="${i}"`)).join('')+
         button('wolverineRemove','Keep current status effects','data-choice="-1"');break;
     case 'stormCharge':
-      phase='Charged Effect';heading=p.name;detail='The ability was Charged before activation. Remove its Lightning for the Charged Effect, or keep it.';content=button('stormUseCharge','Remove Lightning · use Charged Effect','class="primary"')+button('stormKeepCharge','Keep the Lightning');break;
+      phase='Charged Effect';heading=pendingAbility;detail='The ability was Charged before activation. Remove its Lightning for the Charged Effect, or keep it.';content=button('stormUseCharge','Remove Lightning · use Charged Effect','class="primary"')+button('stormKeepCharge','Keep the Lightning');break;
     case 'stormAbility':
-      phase='Storm';heading=p.name;detail='Resolve the ability’s printed effects. Lightning Strike! can activate an eligible uncharged ability’s Charged Effect now.';content=button('finishStormAbility','Continue ability','class="primary"');break;
+      phase='Storm';heading=pendingAbility;detail='Resolve the ability’s printed effects. Lightning Strike! can activate an eligible uncharged ability’s Charged Effect now.';content=button('finishStormAbility','Continue ability','class="primary"');break;
     case 'stormResolved':
-      phase='Storm';heading=p.name;content=button('finishStormResolved','Continue after Lightning placements','class="primary"');break;
+      phase='Storm';heading=pendingAbility;content=button('finishStormResolved','Continue after Lightning placements','class="primary"');break;
     case 'rogueAbility':
-      phase='Rogue';heading=p.name;content=button('finishRogueAbility','Continue ability','class="primary"');break;
+      phase='Rogue';heading=pendingAbility;content=button('finishRogueAbility','Continue ability','class="primary"');break;
     case 'psyAbility':
-      phase='Psylocke';heading=p.name;content=button('finishPsyAbility','Continue ability','class="primary"');break;
+      phase='Psylocke';heading=pendingAbility;content=button('finishPsyAbility','Continue ability','class="primary"');break;
     case 'paralyzeAfter':
-      phase='Paralyze · ability effects';heading=p.name;detail='Paralyze prevented the status gains. Eligible responses such as Forced! may be played before concluding the Roll Phase.';content=button('finishParalyze','Conclude the Roll Phase','class="primary"');break;
+      phase='Paralyze · ability effects';heading=pendingAbility;detail='Paralyze prevented the status gains. Eligible responses such as Forced! may be played before concluding the Roll Phase.';content=button('finishParalyze','Conclude the Roll Phase','class="primary"');break;
     case 'jeanAbility':
-      phase='Jean Grey';heading=p.name;detail='The activation bonus and initial gains have resolved.';content=button('finishJeanAbility','Continue ability','class="primary"');break;
+      phase='Jean Grey';heading=pendingAbility;detail='The activation bonus and initial gains have resolved.';content=button('finishJeanAbility','Continue ability','class="primary"');break;
     case 'jeanResolved':
-      phase='Jean Grey';heading=p.name;content=button('finishJeanResolved','Continue after the effect roll','class="primary"');break;
+      phase='Jean Grey';heading=pendingAbility;content=button('finishJeanResolved','Continue after the effect roll','class="primary"');break;
     case 'iceAbility':
-      phase='Iceman';heading=p.name;content=button('finishIcemanAbility','Continue ability','class="primary"');break;
+      phase='Iceman';heading=pendingAbility;content=button('finishIcemanAbility','Continue ability','class="primary"');break;
     case 'iceResolved':
-      phase='Iceman';heading=p.name;content=button('finishIcemanResolved','Continue after the effect roll','class="primary"');break;
+      phase='Iceman';heading=pendingAbility;content=button('finishIcemanResolved','Continue after the effect roll','class="primary"');break;
     case 'iceAfter':
       phase='After damage';heading='Frostbite · conclude the Roll Phase';content=button('finishIcemanAfter','Continue to the end of the Roll Phase','class="primary"');break;
     case 'iceGlideOffer':
-      phase='End of Roll Phase';heading=`Glide Path · ${p.name} → ${p.iceman.path}`;
+      phase='End of Roll Phase';heading=`Glide Path · ${pendingAbility} → ${abilityName(p.iceman.path)}`;
       detail='Spend Glide to activate the connected primary ability against the same opponent. You may gain or transfer Glide now using an eligible effect. Glide can only be spent once per turn.';
       content=(allowed.spendGlide?button('spendGlide','Spend Glide · activate the connected ability','class="primary"'):'')+button('skipGlide','Continue to Main Phase 2');break;
     case 'iceGlideReady':
-      phase='Glide · new Roll Phase';heading=state.iceGlideTarget;detail='No dice objective is required. Normal activation, targeting and defence rules still apply.';
+      phase='Glide · new Roll Phase';heading=abilityName(state.iceGlideTarget);detail='No dice objective is required. Normal activation, targeting and defence rules still apply.';
       content=button('activateIcemanGlide','Activate the connected ability','class="primary"');break;
     case 'gambitAbility':
-      phase='Gambit';heading=p.name;detail='Acceleration and other selected effects have resolved. You may explode a fully charged Ace before continuing, if this ability is an attack.';
+      phase='Gambit';heading=pendingAbility;detail='Acceleration and other selected effects have resolved. You may explode a fully charged Ace before continuing, if this ability is an attack.';
       content=button('finishGambitAbility','Continue ability','class="primary"');break;
     case 'cyclopsAbility':
-      phase='Cyclops';heading=p.name;detail=`${cyclops.count(state,state.active)} Leadership card(s) played this turn.`;
+      phase='Cyclops';heading=pendingAbility;detail=`${cyclops.count(state,state.active)} Leadership card(s) played this turn.`;
       content=button('finishCyclopsAbility','Continue ability','class="primary"');break;
     case 'thorAbility':
-      phase='Thor';heading=p.name;detail='The hammer movements and status gains have resolved.';
+      phase='Thor';heading=pendingAbility;detail='The hammer movements and status gains have resolved.';
       content=button('finishThorAbility','Continue ability','class="primary"');break;
     case 'spiderCombo':
       phase='Combo';heading=`${activeName} may attack again`;detail='Spend Combo for another Offensive Roll Phase against the same opponent. No Income or Main Phase occurs between these rolls. Combo can only be spent once per turn.';content=(allowed.spendCombo?button('spendCombo','Spend Combo · start another Offensive Roll Phase','class="primary"'):'')+button('skipCombo','Continue to Main Phase 2');break;
     case 'scarletAbility':
-      phase='Scarlet Witch';heading=p.name;content=button('finishScarletAbility','Continue ability','class="primary"');break;
+      phase='Scarlet Witch';heading=pendingAbility;content=button('finishScarletAbility','Continue ability','class="primary"');break;
     case 'lokiAbility':
-      phase='Loki';heading=p.name;content=button('finishLokiAbility','Continue ability','class="primary"');break;
+      phase='Loki';heading=pendingAbility;content=button('finishLokiAbility','Continue ability','class="primary"');break;
     case 'strangeAbility':
-      phase='Ability';heading=p.name;content=button('finishStrangeAbility','Continue ability','class="primary"');break;
+      phase='Ability';heading=pendingAbility;content=button('finishStrangeAbility','Continue ability','class="primary"');break;
     case 'widowAbility':
       phase='Black Widow';heading='Finish resolving the ability';
       content=button('finishWidowAbility','Continue ability','class="primary"');break;
@@ -1875,7 +1906,7 @@ function arena(seat, responding, decisionSeat) {
     </div>`:''}
     <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${detail?`<p>${detail}</p>`:''}
-    ${cardTimingReminder()}
+    ${defenceReference()}
     ${p?.paralyzePrevented?.length?`<p>Paralyze prevented: ${p.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}
     <div class="decision-actions">${content}</div>
     ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
@@ -1931,7 +1962,7 @@ function matchEffects(state, responding, renderButton = button) {
   const probability=scarletWitch.probabilityChoices(state,responding);
   if(probability.length)content+=`<div class="token-actions"><strong>${names[responding]} · Probability Manipulation</strong><div class="controls">${probability.map((choice,i)=>renderButton('spendProbability',choice.label,`data-choice="${i}"`)).join('')}</div></div>`;
   const scarletChanges=scarletWitch.defenceChanges(state,responding);
-  if(scarletChanges.length)content+=`<details class="token-actions"><summary>Double Trouble II · discard Probability Manipulation to change any die</summary><div class="controls">${scarletChanges.map((choice,i)=>renderButton('scarletDefenceChange',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  if(scarletChanges.length)content+=`<details class="token-actions"><summary>${abilityName('Double Trouble II')} · discard Probability Manipulation to change any die</summary><div class="controls">${scarletChanges.map((choice,i)=>renderButton('scarletDefenceChange',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   if(scarletWitch.canCrackle(state,responding))content+=renderButton('spendCrackle',`Spend Crackle · +${Math.min(3,Math.max(0,scarletWitch.countedStatuses(state.players[responding])-1))} damage`);
   const conjure=scarletWitch.conjureChoices(state,responding);
   if(conjure.length)content+=`<details class="token-actions"><summary>Spend Conjure</summary><div class="controls">${conjure.map((choice,i)=>renderButton('spendConjure',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
@@ -2009,26 +2040,22 @@ function matchEffects(state, responding, renderButton = button) {
     ...(tithe.draw?[renderButton('titheDraw',`Draw 1 card · ${titheDrawCost(state.players[responding])} CP`)]:[]),
     ...(tithe.dice??[]).map((value,i)=>renderButton('titheReroll',`Reroll die ${i+1} (${value}) · 1 CP`,`data-index="${i}"`))
   ];
-  if(titheActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · ${state.players[responding].upgrades?.Tithe?'Tithe II':'Tithe'}</strong><div class="controls">${titheActions.join('')}</div></div>`;
+  if(titheActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · ${abilityName(state.players[responding].upgrades?.Tithe?'Tithe II':'Tithe')}</strong><div class="controls">${titheActions.join('')}</div></div>`;
   }
   }
   return content;
-}
-
-function cardTimingReminder() {
-  if (!state.cards || ['discard','nyraDamage','finished'].includes(state.stage)) return '';
-  const hand = state.response ? `${names[state.response.seat]}’s Hand` : 'either hero’s Hand';
-  const cards = rollPhase(state) ? 'Instant and Roll Phase' : 'Instant';
-  return `<p class="card-timing">Open ${hand} to play eligible ${cards} cards now.</p>`;
 }
 
 function matchTools(responding) {
   if (!state.cards || state.stage === 'finished') return '';
   return `<nav class="match-tools" aria-label="Match references">
     ${button('inspect-board','Board',`class="quick-board" data-index="${responding}" aria-label="Open ${names[responding]}’s board" aria-haspopup="dialog"`)}
-    <div class="match-tool-buttons">${state.players.map((player, seat) =>
-      button('open-hand',`<span>${names[seat]}</span><small>Hand (${player.hand.length})</small>`,`data-index="${seat}" data-responding="${seat === responding}" aria-label="Open ${names[seat]}’s hand" aria-haspopup="dialog"`)
-    ).join('')}</div>
+    <div class="match-tool-buttons">${state.players.map((_, seat) => {
+      const options = handOptions(seat);
+      const playable = options.filter(({choices}) => choices.length).length;
+      return button('open-hand',`<span>${names[seat]}</span><small>Hand (${options.length}) · <span class="playable-count" data-available="${playable>0}">${playable} playable</span></small>`,
+        `data-index="${seat}" data-responding="${seat === responding}" aria-label="Open ${names[seat]}’s hand, ${options.length} ${options.length===1?'card':'cards'}, ${playable} playable" aria-haspopup="dialog"`);
+    }).join('')}</div>
   </nav>`;
 }
 function render() {
@@ -2315,7 +2342,7 @@ function openHeroPicker(seat) {
       <div class="picker-heroes">
         ${set.heroes.map(id=>`
           <button type="button" class="picker-hero" data-hero="${id}" ${id===currentHero?'aria-current="true"':''}>
-            ${HEROES[id].name}${id===currentHero?'<small aria-hidden="true">Selected</small>':''}
+            <span>${HEROES[id].name}</span><small>Complexity ${heroRoster[id].complexity}/6</small>
           </button>`).join('')}
       </div>
     </details>`).join('');
