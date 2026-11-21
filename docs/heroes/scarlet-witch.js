@@ -63,7 +63,6 @@ const scarletWitch=(()=>{
   id,board,upgrades,cards,promoId:33,countedStatuses,probabilityChoices,defenceChanges,canCrackle,canConjure,conjureChoices,symbols,start,resolveJinx,
   initialize(s,seat){Object.assign(s.players[seat],{probabilityManipulation:0,conjure:false,crackle:0});},
   complexity: 4,
-  defenceEffect: p => `On 2 Warp, gain 1 Crackle${p.upgrades?.defence ? ' (2 Crackle on 3 or more Warp)' : ''}. On 2 Chaos, gain Probability Manipulation. On 2 Spell, gain Conjure. On 2 Crowns, return 4 damage.`,
   defenceDiceCount(){return 5;},
   resolveDefence({state,defender,counts,grantStatus}){
    const up=!!defender.upgrades?.defence;

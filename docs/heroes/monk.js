@@ -65,7 +65,6 @@ const monk = (() => {
     },
 
     complexity: 4,
-    defenceEffect: p => 'Return 1 damage per Fist and gain 1 Chi per Zen.' + (p.upgrades?.defence === 28 ? ' Zen + Lotus lets you gain Evasive or Cleanse.' : ''),
     defenceDiceCount(defender) {
       return defender.upgrades?.defence ? 5 : 4;
     },

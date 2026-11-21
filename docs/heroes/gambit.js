@@ -118,7 +118,6 @@ const gambit=(()=>{
   id,board,upgrades,cards,promoId:33,suits,caps,red,black,superCharge,phase,available,regainChoices,forced,canExplode,dissolveChoices,gainDissolution,pump,ability,
   initialize(s,seat){s.players[seat].aces=Object.fromEntries(suits.map(k=>[k,{up:true,charge:0}]));s.players[seat].dissolution=0;},
   complexity: 5,
-  defenceEffect: () => 'Return 1 damage per Staff. Any Heart/Diamond heals 2. Any Super Charge lets you Accelerate once.',
   defenceDiceCount:p=>p.upgrades?.defence?4:3,
   resolveDefence({state:s,seat,defender:p,counts:c}){
    s.pending.returnDamage+=c.Staff??0;if(c[red])p.hp=bounded(p.hp+2,60);

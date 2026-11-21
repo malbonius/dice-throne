@@ -105,7 +105,6 @@ const thor=(()=>{
   id,board,upgrades,cards,promoId:34,isolated,isolatedCard,holder,begin,gain,move,pump,ability,odin,refresh,canDraw,canMove,incoming,
   initialize(s,seat){Object.assign(s.players[seat],{mjolnirSeat:seat,electrokinesis:0});},
   complexity: 3,
-  defenceEffect: p => `Prevent 2 damage per Worthy. On 2 Hammers, move Mjölnir${p.upgrades?.defence ? ' once per pair' : ''}. ${p.upgrades?.defence ? 'Gain 1 Electrokinesis per Thunder.' : 'Any Thunder grants 1 Electrokinesis.'}`,
   defenceDiceCount:p=>p.upgrades?.defence?4:3,
   resolveDefence({state:s,seat,defender:p,counts:c}){
    const h=s.pending;h.prevention=(h.prevention??0)+2*(c.Worthy??0);updateDamage(h);

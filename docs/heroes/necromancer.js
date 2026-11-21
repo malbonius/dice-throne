@@ -43,7 +43,6 @@ const necromancer=(()=>{
   initialize(s,seat){Object.assign(s.players[seat],{corpses:0,covered:'Black Shroud',undead:{}});},
   effects:{corpseExplosion(hit,c){hit.damage+=(c.Scythe??0)+2*(c.Bones??0);hit.undefendable||=!!c.Soul;}},
   complexity: 6,
-  defenceEffect: p => `Gain 1 Corpse per Bones. Steal 1 Health ${p.upgrades?.defence ? 'per Soul' : 'if you roll a Soul'}.`,
   defenceDiceCount(p){return p.upgrades?.defence?5:4;},
   resolveDefence({state,seat,defender,counts,stealNecroHealth}){
    gain(defender,counts.Bones??0);

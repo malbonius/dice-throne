@@ -123,7 +123,6 @@ const artificer = (() => {
       }
     },
     complexity: 6,
-    defenceEffect: p => `Gain 1 Synth per Gear. ${p.upgrades?.defence ? 'Inflict 1 Nanite per Bolt. On 2 Wrenches, return 1 damage.' : 'Any Bolt inflicts 1 Nanite.'}`,
     defenceDiceCount(p) { return p.upgrades?.defence?5:4; },
     resolveDefence({defender,attacker,counts,state,grantStatus}){
       if(counts.Gear)grantStatus(defender,'synth',counts.Gear);

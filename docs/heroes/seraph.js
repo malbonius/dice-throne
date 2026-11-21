@@ -95,9 +95,6 @@ const seraph = (() => {
       return false;
     },
     complexity: 3,
-    defenceEffect: p => p.upgrades?.defence
-      ? `Blade returns 3 damage. Wings grants Flight. Cross prevents 2. Pendant prevents ${p.upgrades.defence === 28 ? '4. You may reroll the die once' : '3'}.`
-      : 'Blade returns 2 damage. Wings prevents 1. Cross prevents 2. Pendant prevents 3.',
     defenceDiceCount() { return 1; },
     resolveDefence({state,defender,counts,grantStatus,updateDamage}) {
       const level=defender.upgrades?.defence??0, hit=state.pending;

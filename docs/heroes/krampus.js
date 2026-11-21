@@ -75,7 +75,6 @@ const krampus=(()=>{
  return {id,board,upgrades,cards,promoId:32,names,options,canGift,begin,pump,ability,printed,effect,damage,activate,finish,rawDraw,
   initialize(s,seat,random=Math.random){const p=s.players[seat];Object.assign(p,{gift:0,coal:0,rejectDeck:shuffle([0,1,2,3,4,5],random),rejectDiscard:[],rejects:[],rejectUsed:{}});rawDraw(s,seat,1,random);},
   complexity: 4,
-  defenceEffect: p => 'On 2 Switch, inflict Coal. Any Present grants 1 Gift. Any Horns returns 1 damage per Reject in play.' + (p.upgrades?.defence ? ' Any Jingle heals 1.' : ''),
   defenceDiceCount:p=>p.upgrades?.defence?4:3,
   resolveDefence({state:s,seat,defender:p,counts:c}){if((c.Switch??0)>=2)grantStatus(s.players[1-seat],'coal');if(p.upgrades?.defence&&c.Jingle)p.hp=bounded(p.hp+1,60);if(c.Horns)s.pending.returnDamage+=p.rejects.length;if(c.Present)grantStatus(p,'gift');return 'damage';},
   cardChoices(card,{s,seat,one}){const a=s.krampusActivation;if(card===27)return s.players[seat].gift?one:[];

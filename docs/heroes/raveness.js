@@ -68,7 +68,6 @@ const raveness = (() => {
    id,board,upgrades,cards,promoId:33,move,activate,feathers,featherChoices,
     initialize(s,seat){Object.assign(s.players[seat],{nevermoreSeat:seat,nevermoreVitality:0,feather:0,featherCap:5});},
     complexity: 3,
-    defenceEffect: p => (p.upgrades?.defence ? 'Return 1 damage per Talon.' : 'On 2 Talons, return 2 damage.') + ' On 2 Wings, prevent 2 damage. On 2 Raven Eyes, activate Nevermore.',
     defenceDiceCount(){return 5;},
     resolveDefence({state,seat,defender,counts,updateDamage}){
       const hit=state.pending, talons=counts.Talon??0;

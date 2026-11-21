@@ -42,9 +42,6 @@ const spiderMan=(()=>{
   defenceName(kind){return kind==='spiderSense'?'Spider-Sense':'Counterpunch';},
   complexity: 2,
   defenceKinds: ['counterpunch','spiderSense'],
-  defenceEffect: (_p, kind, pending) => kind === 'spiderSense'
-    ? `On any ${pending?.spiderSwing ? 'Web' : 'Spider'}, prevent half the incoming damage (round up).`
-    : 'Return 1 damage per Thwip.',
   defenceDiceCount(p,kind){return kind==='spiderSense'?2:3;},
   resolveDefence({state,counts,updateDamage}){
    const h=state.pending;

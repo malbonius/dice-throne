@@ -51,7 +51,6 @@ const storm=(()=>{
   id,board,upgrades,cards,promoId:33,slots,borrowed,dieHero,symbols,canTornado,canWind,begin,pump,places,chargeEffect,ability,printed,strike,oppReroll,light,
   initialize(s,seat){Object.assign(s.players[seat],{tornado:0,windShear:false,lightningCharges:Object.fromEntries(slots.map(k=>[k,false]))});},
   complexity: 4,
-  defenceEffect: () => 'On 3 Wind, gain Tornado. On 2 Rain, prevent 2 damage. Any Cyclone lets you place 1 Lightning.',
   defenceDiceCount:()=>5,
   resolveDefence({state:s,seat,defender:p,counts:c}){if((c.Wind??0)>=3)grantStatus(p,'tornado');if((c.Rain??0)>=2)s.pending.prevention=(s.pending.prevention??0)+2;updateDamage(s.pending);if(c.Cyclone){begin(s,seat,[{kind:'place',left:1}],'damage');return 'stormChoices';}return 'damage';},
   cardChoices(card,{s,seat,one,pos,d}){

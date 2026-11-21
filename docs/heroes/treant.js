@@ -86,7 +86,6 @@ const treant = (() => {
     },
 
     complexity: 6,
-    defenceEffect: p => 'Prevent 1 damage per Branch or Spirit. On 2 Leaves, grow a Spirit.' + (p.upgrades?.defence ? ' On 2 Spirits, give Wellspring to either hero.' : ''),
     defenceDiceCount(defender) {
       return defender.upgrades?.defence ? 4 : 3;
     },

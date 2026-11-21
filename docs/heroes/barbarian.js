@@ -85,7 +85,6 @@ const barbarian = (() => {
     effectDiceCount: {overpower: 3},
 
     complexity: 1,
-    defenceEffect: p => 'Heal 2 per Life.' + (p.upgrades?.defence ? ' On 2 Life, you may also prevent one incoming status effect.' : ''),
     defenceDiceCount(defender) {
       return defender.upgrades?.defence ? 4 : 3;
     },

@@ -71,7 +71,6 @@ const moonElf = (() => {
     },
 
     complexity: 2,
-    defenceEffect: p => `On 2 Foot, prevent half the incoming damage (round up). Return 1 damage ${p.upgrades?.defence ? 'per Arrow' : 'per pair of Arrows'}.`,
     defenceDiceCount() {
       return 5;
     },

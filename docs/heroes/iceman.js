@@ -87,7 +87,6 @@ const iceman=(()=>{
   id,board,upgrades,cards,promoId:33,paths,phase,begin,gain,canConvert,canFreezerConvert,transferOptions,path,canGlide,ability,meet,pump,locked,contextLocked,freeze,capture,onStart,clear,permitted,
   initialize(s,seat){Object.assign(s.players[seat],{iceShard:0,glide:false,freezer:{shards:0,glide:false}});},
   complexity: 4,
-  defenceEffect: p => `Any Ice returns 1 damage. Any Frost returns 2. Any Slide prevents 2 damage. On two matching numbers, store up to ${p.upgrades?.defence ? 2 : 1} Ice ${p.upgrades?.defence ? 'Shards' : 'Shard'} in the Freezer.`,
   defenceDiceCount:p=>p.upgrades?.defence?4:3,
   resolveDefence({state:s,seat,defender:p,counts:c}){
    const h=s.pending;h.returnDamage+=Number(!!c.Ice)+2*Number(!!c.Frost);h.prevention=(h.prevention??0)+2*Number(!!c.Slide);updateDamage(h);

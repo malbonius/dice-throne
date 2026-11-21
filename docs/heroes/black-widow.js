@@ -76,7 +76,6 @@ const blackWidow=(()=>{
    id,board,upgrades,cards,promoId:33,count,sync,inflict,removeBomb,advance,advanceAll,upgradeChoices,install,refresh,incoming,half,canCovert,
     initialize(s,seat){Object.assign(s.players[seat],{covertOps:3,agility:0});},
     complexity: 4,
-    defenceEffect: p => `Return 1 damage per Batons and prevent 1 per Espionage. ${p.upgrades?.defence ? '2 Widow symbols' : 'Any Widow symbol'} inflicts a Time Bomb.`,
     defenceDiceCount(p){return p.upgrades?.defence?4:3;},
     resolveDefence({state,seat,defender,counts,updateDamage}){
       state.pending.returnDamage+=counts.Batons??0;

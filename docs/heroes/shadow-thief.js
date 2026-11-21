@@ -50,9 +50,6 @@ const shadowThief = (() => {
 
     complexity: 5,
     defenceKinds: ['shadowDefence','counterStrike'],
-    defenceEffect: (p, kind) => kind === 'counterStrike'
-      ? `Return ${p.upgrades?.counterStrike ? 2 : 1} damage per Dagger. Dagger + Shadow inflicts Poison.`
-      : 'On 2 Daggers, inflict Poison. Any Shadow grants Sneak Attack. On 2 Shadows, also gain Shadows.',
     defenceDiceCount(defender, kind) {
       return kind === 'shadowDefence' && !defender.upgrades.shadowDefence ? 4 : 5;
     },

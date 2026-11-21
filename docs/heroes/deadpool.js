@@ -54,7 +54,6 @@ const deadpool=(()=>{
   rpsActor(s){const r=s.deadpoolRps;return r.step==='second'?1-r.seat:r.step==='shoot'?1-r.winner:r.seat;},
   initialize(s,seat){Object.assign(s.players[seat],{donut:0,onomatopoeia:0,rps:0,shootActive:true,curmudgeon:false});},
   complexity: 3,
-  defenceEffect: p => `Heal ${p.upgrades?.defence ? 2 : 1} automatically. Return 1 damage per Knife. ${p.upgrades?.defence ? 'Gain 1 Onomatopoeia per Joke.' : 'Any Joke grants 1 Onomatopoeia.'}`,
   defenceDiceCount:()=>4,
   resolveDefence({state:s,seat,defender:p,counts:c,random}){p.hp=bounded(p.hp+(p.upgrades?.defence?2:1),60);s.pending.returnDamage+=c.Knife??0;if(c.Joke)begin(s,seat,[{kind:'gain',key:'onomatopoeia',amount:p.upgrades?.defence?c.Joke:1}],'damage',random);return s.stage==='deadpoolChoices'?s.stage:'damage';},
   cardChoices(card,{s,seat,one}){const p=s.players[seat];if(card===28)return p.hand.length===1?['donut','rps','onomatopoeia'].map(key=>({key,label:`Gain ${statusLabel(key)}`})):[];if([29,30].includes(card))return attack(s,seat)?one:[];return one;},

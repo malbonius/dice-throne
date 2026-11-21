@@ -65,7 +65,6 @@ const pyromancer = (() => {
     },
 
     complexity: 3,
-    defenceEffect: p => 'Return 1 damage per Flame. Gain 1 Fire Mastery per Soul.' + (p.upgrades?.defence ? ' Flame + Blaze inflicts Burn.' : '') + (p.upgrades?.defence === 28 ? ' Each Meteor also returns 1 damage and grants 1 Fire Mastery.' : ''),
     defenceDiceCount() {
       return 5;
     },

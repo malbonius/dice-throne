@@ -89,7 +89,6 @@ const ninja = (() => {
     },
 
     complexity: 2,
-    defenceEffect: p => `Return ${p.upgrades?.defence ? '1 damage per Ninjato' : '1 damage on any Ninjato'} and 2 damage on any Shuriken. On 2 Masks, gain Smoke Bomb. You may reroll ${p.upgrades?.defence ? 'up to two dice' : 'one die'}.`,
     defenceDiceCount() {
       return 3;
     },

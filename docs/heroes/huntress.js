@@ -87,7 +87,6 @@ const huntress = (() => {
       }
     },
     complexity: 5,
-    defenceEffect: p => (p.upgrades?.defence === 27 ? 'Return 1 damage per Spear or Saber Tooth.' : 'Any Spear returns 1 damage.') + ' Any Claw returns 2 more if Nyra is active. Heal Nyra by 1 per Bonded Soul after damage.',
     defenceDiceCount(p){return p.upgrades?.defence?4:3;},
     resolveDefence({state,defender,counts}){
       const hit=state.pending;

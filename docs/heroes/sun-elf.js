@@ -58,7 +58,6 @@ const sunElf=(()=>{
    id,board,upgrades,cards,promoId:34,initialize(s,seat){Object.assign(s.players[seat],{sunDial:0,sunDawn:false});},
     heal,increase,setDial,canDawn,canGem,
     complexity: 3,
-    defenceEffect: p => `Heal 1 per Stave. Advance the Sun Dial ${p.upgrades?.defence ? 'once on any Charge and once per Sun Power. Stave + Charge + Sun Power grants a Charged Gem' : 'once on 2 Charges and once on any Sun Power'}. Dial overflow heals 1 per excess step.`,
     defenceDiceCount(){return 3;},
     resolveDefence({defender,counts,grantStatus}){
       heal(defender,counts.Stave??0);

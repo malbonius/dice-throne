@@ -77,7 +77,6 @@ const jeanGrey=(()=>{
   id,board,upgrades,cards,promoId:33,startTurn,main1,needsSwitch,needsBurn,phase,begin,gain,busy,acuityChoices,flameChoices,fieldChoices,ability,multiplier,pump,
   initialize(s,seat){Object.assign(s.players[seat],{darkPhoenix:false,jeanOwnTurns:0,acuity:0,flameBlast:0,forceField:false});},
   complexity: 6,
-  defenceEffect: p => 'Return 1 damage per Astral.' + (p.darkPhoenix ? '' : ` Prevent 2 damage ${p.upgrades?.defence ? 'per Phoenix' : 'if you roll a Phoenix'}.`),
   defenceDiceCount:p=>(p.upgrades?.defence?3:2)+(p.darkPhoenix?2:0),
   resolveDefence({state:s,seat,defender:p,counts:c}){
    s.pending.returnDamage+=c.Astral??0;

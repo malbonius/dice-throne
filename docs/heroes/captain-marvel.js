@@ -69,7 +69,6 @@ const captainMarvel=(()=>{
    id,board,upgrades,cards,promoId:33,star,sync,gainRay,spendRay,canRay,radianceDice,incoming,prevent,readyRay,
     initialize(s,seat){Object.assign(s.players[seat],{cosmicRay:0,cosmicRays:[],cosmicFlare:0,radiance:0});},
     complexity: 2,
-    defenceEffect: () => 'Return 1 damage and prevent 1 per Hala Star. Gain 1 Cosmic Flare per pair of Ascend symbols.',
     defenceDiceCount(p){return p.upgrades?.defence?5:4;},
     resolveDefence({state,defender,counts,grantStatus,updateDamage}){
       const stars=counts[star]??0;

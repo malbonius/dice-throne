@@ -67,7 +67,6 @@ const gunslinger = (() => {
       }
     },
     complexity: 2,
-    defenceEffect: p => `Both heroes roll one die. If your die is ${p.upgrades?.defence ? 'equal or higher' : 'higher'}, choose to return 3 damage or prevent half the incoming damage (round up). Otherwise, return 1 damage.`,
     defenceDiceCount() { return 1; },
     resolveDefence() { return 'damage'; }
   };
