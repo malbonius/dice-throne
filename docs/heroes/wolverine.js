@@ -57,6 +57,8 @@ const wolverine=(()=>{
   },
   id,board,upgrades,cards,promoId:33,busy,attack,rageChoices,gain,inflictAlpha,ability,printed,effect,effectAlpha,removalChoices,pump,
   initialize(s,seat){Object.assign(s.players[seat],{rage:0,alpha:false});},
+  complexity: 2,
+  defenceEffect: () => 'Return 1 damage per Claw. Any Mask grants 1 Rage.',
   defenceDiceCount:p=>p.upgrades?.defence?4:3,
   resolveDefence({state:s,seat,counts:c}){s.pending.returnDamage+=c.Claw??0;s.stage='damage';if(c.Mask)gain(s,seat);return 'damage';},
   cardChoices(card,{s,seat,one}){if(card>=27&&card<=32)return [];if(card===24)return s.players[1-seat].alpha?one:[];

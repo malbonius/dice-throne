@@ -50,6 +50,8 @@ const mysticBrawler=(()=>{
  function wildLimit(s){return Math.min(5,total(s.players[s.cardRoll.seat]));}
  return {id,board,upgrades,cards,promoId:34,keys,caps,total,gainOptions,begin,pump,ability,printed,tidal,oceanChoices,attack,damage,refresh,wildLimit,
   initialize(s,seat){Object.assign(s.players[seat],{strengthOcean:0,strengthMountain:0,strengthSky:0});},
+  complexity: 3,
+  defenceEffect: () => 'Return 1 damage per Fist and heal 1 per Spirit. Any Peak lets you gain a Strength of your choice.',
   defenceDiceCount:p=>(p.upgrades?.defence?3:2)+(p.strengthSky??0),
   resolveDefence({state:s,seat,defender:p,counts:c,random}){s.pending.returnDamage+=c.Fist??0;p.hp=bounded(p.hp+(c.Spirit??0),60);if(c.Peak)begin(s,seat,[{kind:'strengths',left:1}],'damage',random);return s.stage==='mysticChoices'?s.stage:'damage';},
   cardChoices(card,{s,seat,one}){const p=s.players[seat],h=s.pending,d=rollContext(s);

@@ -68,6 +68,8 @@ const samurai = (() => {
         } else drawCards(p,1,random,card);
       }
     },
+    complexity: 3,
+    defenceEffect: p => 'Return 1 damage per Katana and prevent 1 per Kabuto. Any Rising Sun prevents 2 more.' + (p.upgrades?.defence ? '' : ' Gain Shame if you roll neither Kabuto nor Rising Sun.'),
     defenceDiceCount(p) { return p.upgrades?.defence?4:3; },
     resolveDefence({state,defender,counts,grantStatus,updateDamage}) {
       const hit=state.pending;

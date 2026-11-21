@@ -71,6 +71,8 @@ const loki=(()=>{
   },
   id,board,upgrades,cards,promoId:33,illusionNames,key,blocked,bindChoices,removeBound,give,removeBag,sync,begin,options,pump,ability,canIllusion,bagRoll,
   initialize(s,seat){Object.assign(s.players[seat],{illusion:0,trickBags:[],bagOfTricks:0,boundAbilities:[],spellbound:0,lokiOwner:seat});},
+  complexity: 4,
+  defenceEffect: () => 'Any Illusion gives you a Bag of Tricks. Lies lets you draw 1 card. Mischief grants 1 Illusion token. Scepter lets you inflict Spellbound. Each effect can trigger once.',
   defenceDiceCount(p){return p.upgrades?.defence?2:1;},
   resolveDefence({state,seat,defender,counts,grantStatus,random}){
    if(counts.Illusion)give(state,seat,seat);

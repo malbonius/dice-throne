@@ -83,6 +83,8 @@ const paladin = (() => {
       return ({31: 1, 32: 1})[id] ?? 0;
     },
 
+    complexity: 5,
+    defenceEffect: p => `Return 1 damage ${p.upgrades?.defence ? 'per Sword' : 'if you roll a Sword'}. Prevent 1 per Helmet and 2 per Heart. Gain 1 CP per Prayer.` + (p.upgrades?.defence === 28 ? ' 2 Helmets + Prayer grants Protect.' : ''),
     defenceDiceCount(defender) {
       return defender.upgrades?.defence ? 4 : 3;
     },

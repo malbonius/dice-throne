@@ -56,6 +56,8 @@ const santa=(()=>{
   },
   id,board,upgrades,cards,promoId:33,removalChoices(s){const r=s.santaRemoval;return s.players[r.choice.target][r.choice.status]?[r.choice]:mainTargets({...s,santaRemoval:null},r.source,7);},begin,pump,gain,ability,printed,cheerChoices,canNog,contexts,view,damage,attack,
   initialize(s,seat){Object.assign(s.players[seat],{cheer:0,eggNog:0});},
+  complexity: 3,
+  defenceEffect: () => 'Gain 1 Egg Nog per Bell. Any Star grants 1 Cheer.',
   defenceDiceCount:p=>p.upgrades?.defence?5:4,
   resolveDefence({state:s,seat,counts:c,random}){const q=[];if(c.Bell)q.push({kind:'gain',key:'eggNog',amount:c.Bell});if(c.Star)q.push({kind:'gain',key:'cheer',amount:1});begin(s,seat,q,'damage',random);return s.stage;},
   cardChoices(card,{s,seat,one}){const p=s.players[seat],r=s.pending?.santa;

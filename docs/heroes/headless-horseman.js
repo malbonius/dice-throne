@@ -77,6 +77,8 @@ const headlessHorseman=(()=>{
       if(counts.Scare)gainGrim(s,seat,3);
       else drawCards(p,1,random,card);
     },
+    complexity: 4,
+    defenceEffect: p => 'Return 1 damage per Axe. Prevent 1 per pair of Horseshoes. Gain 1 Dreadful per Scare.' + (p.upgrades?.defence ? ' On 2 Scares, also gain Grim Pursuit.' : ''),
     defenceDiceCount(p){return Math.min(5,(p.upgrades?.defence?2:1)+(p.dreadful??0));},
     resolveDefence({state,seat,defender,counts,grantStatus,gainGrim,updateDamage}){
       const hit=state.pending;

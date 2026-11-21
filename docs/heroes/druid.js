@@ -49,6 +49,8 @@ const druid=(()=>{
     leafletPositives: {regenerate: true},
    id,board,upgrades,cards,promoId:33,formName,regenTotal,heal,regenerate,gainShifts,shiftChoices,
     initialize(s,seat){Object.assign(s.players[seat],{druidForm:'druid',shapeShift:0});},
+    complexity: 4,
+    defenceEffect: p => 'Return 1 damage per Claw.' + (p.druidForm === 'bear' ? ' Prevent 1 damage per Paw or Nature.' : ''),
     defenceDiceCount(p){return p.druidForm==='bear'?4:2;},
     resolveDefence({state,defender,counts,updateDamage}){
       const hit=state.pending;

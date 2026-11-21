@@ -98,6 +98,8 @@ const cyclops=(()=>{
   },
   id,board,upgrades,cards,promoId:34,leadershipIds,isLeadership,count,other,onCardPlayed,stage,begin,gain,focus,pump,ability,refresh,supportChoices,battleChoices,canRecourse,choosing,
   initialize(s,seat){Object.assign(s.players[seat],{support:0,battlePlan:0});},
+  complexity: 4,
+  defenceEffect: p => 'Prevent 1 damage per Pouch.' + (p.upgrades?.defence ? ' Return 1 damage per Fist.' : '') + ` Any Blast ${p.upgrades?.defence ? 'makes you choose' : 'lets you choose'} to return 3 damage or prevent 2.`,
   defenceDiceCount:()=>3,
   resolveDefence({state:s,seat,defender:p,counts:c}){
    const h=s.pending;h.prevention=(h.prevention??0)+(c.Pouch??0);if(p.upgrades?.defence)h.returnDamage+=c.Fist??0;updateDamage(h);

@@ -227,6 +227,8 @@ const cursedPirate = (() => {
         else drawCards(p,1,random,card);
       }
     },
+    complexity: 4,
+    defenceEffect: p => `Return 1 damage per Cutlass, gain 1 CP per Booty and prevent 2 damage per Skull. On 2 Cutlasses + Skull, ${p.cursed ? 'inflict a Cursed Doubloon' : 'you may give away a Cursed Doubloon'}.`,
     defenceDiceCount(defender) { return defender.cursed ? 5 : 4; },
     resolveDefence({state,seat,defender,counts,bounded,updateDamage}) {
       const hit = state.pending;

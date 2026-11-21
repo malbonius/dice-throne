@@ -40,6 +40,10 @@ const paleLady = (() => {
     turnStartUpkeep: 'every-turn',
     id,board,werewolfBoard,cards,upgrades:[],promoId:33,gain,heal,
     initialize(s,seat){Object.assign(s.players[seat],{moonShard:0,werewolf:false});},
+    complexity: 3,
+    defenceEffect: p => p.werewolf
+      ? 'Return 1 damage per Slash and 2 more on any Full Moon. Any Crescent inflicts Bleed.'
+      : 'Heal 1 per Crescent. Any Full Moon grants 1 Moon Shard.',
     defenceDiceCount(){return 4;},
     resolveDefence({state,defender,attacker,counts,grantStatus}){
       const crescent=counts.Crescent??0, full=!!counts['Full Moon'];

@@ -47,6 +47,8 @@ const duelist=(()=>{
     leafletPositives: {guardBreak: true},
    id,board,upgrades,cards,promoId:33,positions,move,steps,offerSteps,bonus,
     initialize(s,seat){s.players[seat].footwork=0;},
+    complexity: 3,
+    defenceEffect: p => `Return 1 damage ${p.upgrades?.defence ? 'per Blade' : 'per pair of Blades'}. Move back one position per Boot or Pierce.`,
     defenceDiceCount(){return 4;},
     resolveDefence({state,defender,counts}){
       const blades=counts.Blade??0;

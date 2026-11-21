@@ -66,6 +66,8 @@ const tactician = (() => {
         else drawCards(p,1,random,card);
       }
     },
+    complexity: 5,
+    defenceEffect: p => `Return ${p.upgrades?.defence === 27 ? 2 : 1} damage per pair of Sabers. Prevent 1 per Flag. Gain 1 Tactical Advantage per Medal.`,
     defenceDiceCount(p) { return p.upgrades?.defence?5:4; },
     resolveDefence({state,seat,defender,counts,gainTactical,updateDamage}) {
       const hit=state.pending, multiplier=defender.upgrades?.defence===27?2:1;

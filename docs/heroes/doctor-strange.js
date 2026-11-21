@@ -87,6 +87,8 @@ const doctorStrange=(()=>{
   leafletPositives: {premonition: true, dejaVu: true},
   id,board,upgrades:[],cards,promoId:33,startingSpell:27,spells,isSpell,earlyBands,canPrepare,canDeja,bandsBlocks,begin,options,pump,
   initialize(s,seat){Object.assign(s.players[seat],{spellBook:[27],premonition:0,dejaVu:false});},
+  complexity: 5,
+  defenceEffect: () => 'Mandala returns 1 damage. Amulet returns 3. Mantle prevents 2 damage. Tome grants Premonition. Each effect can trigger once.',
   defenceDiceCount(){return 2;},
   resolveDefence({state,defender,counts,grantStatus,updateDamage}){
    state.pending.returnDamage+=Number(!!counts.Mandala)+3*Number(!!counts.Amulet);

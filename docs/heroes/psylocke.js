@@ -60,6 +60,8 @@ const psylocke=(()=>{
   leafletPositives: {agility: true, infiltration: true},
   id,board,upgrades,cards,promoId:33,enter,leave,setState,withAbility,withoutAbility,useAbility,suppressed,tag,block,blockDirect,flush,pendingPositives,pauseEnd,initialRoll,start,swaps,canBoost,infiltrationChoices,forcedChoices,ability,
   initialize(s,seat){Object.assign(s.players[seat],{agility:0,infiltration:0,manifestDie:0,manifestReady:false,manifestSwapped:false});},
+  complexity: 3,
+  defenceEffect: p => `Return ${p.upgrades?.defence ? 2 : 1} damage per Blade. Blade + Mind lets you draw 1 card. Blade + Starlight grants Agility.`,
   defenceDiceCount:()=>3,
   resolveDefence({state:s,defender:p,counts:c,random}){s.pending.returnDamage+=(p.upgrades?.defence?2:1)*(c.Blade??0);if(c.Blade&&c.Mind)drawCards(p,1,random);if(c.Blade&&c.Starlight)grantStatus(p,'agility');return 'damage';},
   cardChoices(card,{s,seat,one}){

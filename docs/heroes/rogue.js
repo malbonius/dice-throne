@@ -47,6 +47,8 @@ const rogue=(()=>{
   leafletPositives: {ionicEnergy: true, ionicEnergy2: true, skyward: true},
   id,board,upgrades,cards,promoId:33,total,cap,rawGain,gain,collectChoices,usage,expanded,ionicChoices,canExpand,canSkyward,start,ability,leach,cloudy,sugah,boostLeach,
   initialize(s,seat){Object.assign(s.players[seat],{ionicEnergy:0,ionicEnergy2:0,skyward:0,influence:0});},
+  complexity: 3,
+  defenceEffect: () => 'Return 1 damage per pair of Touch symbols. Prevent 2 per pair of Soar symbols. Each pair of Ion symbols grants 1 Skyward and 1 Ionic Energy (1).',
   defenceDiceCount:p=>p.upgrades?.defence?5:4,
   resolveDefence({state:s,defender:p,counts:c}){s.pending.returnDamage+=Math.floor((c.Touch??0)/2);s.pending.prevention=(s.pending.prevention??0)+2*Math.floor((c.Soar??0)/2);const n=Math.floor((c.Ion??0)/2);grantStatus(p,'skyward',n);s.stage='damage';gain(s,1-s.active,n);updateDamage(s.pending);return 'damage';},
   drive(s,seat,amount){if(heroId(s,seat)===id&&s.players[seat].hp>0&&s.pending?.attack&&!s.pending.ultimate&&amount>0)psylocke.withoutAbility(s,()=>rawGain(s.players[seat],amount>=7?'ionicEnergy2':'ionicEnergy'));},

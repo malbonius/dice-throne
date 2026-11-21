@@ -64,6 +64,8 @@ const forgemaster=(()=>{
     turnStartUpkeep: 'every-turn',
     id,board,upgrades:[],cards,promoId:35,oreType,materialName,armorName,beginMine,choices,eligibleArmor,selections,
     initialize(s,seat){Object.assign(s.players[seat],{forgeOre:[],armor:{helm:0,shield:0}});},
+    complexity: 4,
+    defenceEffect: () => 'Pick lets you mine Ore. Forge lets you double one equipped armour effect. Anvil lets you double up to two.',
     defenceDiceCount(){return 1;},
     resolveDefence({state,seat,defender,counts}){
       state.stage='damage';

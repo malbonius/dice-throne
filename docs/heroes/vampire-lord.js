@@ -87,6 +87,8 @@ const vampireLord = (() => {
         else drawCards(p,1,random,card);
       }
     },
+    complexity: 4,
+    defenceEffect: () => 'On 2 Claws, inflict Bleed. On 2 Gaze, gain 1 Blood Power. Steal 1 Health per Droplet.',
     defenceDiceCount(p) { return p.upgrades?.defence?4:3; },
     resolveDefence({state,seat,attacker,defender,counts,bounded,grantStatus,removeStatus,gainBloodPower,add}) {
       if(counts.Claw>=2)grantStatus(attacker,'bleed');

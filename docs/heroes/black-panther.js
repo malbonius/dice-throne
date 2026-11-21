@@ -53,6 +53,8 @@ const blackPanther=(()=>{
     leafletPositives: {kineticEnergy: true},
    id,board,upgrades,cards,promoId:33,gain,incoming,prevent,
     initialize(s,seat){s.players[seat].kineticEnergy=0;},
+    complexity: 2,
+    defenceEffect: () => 'Return 1 damage per Slash.',
     defenceDiceCount(p){return p.upgrades?.defence?4:3;},
     resolveDefence({state,counts}){state.pending.returnDamage+=counts.Slash??0;return 'damage';},
     cardChoices(card,{s,seat,one}){

@@ -67,6 +67,8 @@ const alchemist=(()=>{
   turnStartUpkeep: 'every-turn',
   id,board,upgrades,cards,promoId:34,types,limits,slots,sync,remove,tokenLabel,tokens,statusOptions,attachOptions,attach,begin,start,ability,prepare,beginSpend,spendChoices,labChoices,damage,pump,taskChoices,taskOptional,busy,
   initialize(s,seat){Object.assign(s.players[seat],{potions:[],potionNext:0,punchify:0,bolsterate:0,cleansitude:0,toxification:0});},
+  complexity: 5,
+  defenceEffect: (_p, _kind, pending) => 'Attach 1 Potion per Crucible, then you may spend Potions attached to Passivation.' + (pending?.alchemistGirded ? ` If you roll no Crucibles, Girded! prevents ${2 * pending.alchemistGirded} damage.` : ''),
   defenceDiceCount:()=>5,
   resolveDefence({state:s,seat,counts:c}){if(s.pending.alchemistGirded&&!c.Crucible)s.pending.prevention=(s.pending.prevention??0)+2*s.pending.alchemistGirded;begin(s,seat,[{kind:'attach',left:c.Crucible??0}],'alchemistDefence');return s.stage;},
   cardChoices(card,{s,seat,one}){const p=s.players[seat],h=s.pending;
