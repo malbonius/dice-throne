@@ -2181,15 +2181,22 @@ const deckPhases = {
 function openDeck(seat) {
   const hero = heroId(state,seat);
   const {startingSpell, promoId = 33} = heroRoster[hero];
-  const cards = deckCardIds(hero,state.promo).map(id => ({id, ...cardInfo(hero,id)}))
-    .sort((a,b) => a.name.localeCompare(b.name));
+  const copies = new Map();
+  for (const id of deckCardIds(hero,state.promo)) {
+    const card = cardInfo(hero,id);
+    const key = JSON.stringify([card.phase, card.name, card.cost]);
+    const entry = copies.get(key);
+    if (entry) entry.count++;
+    else copies.set(key, {id, ...card, count:1});
+  }
+  const cards = [...copies.values()].sort((a,b) => a.name.localeCompare(b.name));
   deckTitle.textContent = `${names[seat]}’s deck list`;
   deckContent.innerHTML = Object.entries(deckPhases).map(([phase, label]) => {
     const entries = cards.filter(card => card.phase === phase);
     if (!entries.length) return '';
     return `<section class="deck-group"><h3>${label}</h3><ul role="list">
-      ${entries.map(({id, name}) => `<li class="deck-entry">
-        <span>${name}${id===startingSpell ? '<small>Starts prepared</small>' : id===promoId ? '<small>Promo</small>' : ''}</span>
+      ${entries.map(({id, name, count}) => `<li class="deck-entry">
+        <span>${name}${count>1 ? ` ×${count}` : ''}${id===startingSpell ? '<small>Starts prepared</small>' : id===promoId ? '<small>Promo</small>' : ''}</span>
         ${previewCard(state,seat,id)}
       </li>`).join('')}
     </ul></section>`;
