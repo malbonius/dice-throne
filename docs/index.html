@@ -85,7 +85,7 @@ body:has(#hero-picker[open]){overflow:hidden}
  <div>
   <div>
    <h1><img class="header-logo" src="./dice-throne-logo.png" alt="Dice Throne" width="1024" height="612"></h1>
-   <small>Playtest 0.53.21</small>
+   <small>Playtest 0.53.22</small>
   </div>
   <div class="header-actions">
   <button id="open-player-aid" type="button" aria-haspopup="dialog" aria-controls="viewer">Player aid</button>
@@ -128,8 +128,13 @@ body:has(#hero-picker[open]){overflow:hidden}
  <div class="viewer-head"><h2 id="hand-title"></h2><form method="dialog"><button>Close hand</button></form></div>
  <div id="hand-content"></div>
 </dialog>
+<dialog id="hero-sheet" aria-labelledby="hero-sheet-title">
+ <div class="viewer-head"><h2 id="hero-sheet-title"></h2><form method="dialog"><button autofocus>Close</button></form></div>
+ <div id="hero-sheet-content"></div>
+</dialog>
 <dialog id="deck-dialog" aria-labelledby="deck-title">
  <div class="viewer-head"><h2 id="deck-title"></h2><form method="dialog"><button autofocus>Close deck</button></form></div>
+ <button id="view-all-deck" type="button" hidden>Full deck list</button>
  <div id="deck-content"></div>
 </dialog>
 <dialog id="viewer" aria-labelledby="viewer-title">
@@ -139,11 +144,16 @@ body:has(#hero-picker[open]){overflow:hidden}
   <button id="aid-quick-reference" type="button" aria-pressed="false">Quick reference</button>
   <button id="aid-damage-cheat-sheet" type="button" aria-pressed="false">Damage cheat sheet</button>
  </nav>
- <div class="viewer-tools">
+ <nav id="board-sections" class="viewer-tools" aria-label="Board views" hidden>
+  <button id="board-scan" type="button" aria-pressed="true">Board</button>
+  <button id="board-upgrades-tab" type="button" aria-pressed="false">Upgrades</button>
+ </nav>
+ <div id="viewer-zoom" class="viewer-tools">
   <button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-fit">Fit</button><button id="zoom-in" aria-label="Zoom in">+</button>
   <button id="leaflet-front">Front</button><button id="leaflet-back">Back</button>
  </div>
  <div id="viewer-scroll" class="viewer-scroll"><img id="viewer-image" alt=""></div>
+ <div id="board-upgrades-panel" hidden></div>
 </dialog>
 <script src="./art-shared.js"></script>
 <script src="./art-shared-marvel.js"></script>

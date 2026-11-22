@@ -258,6 +258,72 @@ main {
   overflow-wrap: anywhere;
 }
 
+button.hero-sheet-trigger {
+  display: none;
+}
+
+#hero-sheet {
+  inset: auto 0 0;
+  margin: 0 auto;
+  width: min(100%, 520px);
+  max-height: 75dvh;
+  overflow: hidden;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0;
+}
+
+#hero-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+body:has(#hero-sheet[open]) {
+  overflow: hidden;
+}
+
+#hero-sheet-content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#hero-sheet .hero-information-body { padding: 0; }
+
+#hero-sheet .inventory {
+  justify-content: flex-start;
+  gap: 8px 16px;
+}
+
+#hero-sheet .inventory button,
+#hero-sheet summary,
+#hero-sheet .token-help button { min-height: 44px; }
+
+#hero-sheet summary { padding-block: 10px; }
+
+#hero-sheet .hero-component-link {
+  display: block;
+  width: 100%;
+  text-align: start;
+}
+
+#board-sections[hidden], #viewer-zoom[hidden] { display: none; }
+
+#board-upgrades-panel {
+  max-height: 65dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#board-upgrades-panel ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#view-all-deck {
+  align-self: flex-start;
+  margin-bottom: 8px;
+}
+
 .draw-count {
   display: inline-flex;
   align-items: center;
@@ -311,7 +377,7 @@ button.draw-count:hover {
   color: var(--gold);
 }
 
-.deck-group ul {
+.deck-card-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -768,8 +834,42 @@ button.card-preview:hover:not(:disabled) {
     gap: 1px 8px;
   }
 
-  .hero-information > summary {
-    font-size: .76rem;
+  .hero-information {
+    display: none;
+  }
+
+  button.hero-sheet-trigger {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 5px;
+    padding-inline: 10px;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: .78rem;
+    text-align: start;
+  }
+
+  .hero-summary-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .hero-sheet-trigger::after {
+    content: "";
+    width: 5px;
+    height: 5px;
+    margin-inline: 3px;
+    border: solid currentColor;
+    border-width: 1px 1px 0 0;
+    transform: rotate(45deg);
   }
 
   .match-tools {

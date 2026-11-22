@@ -34,6 +34,10 @@ const handContent=document.getElementById('hand-content');
 const deckDialog = document.getElementById('deck-dialog');
 const deckTitle = document.getElementById('deck-title');
 const deckContent = document.getElementById('deck-content');
+const fullDeckButton = document.getElementById('view-all-deck');
+const heroSheet = document.getElementById('hero-sheet');
+const heroSheetContent = document.getElementById('hero-sheet-content');
+let deckSeat;
 const button = (action,label,attrs='') => `<button type="button" data-action="${action}" ${attrs}>${label}</button>`;
 const abilityName = (name, tag = 'span') => `<${tag} class="ability-name">${name}</${tag}>`;
 function previewCard(state, seat, id, label = 'View') {
@@ -53,12 +57,9 @@ function boardImage(state,seat,full=false) {
   if(id===druid.id&&form!=='druid')return art[form+(full?'DruidFullBoard':'DruidBoard')];
   return (full?art.fullBoards:art.boards)[id];
 }
-function heroEquipment(seat) {
-  const upgrades=Object.values(state.players[seat].upgrades??{});
+function heroComponents(seat) {
   return `${heroId(state,seat)===alchemist.id?attachedPotions(seat):''}
-    ${heroId(state,seat)===krampus.id?`<details class="board-upgrades" data-disclosure="rejects-${seat}"><summary>Rejects (${state.players[seat].rejects.length}/3)</summary><div class="controls">${state.players[seat].rejects.map(id=>button('inspect-reject',`<img src="${art.krampusRejects[id]}" alt="${krampus.names[id]}" style="width:100px;max-width:100%"><br>${krampus.names[id]}${state.players[seat].rejectUsed[id]===state.turn?' · used this turn':''}`,`data-index="${id}" data-seat="${seat}"`)).join('')||'No Rejects in play'}</div><p>Draw pile: ${state.players[seat].rejectDeck.length} · Discard: ${state.players[seat].rejectDiscard.map(id=>krampus.names[id]).join(', ')||'empty'}</p></details>`:''}
-    ${upgrades.length?`<details class="board-upgrades" data-disclosure="upgrades-${seat}"><summary>Equipped upgrades (${upgrades.length})</summary>
-      ${upgrades.map(id=>button('inspect-card',seatCard(state,seat,id).name,`data-index="${id}" data-seat="${seat}"`)).join('')}</details>`:''}`;
+    ${heroId(state,seat)===krampus.id?`<details class="board-upgrades" data-disclosure="rejects-${seat}"><summary>Rejects (${state.players[seat].rejects.length}/3)</summary><div class="controls">${state.players[seat].rejects.map(id=>button('inspect-reject',`<img src="${art.krampusRejects[id]}" alt="${krampus.names[id]}" style="width:100px;max-width:100%"><br>${krampus.names[id]}${state.players[seat].rejectUsed[id]===state.turn?' · used this turn':''}`,`data-index="${id}" data-seat="${seat}"`)).join('')||'No Rejects in play'}</div><p>Draw pile: ${state.players[seat].rejectDeck.length} · Discard: ${state.players[seat].rejectDiscard.map(id=>krampus.names[id]).join(', ')||'empty'}</p></details>`:''}`;
 }
 const statusNotes = {
   donut:'Positive, stack limit 2. When gaining Donut, choose any player to receive it. During your own Upkeep, spend one and roll: heal half the final value, rounded up. Healing uses the existing end-of-Upkeep timing.',
@@ -215,18 +216,20 @@ function tokenChoiceLabel(view, choice, seat) {
   return image?`<span class="token-choice">${image}<span>${choice.label}</span></span>`:choice.label;
 }
 
-const token = (seat,key,label,suffix=key,bombId) => {
-  const id = `status-${seat}-${suffix}`;
+const token = (seat,key,label,suffix=key,bombId,scope='hero') => {
+  const id = `status-${scope}-${seat}-${suffix}`;
   return `<span class="token-help">${button('status',`<span class="token">${tokenImage(state,seat,key,bombId)}${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
-function hero(seat, decisionSeat, responding) {
+const urgentStatuses = new Set(['stun','timeBomb','phoenixBurn','poison','burn','delayedPoison',
+  'bleed','wound','powderKeg','concussion','knockdown','disarm','blind','blindingLight']);
+
+function heroStatuses(seat, scope) {
   const p = state.players[seat];
-  const drawCount = p.deck.length ?? p.deck;
   const statusLabels = [];
   const status = (key, label, suffix, bombId) => {
-    statusLabels.push(label);
-    return token(seat, key, label, suffix, bombId);
+    statusLabels.push({key, label});
+    return token(seat, key, label, suffix, bombId, scope);
   };
   const statuses = [p.evasive && status('evasive',`Evasive ×${p.evasive}`),p.entangle && status('entangle','Entangle'),p.blind && status('blind','Blind'),p.targeted && status('targeted','Targeted'),
     p.pirateCoins?.[seat]&&status('doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`),
@@ -342,9 +345,17 @@ function hero(seat, decisionSeat, responding) {
     p.burn&&status('burn','Burn'),p.knockdown&&status('knockdown','Knockdown'),
     p.fireMastery&&status('fireMastery',`Fire Mastery ${p.fireMastery}/${statusCap(p,'fireMastery')}`),
     p.concussion && status('concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && status('stun','Stun')].filter(Boolean);
-  const visibleStatuses = statusLabels.slice(0, 2).join(' · ');
-  const moreStatuses = statusLabels.length > 2 ? ` · +${statusLabels.length - 2}` : '';
-  const statusSummary = visibleStatuses ? visibleStatuses + moreStatuses : 'Hero details';
+  return {statuses, statusLabels};
+}
+
+function hero(seat, decisionSeat, responding) {
+  const p = state.players[seat];
+  const {statuses, statusLabels} = heroStatuses(seat);
+  const summaryLabels = statusLabels.filter(({key}) => urgentStatuses.has(key))
+    .concat(statusLabels.filter(({key}) => !urgentStatuses.has(key)));
+  const visibleStatuses = summaryLabels.slice(0, 2).map(({label}) => label).join(' · ');
+  const moreStatuses = statusLabels.length > 2 ? `+${statusLabels.length - 2}` : '';
+  const statusSummary = visibleStatuses || 'Hero details';
   const ready = seat === decisionSeat && state.stage !== 'finished';
   return `<section class="hero seat-${seat}" aria-label="${names[seat]}" data-deciding="${ready}" style="--hero:${seat ? '#89cbc5' : '#e9a987'}">
     <div class="hero-head">
@@ -363,32 +374,48 @@ function hero(seat, decisionSeat, responding) {
       ${heroId(state,seat)===deadpool.id&&seat===responding&&seat===state.active&&isMain(state)&&!state.cardRoll&&!state.mainAction&&!rollRequest?
         button('toggleCurmudgeon',`<img src="${art.curmudgeonCoin}" alt="" width="24" height="24"><span>Curmudgeon coin · ${p.curmudgeon?'On':'Off'}</span>`,`class="curmudgeon-toggle" aria-pressed="${!!p.curmudgeon}" title="Waive Deadpool’s spoken bonus requirements"`):''}
     </div>
+    ${button('open-hero-details',`<span class="hero-summary-text">${statusSummary}</span>${moreStatuses?`<span>${moreStatuses}</span>`:''}`,
+      `class="hero-sheet-trigger" data-index="${seat}" aria-label="${names[seat]}’s details · ${statusSummary}${moreStatuses?` · ${moreStatuses}`:''}" aria-haspopup="dialog" aria-controls="hero-sheet"`)}
     <details class="hero-information" data-disclosure="hero-${seat}">
-      <summary>${statusSummary}</summary>
-      <div class="hero-information-body">
+      <summary>${statusSummary}${moreStatuses?` · ${moreStatuses}`:''}</summary>
+      ${heroInformation(seat,statuses)}
+    </details>
+  </section>`;
+}
+
+function heroInformation(seat, statuses, compact = false) {
+  const p = state.players[seat];
+  const drawCount = p.deck.length ?? p.deck;
+  const discardCount = p.discard?.length ?? 0;
+  const shootLabel = `Shoot · ${p.shootActive?'Active':'Inactive'}`;
+  const spellBook = p.spellBook && `<div class="controls">${p.spellBook.map(id =>
+    button('inspect-card',doctorStrange.spells[id],`data-index="${id}" data-seat="${seat}"`)).join('')||'No prepared Spells'}</div>`;
+  const spellBookLabel = `Book of Vishanti · ${p.spellBook?.length ?? 0} prepared`;
+  return `<div class="hero-information-body">
         ${heroId(state,seat)===cyclops.id?`<div class="leadership-counter" role="status">Leadership cards played this turn: <strong>${cyclops.count(state,seat)}</strong></div>`:''}
         ${p.nyra?`<div class="tokens"><span class="token"><img src="${art.nyraDials[Number(p.nyra.downed)]}" alt="">Nyra · ${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health</span></div>`:''}
         <div class="tokens">${statuses.join('') || 'No status effects'}</div>
         <div class="inventory">
-          ${button('open-deck',`<img src="${art.back}" alt="">Draw ${drawCount}`,`class="draw-count" data-index="${seat}" aria-label="Draw ${drawCount}. View ${names[seat]}’s deck list" aria-haspopup="dialog"`)}
-          <span>Discard ${p.discard?.length ?? 0}</span>
-          <span>${p.hand.length ?? p.hand} in hand</span>
-          ${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}
+          ${button('open-deck',`<img src="${art.back}" alt="">Draw ${drawCount}`,`class="draw-count" data-index="${seat}" aria-label="Draw ${drawCount}. View ${names[seat]}’s ${compact?'draw pile':'deck list'}" aria-haspopup="dialog"${compact?' data-location="draw"':''}`)}
+          ${compact?button('open-deck',`Discard ${discardCount}`,`data-index="${seat}" data-location="discard" aria-label="Discard ${discardCount}. View ${names[seat]}’s discard pile" aria-haspopup="dialog"`):`<span>Discard ${discardCount}</span><span>${p.hand.length ?? p.hand} in hand</span>`}
         </div>
-        ${heroEquipment(seat)}
-    ${heroId(state,seat)===deadpool.id?`<details class="token-actions deadpool-shoot" data-disclosure="shoot-${seat}"><summary>Shoot · ${p.shootActive?'Active':'Inactive'}</summary><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="Shoot ${p.shootActive?'Active':'Inactive'}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}</div><p>The Shoot card is separate from the draw deck.</p></details>`:''}
-    ${p.spellBook?`<div class="forge-inventory"><strong>Book of Vishanti · ${p.spellBook.length} prepared</strong><div class="controls">${p.spellBook.map(id=>button('inspect-card',doctorStrange.spells[id],`data-index="${id}" data-seat="${seat}"`)).join('')||'No prepared Spells'}</div></div>`:''}
+        ${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}
+        ${heroComponents(seat)}
+    ${heroId(state,seat)===deadpool.id?(compact
+      ? button('inspect-shoot',shootLabel,`class="hero-component-link" data-index="${seat}" aria-haspopup="dialog"`)
+      : `<details class="token-actions deadpool-shoot" data-disclosure="shoot-${seat}"><summary>${shootLabel}</summary><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="${shootLabel}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}</div><p>The Shoot card is separate from the draw deck.</p></details>`):''}
+    ${spellBook?(compact
+      ? `<details class="forge-inventory"><summary>${spellBookLabel}</summary>${spellBook}</details>`
+      : `<div class="forge-inventory"><strong>${spellBookLabel}</strong>${spellBook}</div>`):''}
     ${p.forgeOre?`<details class="forge-inventory" data-disclosure="forge-${seat}"><summary>The Forge · ${p.forgeOre.length} Ore</summary>
       <div class="controls">${[19,28,34].map(id=>{
         const ore=forgemaster.oreType(id),cards=p.forgeOre.filter(card=>forgemaster.oreType(card)===ore);
         return cards.length?button('inspect-card',`${seatCard(state,seat,id).name} ×${cards.length}`,`data-index="${id}" data-seat="${seat}"`):'';
       }).join('')}${['mining','crafting'].map(key=>button('inspect-forging',key==='mining'?'Mining rules':'Crafting rules',`data-status="${key}"`)).join('')}</div>
     </details>`:''}
-    ${p.freezer?`<details class="token-actions" data-disclosure="freezer-${seat}"><summary>The Freezer · ${p.freezer.shards}/5 Ice Shards · ${p.freezer.glide?'Glide stored':'No Glide stored'}</summary><div class="controls">${button('inspect-freezer','View The Freezer',`data-index="${seat}"`)}</div><p>Stored tokens are out of play. They cannot be removed, transferred by ordinary status cards or counted for damage. Only an authorised ability or card can transfer them to your board. Five stored shards can be converted into stored Glide.</p></details>`:''}
+    ${p.freezer?`<details class="token-actions" data-disclosure="freezer-${seat}"><summary>The Freezer · ${p.freezer.shards}/5 Ice Shards · ${p.freezer.glide?'Glide stored':'No Glide'}</summary><div class="controls">${button('inspect-freezer','View The Freezer',`data-index="${seat}"`)}</div><p>Stored tokens are out of play. They cannot be removed, transferred by ordinary status cards or counted for damage. Only an authorised ability or card can transfer them to your board. Five stored shards can be converted into stored Glide.</p></details>`:''}
     ${p.aces?`<details class="token-actions" data-disclosure="aces-${seat}"><summary>Ace cards · ${p.aceTurn===state.turn?p.aceExploded??0:0}/${1+(p.aceTurn===state.turn?p.aceExtra??0:0)} exploded this turn</summary><div class="controls">${gambit.suits.map((suit,i)=>`<figure style="max-width:150px;margin:6px">${button('inspect-ace',`<img src="${p.aces[suit].up?art.gambitAces[i]:art.back}" alt="${suit} Ace" style="width:100%">`,`data-index="${i}" data-seat="${seat}"`)}<figcaption>${statusLabel(suit)} · ${p.aces[suit].up?`${p.aces[suit].charge}/${gambit.caps[suit]} charged`:'Face down'}</figcaption></figure>`).join('')}</div><p>One Ace explosion per turn in total, plus any additional allowance. Acceleration tokens remain on their own Aces and cannot be transferred or removed.</p></details>`:''}
-      </div>
-    </details>
-  </section>`;
+  </div>`;
 }
 function dieFace(values, seat, index, view, value = values[index], showFace = false) {
   const primary = values === view.dice;
@@ -2222,10 +2249,12 @@ const deckSections = {
   spell:'Spells', rage:'Rage', ore:'Ore', discard:'Discard pile'
 };
 
-function openDeck(seat) {
+function renderDeck(seat, location) {
   const hero = heroId(state,seat);
   const player = state.players[seat];
   const {startingSpell, promoId = 33} = heroRoster[hero];
+  const pile = location === 'draw' ? player.deck : location === 'discard' ? player.discard : null;
+  const pileLabel = location === 'draw' ? 'Draw pile' : 'Discard pile';
   const locations = [
     ['Draw pile', player.deck],
     ['In hand', player.hand],
@@ -2243,7 +2272,11 @@ function openDeck(seat) {
     if (entry) entry.ids.push(id);
     else copies.set(key, {...card, ids:[id]});
   }
-  const cards = [...copies.values()].map(({ids, name, phase}) => {
+  const cards = [...copies.values()].flatMap(({ids, name, phase}) => {
+    if (pile) {
+      const entries = ids.filter(id => pile.includes(id));
+      return entries.length ? [{id:entries[0], name, count:entries.length, section:phase}] : [];
+    }
     const count = ids.length;
     const current = locations
       .map(([label, pile]) => [label, ids.filter(id => pile.includes(id)).length])
@@ -2252,21 +2285,36 @@ function openDeck(seat) {
     if (outside > 0) current.push(['Outside draw pile', outside]);
     const status = current.map(([label, quantity]) => count > 1 ? `${label} ×${quantity}` : label).join(' · ');
     const section = ids.every(id => player.discard.includes(id)) ? 'discard' : phase;
-    return {id: ids[0], name, count, status, section};
+    return [{id: ids[0], name, count, status, section}];
   }).sort((a,b) => a.name.localeCompare(b.name));
-  deckTitle.textContent = `${names[seat]}’s deck list`;
-  deckContent.innerHTML = Object.entries(deckSections).map(([section, label]) => {
-    const entries = cards.filter(card => card.section === section);
-    if (!entries.length) return '';
-    return `<details class="deck-group"><summary>${label}</summary><ul role="list">
+  const cardList = entries => `<ul class="deck-card-list" role="list">
       ${entries.map(({id, name, count, status}) => `<li class="deck-entry">
-        <span>${name}${count>1 ? ` ×${count}` : ''}<small>${status}</small>${id===startingSpell ? '<small>Starts prepared</small>' : id===promoId ? '<small>Promo</small>' : ''}</span>
+        <span>${name}${count>1 ? ` ×${count}` : ''}${status ? `<small>${status}</small>` : ''}${id===startingSpell ? '<small>Starts prepared</small>' : id===promoId ? '<small>Promo</small>' : ''}</span>
         ${previewCard(state,seat,id)}
       </li>`).join('')}
-    </ul></details>`;
-  }).join('');
+    </ul>`;
+  deckTitle.textContent = pile ? `${names[seat]} · ${pileLabel} (${pile.length})` : `${names[seat]}’s deck list`;
+  fullDeckButton.hidden = !pile;
+  deckContent.innerHTML = pile ? cards.length ? cardList(cards) : `<p>${pileLabel} is empty.</p>` :
+    Object.entries(deckSections).map(([section, label]) => {
+      const entries = cards.filter(card => card.section === section);
+      return entries.length ? `<details class="deck-group"><summary>${label}</summary>${cardList(entries)}</details>` : '';
+    }).join('');
+  deckContent.scrollTop = 0;
+}
+
+function openDeck(seat, location) {
+  deckSeat = seat;
+  renderDeck(seat, location);
   deckDialog.showModal();
   deckContent.scrollTop = 0;
+}
+
+function openHeroSheet(seat) {
+  document.getElementById('hero-sheet-title').textContent = names[seat];
+  heroSheetContent.innerHTML = heroInformation(seat,heroStatuses(seat,'sheet').statuses,true);
+  heroSheetContent.scrollTop = 0;
+  heroSheet.showModal();
 }
 
 function handleAction(event) {
@@ -2282,8 +2330,12 @@ function handleAction(event) {
     return;
   }
   if (!state || rollRequest?.setup) return;
+  if(type==='open-hero-details') {
+    openHeroSheet(index);
+    return;
+  }
   if(type==='open-deck') {
-    openDeck(index);
+    openDeck(index,target.dataset.location);
     return;
   }
   if(type==='open-hand') {
@@ -2424,9 +2476,19 @@ function handleAction(event) {
 match.addEventListener('click',handleAction);
 handContent.addEventListener('click',handleAction);
 deckContent.addEventListener('click',handleAction);
+heroSheetContent.addEventListener('click',handleAction);
+fullDeckButton.addEventListener('click',()=>{
+  renderDeck(deckSeat);
+  deckDialog.querySelector('form button').focus();
+});
 const viewer = document.getElementById('viewer');
 const viewerImage = document.getElementById('viewer-image');
 const viewerScroll = document.getElementById('viewer-scroll');
+const viewerZoom = document.getElementById('viewer-zoom');
+const boardSections = document.getElementById('board-sections');
+const boardScanButton = document.getElementById('board-scan');
+const boardUpgradesButton = document.getElementById('board-upgrades-tab');
+const boardUpgradesPanel = document.getElementById('board-upgrades-panel');
 const front = document.getElementById('leaflet-front');
 const back = document.getElementById('leaflet-back');
 const aidSections = document.getElementById('player-aid-sections');
@@ -2470,6 +2532,9 @@ function openImageViewer(mode) {
   viewerMode=mode;
   front.hidden=back.hidden=mode!=='leaflet';
   aidSections.hidden=mode!=='aid';
+  boardSections.hidden=mode!=='board';
+  boardUpgradesPanel.hidden=true;
+  viewerScroll.hidden=viewerZoom.hidden=false;
   viewer.showModal();
 }
 function openReference(source, title) {
@@ -2483,8 +2548,43 @@ function openViewer(seat,leaflet,card=null) {
   }
   viewerSeat=seat;
   openImageViewer(leaflet?'leaflet':'board');
-  showScan(0);
+  if(leaflet)showScan(0);
+  else openBoardScan(seat);
 }
+function openBoardScan(seat) {
+  const upgrades = Object.values(state.players[seat].upgrades ?? {});
+  boardUpgradesButton.textContent = `Upgrades (${upgrades.length})`;
+  boardUpgradesPanel.innerHTML = upgrades.length
+    ? `<ul role="list">${upgrades.map(id => {
+        const name = seatCard(state,seat,id).name;
+        return `<li class="deck-entry"><span>${name}</span>
+        ${button('preview-equipped-upgrade','View',`class="card-preview" data-index="${id}" aria-label="View ${name}"`)}</li>`;
+      }).join('')}</ul>`
+    : '<p>No equipped upgrades.</p>';
+  showBoardPage('board');
+}
+function showBoardPage(page, cardId) {
+  boardScanButton.setAttribute('aria-pressed',String(page==='board'));
+  boardUpgradesButton.setAttribute('aria-pressed',String(page!=='board'));
+  const showList = page==='upgrades';
+  viewerScroll.hidden=viewerZoom.hidden=showList;
+  boardUpgradesPanel.hidden=!showList;
+  if(showList) {
+    document.getElementById('viewer-title').textContent=`${names[viewerSeat]} · Equipped upgrades`;
+    return;
+  }
+  viewerMode = page==='board' ? 'board' : 'card';
+  if(page==='board')showScan(0);
+  else showViewerImage(cardArtwork(state,viewerSeat,cardId),seatCard(state,viewerSeat,cardId).name);
+}
+boardScanButton.addEventListener('click',()=>showBoardPage('board'));
+boardUpgradesButton.addEventListener('click',()=>showBoardPage('upgrades'));
+boardUpgradesPanel.addEventListener('click',event=>{
+  const target=event.target.closest('button[data-action="preview-equipped-upgrade"]');
+  if(!target)return;
+  showBoardPage('card', Number(target.dataset.index));
+  boardUpgradesButton.focus();
+});
 function showAidPage(page) {
   for(const section of aidPages)section.button.setAttribute('aria-pressed', String(section===page));
   showViewerImage(`./player-aid/${page.key}.webp`,page.title);
