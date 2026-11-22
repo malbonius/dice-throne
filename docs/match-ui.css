@@ -409,6 +409,22 @@ button.draw-count:hover {
   margin-bottom: 7px;
 }
 
+.hero-states {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .8rem;
+}
+
+.hero-state-row .token img {
+  width: 19px;
+  height: 19px;
+  object-fit: contain;
+}
+
 .hero-information-body .token-help button {
   min-height: 36px;
   border-color: #435159;
@@ -418,8 +434,7 @@ button.draw-count:hover {
 
 .hero-information-body .token-actions,
 .hero-information-body .board-upgrades,
-.hero-information-body .forge-inventory,
-.leadership-counter {
+.hero-information-body .forge-inventory {
   margin: 0;
   padding: 8px 0;
   border-top: 1px solid var(--line);
@@ -762,7 +777,8 @@ button.card-preview:hover:not(:disabled) {
   overflow-wrap: anywhere;
 }
 
-.match-tool-buttons button small {
+.match-tool-buttons button small,
+.board-button small {
   display: block;
   margin-top: 2px;
   color: var(--muted);

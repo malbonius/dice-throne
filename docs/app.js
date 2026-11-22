@@ -39,6 +39,13 @@ const heroSheet = document.getElementById('hero-sheet');
 const heroSheetContent = document.getElementById('hero-sheet-content');
 let deckSeat;
 const button = (action,label,attrs='') => `<button type="button" data-action="${action}" ${attrs}>${label}</button>`;
+const equippedUpgrades = seat => Object.values(state.players[seat].upgrades ?? {});
+function boardButton(seat, quick = false) {
+  const count = equippedUpgrades(seat).length;
+  const label = `${count} ${count === 1 ? 'upgrade' : 'upgrades'}`;
+  return button('inspect-board',`<span>Board</span><small>${label}</small>`,
+    `class="board-button${quick?' quick-board':''}" data-index="${seat}" aria-label="Open ${names[seat]}’s board · ${label} equipped" aria-haspopup="dialog"`);
+}
 const abilityName = (name, tag = 'span') => `<${tag} class="ability-name">${name}</${tag}>`;
 function previewCard(state, seat, id, label = 'View') {
   const style = label === 'View' ? 'class="card-preview" ' : '';
@@ -221,7 +228,7 @@ const token = (seat,key,label,suffix=key,bombId,scope='hero') => {
   return `<span class="token-help">${button('status',`<span class="token">${tokenImage(state,seat,key,bombId)}${label}</span>`,
     `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
 };
-const urgentStatuses = new Set(['stun','timeBomb','phoenixBurn','poison','burn','delayedPoison',
+const urgentStatuses = new Set(['timeBomb','phoenixBurn','poison','burn','delayedPoison',
   'bleed','wound','powderKeg','concussion','knockdown','disarm','blind','blindingLight']);
 
 function heroStatuses(seat, scope) {
@@ -247,7 +254,6 @@ function heroStatuses(seat, scope) {
     p.webbed&&status('webbed','Webbed'),
     p.probabilityManipulation>0&&status('probabilityManipulation',`Probability Manipulation ×${p.probabilityManipulation}`),
     p.realityWarp&&status('realityWarp','Reality Warp'),
-    state.realityDie?.seat===seat&&status('realityWarp','Reality Warp · Scarlet Witch die 5','active'),
     p.conjure&&status('conjure','Conjure'),
     p.crackle>0&&status('crackle',`Crackle ×${p.crackle}`),
     p.illusion>0&&status('illusion',`Illusion ×${p.illusion}`),
@@ -264,38 +270,28 @@ function heroStatuses(seat, scope) {
     ...(p.timeBombTimers??[]).map((b,i)=>status('timeBomb',`Time Bomb ${i+1} · 0:0${b.ticks}`,`timeBomb-${b.id}`,b.id)),
     p.kineticEnergy>0&&status('kineticEnergy',`Kinetic Energy ${p.kineticEnergy}/${statusCap(p,'kineticEnergy')}`),
     p.vibraniumSuit&&status('vibraniumSuit','Vibranium Suit'),
-    p.sunDial!==undefined&&status('sunDial',`${p.sunDawn?'Dawn':'Dusk'} · ${p.sunDial}/5`),
     p.sunMarked&&status('sunMarked','Sun Marked'),
     p.chargedGem&&status('chargedGem','Charged Gem'),
-    p.footwork!==undefined&&status('footwork',`Footwork · ${duelist.positions[p.footwork+2]}`),
     p.guardBreak>0&&status('guardBreak',`Guard Break ×${p.guardBreak}`),
     p.disarm&&status('disarm','Disarm'),
-    p.druidForm&&`<span class="token">${druid.formName(p.druidForm)} Form</span>`,
     p.shapeShift>0&&status('shapeshift',`Shape Shift ×${p.shapeShift}`),
     p.regenerate>0&&status('regenerate',`Regenerate (2) ×${p.regenerate}`),
     p.regenerate1>0&&status('regenerate1',`Regenerate (1) ×${p.regenerate1}`),
     p.wound>0&&status('wound',`Wound ×${p.wound}`),
     p.hex&&status('hex','Hex'),
     p.feather>0&&status('feather',`Feathers ${p.feather}/${p.featherCap??5}`),
-    ...state.players.flatMap((owner,i)=>owner.nevermoreSeat===seat?
-      [status('nevermore',`Nevermore${heroId(state,1-i)===raveness.id?` (P${i+1})`:''} · ${owner.nevermoreVitality}/3`,`nevermore-${i}`)]:[]),
-    p.werewolf&&'<span class="token">Werewolf form</span>',
     p.moonShard>0&&status('moonShard',`Moon Shards ×${p.moonShard}`),
     p.prey>0&&status('prey',`Prey ×${p.prey}`),
-    p.corpses!==undefined&&`<span class="token"><img src="${art.corpseDial}" alt="">Corpses ${p.corpses}/10</span>`,
-    p.covered&&`<span class="token">Unearth covers ${p.covered}</span>`,
     ...Object.entries(p.undead??{}).filter(([,count])=>count).map(([kind,count])=>{
       const {name}=necromancer.undead[kind], key={warrior:'skeletalWarrior',mage:'skeletalMage',golem:'boneGolem'}[kind];
       return `<span class="token"><img src="${art[key]}" alt="">${name} ×${count}</span>`;
     }),
-    p.resurrected&&'<span class="token">Resurrected · CP and cards locked</span>',
     p.resurrect&&status('resurrect','Resurrect'),
     p.decrepify&&status('decrepify','Decrep-ify'),
     p.dreadful&&status('dreadful',`Dreadful ×${p.dreadful}`),
     p.grim&&status('grim',`Grim Pursuit ×${p.grim}`),
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&status('hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&status('nyraBond','Nyra’s Bond'),
-    heroId(state,seat)===jeanGrey.id&&`<span class="token">${p.darkPhoenix?'Dark Phoenix':'Jean Grey'} active</span>`,
     ...alchemist.types.map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
     p.coal&&status('coal',`Coal ${p.coal}/4`),
     p.gift&&status('gift',`Gift ${p.gift}/3`),
@@ -306,14 +302,12 @@ function heroStatuses(seat, scope) {
     p.alpha&&status('alpha','Alpha'),
     p.tornado&&status('tornado',`Tornado ${p.tornado}/4`),
     p.windShear&&status('windShear','Wind Shear'),
-    p.lightningCharges&&`<details class="token-actions"><summary>Lightning · ${Object.values(p.lightningCharges).filter(Boolean).length} charged abilities</summary>${storm.slots.map(key=>`<span class="token">${status('lightning',key+': '+(p.lightningCharges[key]?'Charged':'empty'))}</span>`).join('')}</details>`,
     p.influence&&status('influence',`Influence ${p.influence}/3`),
     p.ionicEnergy&&status('ionicEnergy',`Ionic (1) ×${p.ionicEnergy} · ${rogue.total(p)}/${rogue.cap(p)}`),
     p.ionicEnergy2&&status('ionicEnergy2',`Ionic (2) ×${p.ionicEnergy2} · ${rogue.total(p)}/${rogue.cap(p)}`),
     p.skyward&&status('skyward',`Skyward ${p.skyward}/2`),
     p.paralyze&&status('paralyze','Paralyze'),
     p.infiltration&&status('infiltration',`Infiltration ${p.infiltration}/2`),
-    heroId(state,seat)===psylocke.id&&status('manifestDie',`Manifest die · ${p.manifestDie||1}${!p.manifestDie?' · not rolled':''}${p.manifestUsedTurn===state.turn?' · used this turn':''}`),
     p.acuity&&status('acuity',`Acuity ${p.acuity}/4`),
     p.flameBlast&&status('flameBlast',`Flame Blast ${p.flameBlast}/5`),
     p.forceField&&status('forceField','Force Field'),
@@ -344,8 +338,34 @@ function heroStatuses(seat, scope) {
     p.poison&&status('poison',`Poison ×${p.poison}`),p.shadows&&status('shadows','Shadows'),p.sneak&&status('sneak','Sneak Attack'),
     p.burn&&status('burn','Burn'),p.knockdown&&status('knockdown','Knockdown'),
     p.fireMastery&&status('fireMastery',`Fire Mastery ${p.fireMastery}/${statusCap(p,'fireMastery')}`),
-    p.concussion && status('concussion','Concussion'),state.stage==='locked' && state.pending.stun && seat!==state.active && status('stun','Stun')].filter(Boolean);
+    p.concussion && status('concussion','Concussion')].filter(Boolean);
   return {statuses, statusLabels};
+}
+
+function heroStateRows(seat, scope) {
+  const player = state.players[seat];
+  const hero = heroId(state,seat);
+  const note = (key, label, suffix) => token(seat,key,label,suffix,undefined,scope);
+  const rows = [
+    hero===jeanGrey.id && `${player.darkPhoenix?'Dark Phoenix':'Jean Grey'} active`,
+    player.werewolf && 'Werewolf form',
+    player.druidForm && `${druid.formName(player.druidForm)} Form`,
+    player.resurrected && 'Resurrected · CP and cards locked',
+    state.stage==='locked' && state.pending.stun && seat!==state.active && note('stun','Stun'),
+    player.nyra && `<span class="token"><img src="${art.nyraDials[Number(player.nyra.downed)]}" alt="">Nyra · ${player.nyra.downed?'Downed':'Active'} · ${player.nyra.hp}/7 Health</span>`,
+    ...state.players.map((owner,i)=>owner.nevermoreSeat===seat &&
+      note('nevermore',`Nevermore${heroId(state,1-i)===raveness.id?` (P${i+1})`:''} · ${owner.nevermoreVitality}/3`,`nevermore-${i}`)),
+    player.sunDial!==undefined && note('sunDial',`${player.sunDawn?'Dawn':'Dusk'} · ${player.sunDial}/5`),
+    player.footwork!==undefined && note('footwork',`Footwork · ${duelist.positions[player.footwork+2]}`),
+    player.corpses!==undefined && `<span class="token"><img src="${art.corpseDial}" alt="">Corpses ${player.corpses}/10</span>`,
+    player.covered && `Unearth covers ${player.covered}`,
+    hero===cyclops.id && `<span role="status">Leadership cards played this turn: <strong>${cyclops.count(state,seat)}</strong></span>`,
+    state.realityDie?.seat===seat && note('realityWarp','Reality Warp · Scarlet Witch die 5','active'),
+    hero===psylocke.id && note('manifestDie',`Manifest die · ${player.manifestDie||1}${!player.manifestDie?' · not rolled':''}${player.manifestUsedTurn===state.turn?' · used this turn':''}`),
+    player.lightningCharges && `<details><summary>Lightning · ${Object.values(player.lightningCharges).filter(Boolean).length} charged abilities</summary>
+      ${storm.slots.map((slot,i)=>note('lightning',`${slot}: ${player.lightningCharges[slot]?'Charged':'empty'}`,`lightning-${i}`)).join('')}</details>`
+  ].filter(Boolean);
+  return rows.length ? `<div class="hero-states">${rows.map(row=>`<div class="hero-state-row">${row}</div>`).join('')}</div>` : '';
 }
 
 function hero(seat, decisionSeat, responding) {
@@ -368,7 +388,7 @@ function hero(seat, decisionSeat, responding) {
         </div>
       </div>
       <div class="hero-links">
-        ${button('inspect-board','Board',`data-index="${seat}" aria-label="Open ${names[seat]}’s board" aria-haspopup="dialog"`)}
+        ${boardButton(seat)}
         ${button('inspect-leaflet','Leaflet',`data-index="${seat}" aria-label="Open ${names[seat]}’s leaflet" aria-haspopup="dialog"`)}
       </div>
       ${heroId(state,seat)===deadpool.id&&seat===responding&&seat===state.active&&isMain(state)&&!state.cardRoll&&!state.mainAction&&!rollRequest?
@@ -392,9 +412,8 @@ function heroInformation(seat, statuses, compact = false) {
     button('inspect-card',doctorStrange.spells[id],`data-index="${id}" data-seat="${seat}"`)).join('')||'No prepared Spells'}</div>`;
   const spellBookLabel = `Book of Vishanti · ${p.spellBook?.length ?? 0} prepared`;
   return `<div class="hero-information-body">
-        ${heroId(state,seat)===cyclops.id?`<div class="leadership-counter" role="status">Leadership cards played this turn: <strong>${cyclops.count(state,seat)}</strong></div>`:''}
-        ${p.nyra?`<div class="tokens"><span class="token"><img src="${art.nyraDials[Number(p.nyra.downed)]}" alt="">Nyra · ${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health</span></div>`:''}
-        <div class="tokens">${statuses.join('') || 'No status effects'}</div>
+        ${heroStateRows(seat,compact?'sheet':undefined)}
+        <div class="tokens">${statuses.join('') || 'No tokens'}</div>
         <div class="inventory">
           ${button('open-deck',`<img src="${art.back}" alt="">Draw ${drawCount}`,`class="draw-count" data-index="${seat}" aria-label="Draw ${drawCount}. View ${names[seat]}’s ${compact?'draw pile':'deck list'}" aria-haspopup="dialog"${compact?' data-location="draw"':''}`)}
           ${compact?button('open-deck',`Discard ${discardCount}`,`data-index="${seat}" data-location="discard" aria-label="Discard ${discardCount}. View ${names[seat]}’s discard pile" aria-haspopup="dialog"`):`<span>Discard ${discardCount}</span><span>${p.hand.length ?? p.hand} in hand</span>`}
@@ -2202,7 +2221,7 @@ function matchEffects(state, responding, renderButton = button) {
 function matchTools(responding) {
   if (!state.cards || state.stage === 'finished') return '';
   return `<nav class="match-tools" aria-label="Match references">
-    ${button('inspect-board','Board',`class="quick-board" data-index="${responding}" aria-label="Open ${names[responding]}’s board" aria-haspopup="dialog"`)}
+    ${boardButton(responding,true)}
     <div class="match-tool-buttons">${state.players.map((_, seat) => {
       const options = handOptions(seat);
       const playable = options.filter(({choices}) => choices.length).length;
@@ -2552,7 +2571,7 @@ function openViewer(seat,leaflet,card=null) {
   else openBoardScan(seat);
 }
 function openBoardScan(seat) {
-  const upgrades = Object.values(state.players[seat].upgrades ?? {});
+  const upgrades = equippedUpgrades(seat);
   boardUpgradesButton.textContent = `Upgrades (${upgrades.length})`;
   boardUpgradesPanel.innerHTML = upgrades.length
     ? `<ul role="list">${upgrades.map(id => {
