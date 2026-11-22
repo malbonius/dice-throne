@@ -2441,7 +2441,9 @@ function setZoom(value) {
   zoom=bounded(value-1,3)+1;
   const width=viewerScroll.clientWidth;
   let fit=viewerMode==='card'?Math.min(460,width):width;
-  if((viewerMode==='card'||viewerMode==='leaflet')&&desktopViewer.matches&&viewerImage.complete&&viewerImage.naturalHeight){
+  const fitHeight=viewerMode==='card'||viewerMode==='leaflet'||
+    viewerMode==='aid'&&viewerImage.naturalWidth<viewerImage.naturalHeight;
+  if(fitHeight&&desktopViewer.matches&&viewerImage.complete&&viewerImage.naturalHeight){
     fit=Math.min(fit,viewerScroll.clientHeight*viewerImage.naturalWidth/viewerImage.naturalHeight);
   }
   viewerImage.style.width=`${fit*zoom}px`;
