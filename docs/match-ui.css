@@ -46,6 +46,23 @@ header small {
   font-size: .78rem;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+#open-player-aid {
+  font-size: .9rem;
+  white-space: nowrap;
+}
+
+#player-aid-sections[hidden] {
+  display: none;
+}
+
 .setup-menu {
   position: relative;
 }

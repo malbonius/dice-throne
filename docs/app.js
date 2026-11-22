@@ -2429,13 +2429,19 @@ const viewerImage = document.getElementById('viewer-image');
 const viewerScroll = document.getElementById('viewer-scroll');
 const front = document.getElementById('leaflet-front');
 const back = document.getElementById('leaflet-back');
+const aidSections = document.getElementById('player-aid-sections');
+const aidPages = [
+  ['turn-summary','Turn summary'],
+  ['quick-reference','Quick reference'],
+  ['damage-cheat-sheet','Damage cheat sheet']
+].map(([key, title]) => ({key, title, button: document.getElementById(`aid-${key}`)}));
 let viewerSeat, viewerMode, zoom=1, pinch=null;
 const desktopViewer = window.matchMedia('(hover: hover) and (pointer: fine)');
 function setZoom(value) {
   zoom=bounded(value-1,3)+1;
   const width=viewerScroll.clientWidth;
   let fit=viewerMode==='card'?Math.min(460,width):width;
-  if(viewerMode!=='board'&&desktopViewer.matches&&viewerImage.complete&&viewerImage.naturalHeight){
+  if((viewerMode==='card'||viewerMode==='leaflet')&&desktopViewer.matches&&viewerImage.complete&&viewerImage.naturalHeight){
     fit=Math.min(fit,viewerScroll.clientHeight*viewerImage.naturalWidth/viewerImage.naturalHeight);
   }
   viewerImage.style.width=`${fit*zoom}px`;
@@ -2458,10 +2464,14 @@ function showScan(side) {
   showViewerImage(leaflet?art.leaflets[heroId(state,viewerSeat)][side]:boardImage(state,viewerSeat,true),
     `${names[viewerSeat]} ${reference}`);
 }
-function openReference(source, title) {
-  viewerMode='card';
-  front.hidden=back.hidden=true;
+function openImageViewer(mode) {
+  viewerMode=mode;
+  front.hidden=back.hidden=mode!=='leaflet';
+  aidSections.hidden=mode!=='aid';
   viewer.showModal();
+}
+function openReference(source, title) {
+  openImageViewer('card');
   showViewerImage(source,title);
 }
 function openViewer(seat,leaflet,card=null) {
@@ -2470,11 +2480,18 @@ function openViewer(seat,leaflet,card=null) {
     return;
   }
   viewerSeat=seat;
-  viewerMode=leaflet?'leaflet':'board';
-  front.hidden=back.hidden=!leaflet;
-  viewer.showModal();
+  openImageViewer(leaflet?'leaflet':'board');
   showScan(0);
 }
+function showAidPage(page) {
+  for(const section of aidPages)section.button.setAttribute('aria-pressed', String(section===page));
+  showViewerImage(`./player-aid/${page.key}.webp`,page.title);
+}
+for(const page of aidPages)page.button.addEventListener('click',()=>showAidPage(page));
+document.getElementById('open-player-aid').addEventListener('click',()=>{
+  openImageViewer('aid');
+  showAidPage(aidPages[0]);
+});
 front.addEventListener('click',()=>showScan(0));
 back.addEventListener('click',()=>showScan(1));
 document.getElementById('zoom-in').addEventListener('click',()=>setZoom(zoom*1.5));

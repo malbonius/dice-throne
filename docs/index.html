@@ -85,8 +85,10 @@ body:has(#hero-picker[open]){overflow:hidden}
  <div>
   <div>
    <h1><img class="header-logo" src="./dice-throne-logo.png" alt="Dice Throne" width="1024" height="612"></h1>
-   <small>Playtest 0.53.19</small>
+   <small>Playtest 0.53.20</small>
   </div>
+  <div class="header-actions">
+  <button id="open-player-aid" type="button" aria-haspopup="dialog" aria-controls="viewer">Player aid</button>
   <details class="setup-menu" id="match-setup">
    <summary>Match setup</summary>
    <div class="match-setup">
@@ -103,6 +105,7 @@ body:has(#hero-picker[open]){overflow:hidden}
    <div class="setup-actions"><label><input id="promos" type="checkbox"> Include promo cards</label><button id="reset" type="button">Set up initiative</button></div>
    </div>
   </details>
+  </div>
  </div>
 </header>
 <aside class="install-strip"><span role="status" id="offline-status">Preparing offline play…</span><button type="button" id="install-app" hidden>Install app</button></aside>
@@ -131,6 +134,11 @@ body:has(#hero-picker[open]){overflow:hidden}
 </dialog>
 <dialog id="viewer" aria-labelledby="viewer-title">
  <div class="viewer-head"><h2 id="viewer-title"></h2><form method="dialog"><button>Close</button></form></div>
+ <nav id="player-aid-sections" class="viewer-tools" aria-label="Player aid sections" hidden>
+  <button id="aid-turn-summary" type="button" aria-pressed="false">Turn summary</button>
+  <button id="aid-quick-reference" type="button" aria-pressed="false">Quick reference</button>
+  <button id="aid-damage-cheat-sheet" type="button" aria-pressed="false">Damage cheat sheet</button>
+ </nav>
  <div class="viewer-tools">
   <button id="zoom-out" aria-label="Zoom out">−</button><button id="zoom-fit">Fit</button><button id="zoom-in" aria-label="Zoom in">+</button>
   <button id="leaflet-front">Front</button><button id="leaflet-back">Back</button>
