@@ -999,7 +999,7 @@ function legal(state) {
     case 'paralyzeAfter': return {finishParalyze:true};
     case 'jeanAbility': return {finishJeanAbility:true};
     case 'jeanResolved': return {finishJeanResolved:true};
-    case 'jeanBurnRoll': return {resolvePhoenixBurn:true};
+    case 'jeanBurnRoll': return state.jeanBurnRoll.dice?{resolvePhoenixBurn:true}:{rollPhoenixBurn:true};
     case 'iceAbility': return {finishIcemanAbility:true};
     case 'iceResolved': return {finishIcemanResolved:true};
     case 'iceAfter': return {finishIcemanAfter:true};
@@ -1085,13 +1085,21 @@ function transition(previous, action, roll, random=Math.random, responseMode=fal
  const context=psylocke.enter(previous,action);
  try{return transitionStep(previous,action,roll,random,responseMode);}finally{psylocke.leave(context);}
 }
+function inlineEffectSeat(view) {
+ if(view.response||!view.cards||attackLocked(view)||view.cardRoll||view.retry)return null;
+ if(view.stage==='jeanBurnRoll'&&!view.jeanBurnRoll.dice)return null;
+ if(!['offence','announce','defence','defenceResponse','damage','sideDamage','effectResponse','jeanBurnRoll'].includes(view.stage))return null;
+ return 1-cardActor(view);
+}
 function transitionStep(previous, action, roll, random, responseMode){
  let next=transitionCore(previous,action,roll,random,responseMode===true);
- // Card-only responses are available through both Hands on the current match screen.
+ // Both hands and the effects already on the match screen can be used before advancing.
  // These response requests are returned before the action consumes dice or randomness.
- if(responseMode==='inlineCards'&&!previous.response&&next.response?.action===action&&
-     !hasEffectResponse(previous,next.response.seat)){
-   next=transitionCore(previous,action,roll,random,true);
+ if(responseMode==='inlineCards'&&!previous.response&&next.response?.action===action){
+   const seat=next.response.seat;
+   if(seat===cardActor(previous)||seat===inlineEffectSeat(previous)||!hasEffectResponse(previous,seat)){
+     next=transitionCore(previous,action,roll,random,true);
+   }
  }
  psylocke.setState(next,true);if(next!==previous)psylocke.flush(next);
  if(next!==previous&&action.type!=='manifestSwap'&&!iceman.permitted(previous,next))return previous;
@@ -2771,6 +2779,8 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'checkPhoenixBurn':
       state.jeanBurnChecked=attacker.phoenixBurnEpoch??0;
       startSideDamage(state,state.active,2,'Phoenix Burn',false,{keepPending:true,jeanBurnCheck:state.jeanBurnChecked});break;
+    case 'rollPhoenixBurn':
+      state.jeanBurnRoll.dice=[roll()];break;
     case 'resolvePhoenixBurn': {
       const event=state.jeanBurnRoll,p=state.players[event.seat],face=dieValue(event.dice[0],p);
       if(face>=5&&p.phoenixBurn&&(p.phoenixBurnEpoch??0)===event.epoch)removeStatus(p,'phoenixBurn');
@@ -3665,7 +3675,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       else {
         state.stage=event.resume;
         if(event.lokiBagResume)state.lokiBag=event.lokiBagResume;
-        if(event.jeanBurnCheck!==undefined){state.jeanBurnRoll={seat:event.seat,epoch:event.jeanBurnCheck,dice:[roll()]};state.stage='jeanBurnRoll';}
+        if(event.jeanBurnCheck!==undefined){state.jeanBurnRoll={seat:event.seat,epoch:event.jeanBurnCheck};state.stage='jeanBurnRoll';}
         if(event.woundCheck){state.woundRoll=[roll()];state.stage='woundRoll';}
         if(event.ravenActivation)finishNevermore(state.ravenActivation);
         if(event.ravage){

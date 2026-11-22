@@ -60,7 +60,7 @@ function rollContext(s) {
  if(s.wolverineRageRoll&&!s.cardRoll)return {dice:s.wolverineRageRoll.dice,seat:s.wolverineRageRoll.seat};
  if(s.alphaRoll&&!s.cardRoll)return opposedRollContext(s.alphaRoll,s.alphaRoll.target);
  if(s.rogueRoll&&!s.cardRoll)return s.rogueRoll.kind==='skyward'?opposedRollContext(s.rogueRoll,1-s.rogueRoll.seat):{dice:s.rogueRoll.dice,seat:s.rogueRoll.seat};
- if(s.jeanBurnRoll&&!s.cardRoll)return {dice:s.jeanBurnRoll.dice,seat:s.jeanBurnRoll.seat};
+ if(s.jeanBurnRoll?.dice&&!s.cardRoll)return {dice:s.jeanBurnRoll.dice,seat:s.jeanBurnRoll.seat};
  if(s.jeanTask&&s.stage==='jeanChoices'&&!s.cardRoll&&!s.retry)return rollContext(resumeRollTask(s,'jeanTask'));
  if(s.iceTask&&s.stage==='iceChoices'&&!s.cardRoll&&!s.retry)return rollContext(resumeRollTask(s,'iceTask'));
  if(s.gambitRoll&&!s.cardRoll)return {dice:s.gambitRoll.dice,seat:s.gambitRoll.seat};

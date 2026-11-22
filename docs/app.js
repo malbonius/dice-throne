@@ -876,6 +876,7 @@ const rerollActions = new Set([
 // These effects already show both the empty tray and their own resolution controls.
 const inlineEffectRolls = new Set([
   'deadpoolLuckyRoll', 'rollTrickBag', 'widowBombRoll', 'rollPrey', 'rollNevermore',
+  'rollPhoenixBurn'
 ]);
 
 const manualRollActions = new Set([
@@ -897,16 +898,16 @@ function rollsOnCurrentScreen(view, type) {
     view.gunContest?.kind === 'duel' && context.dice === view.gunContest.dice);
 }
 
-function defenceAttackerView(view) {
-  // Reuse the engine's response priority for an attacker effect chosen before the roll.
-  return {...view, response: {seat: view.active}};
+function effectPriorityView(view, seat) {
+  return {...view, response: {seat}};
 }
 
 function transitionOnMatchScreen(view, action, roller, random) {
   if (action.type === 'defend') return transition(view, action, roller, random, true);
-  if (!action.attackerEffect) return transition(view, action, roller, random, 'inlineCards');
-  if (view.stage !== 'defence' || view.response) return view;
-  const priority = defenceAttackerView(view);
+  const effectSeat = action.attackerEffect ? view.active : action.effectSeat;
+  if (effectSeat === undefined) return transition(view, action, roller, random, 'inlineCards');
+  if (effectSeat !== inlineEffectSeat(view)) return view;
+  const priority = effectPriorityView(view, effectSeat);
   const next = transition(priority, action, roller, random, 'inlineCards');
   if (next === priority) return view;
   // The temporary priority has no deferred action and must never enter the save.
@@ -1341,9 +1342,12 @@ function arena(seat, responding, decisionSeat) {
   } else if(allowed.jeanSwitch){
     phase='Upkeep · Call of the Phoenix';heading=`${activeName} changes form`;detail='Switching form preserves all status effects. Jean Grey draws at the start of Main Phase 1; Dark Phoenix skips Income.';content=button('jeanSwitch',`Become ${state.players[state.active].darkPhoenix?'Jean Grey':'Dark Phoenix'}`,'class="primary"');
   } else if(allowed.checkPhoenixBurn){
-    phase='Upkeep · Phoenix Burn';heading=`${activeName} resolves Phoenix Burn`;detail='Receive 2 damage first, then roll to remove the token. Damage can be prevented normally.';content=button('checkPhoenixBurn','Resolve Phoenix Burn damage','class="primary"');
+    phase='Upkeep · Phoenix Burn';heading=`${activeName} resolves Phoenix Burn`;detail='Receive 2 damage first, then roll to remove the token. Damage can be prevented normally.';content=button('checkPhoenixBurn','Check Phoenix Burn damage','class="primary"');
   } else if(!state.response&&state.jeanBurnRoll&&!state.cardRoll&&!state.retry){
-    phase='Upkeep · Phoenix Burn';heading='Roll to remove Phoenix Burn';detail='A 5 or 6 removes the token. This roll may be modified before it resolves.';content=tray(state.jeanBurnRoll.dice,state.jeanBurnRoll.seat,false)+button('resolvePhoenixBurn','Resolve removal roll','class="primary"');
+    phase='Upkeep · Phoenix Burn';heading='Roll to remove Phoenix Burn';detail='A 5 or 6 removes the token. This roll may be modified before it resolves.';
+    content=state.jeanBurnRoll.dice
+      ?tray(state.jeanBurnRoll.dice,state.jeanBurnRoll.seat,false)+button('resolvePhoenixBurn','Resolve removal roll','class="primary"')
+      :blankRoll(1)+button('rollPhoenixBurn','Roll die','class="primary"');
   } else if(allowed.gambitHighStakes){
     phase='Upkeep · High Stakes';heading='Choose two or five dice';detail='With five dice, any 1 loses every reward and removes one charge token. With two dice, a 1 does not cause a bust.';
     content=button('gambitHighStakes','Choose 2 dice','data-amount="2"')+button('gambitHighStakes','Choose 5 dice','data-amount="5"');
@@ -1359,7 +1363,7 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.mainChoice) {
     const {seat,id}=state.mainChoice;
     phase='Main Phase action'; heading=seatCard(state,seat,id).name;
-    detail='Choose the target after the response.';
+    detail='Choose a target.';
     content=`<div class="controls">${mainTargets(state,seat,id).map((choice,i)=>
       button('resolveMainChoice',tokenChoiceLabel(state,choice,seat),`data-choice="${i}"`)).join('')}</div>`;
   } else if(state.response) {
@@ -1431,9 +1435,9 @@ function arena(seat, responding, decisionSeat) {
     heading={scrap:'Scrap Collector II',nanites:'Clear Nanites',heal:'Heal Bot',freeHeal:'Heal Bot'}[kind];
     content=tray(dice,roller,false)+button('resolveArtRoll','Resolve roll','class="primary"');
   } else if(state.mainAction) {
-    phase='Main Phase response'; heading=`${actingName} can respond`;
-    detail=`${seatCard(state,state.mainAction.seat,state.mainAction.id).name} is pending.`;
-    content=button('finishMainCard','Pass and resolve','class="primary"');
+    phase='Main Phase'; heading=seatCard(state,state.mainAction.seat,state.mainAction.id).name;
+    detail=`${actingName} can use an eligible card or effect before this card resolves.`;
+    content=button('finishMainCard','Resolve card','class="primary"');
   } else switch (state.stage) {
     case 'tacticalRestart':
       phase='Offensive Roll'; heading='Profiteer';
@@ -2005,10 +2009,16 @@ function arena(seat, responding, decisionSeat) {
       phase='Match complete'; heading=state.winner; detail=state.log[1] ?? '';
   }
   const effects = matchEffects(state, responding);
-  const attackerEffects = allowed.defend && hasEffectResponse(state, state.active)
-    ? matchEffects(defenceAttackerView(state), state.active, (action, label, attrs = '') =>
-      button(action, label, `data-attacker-effect="true" ${attrs}`))
-    : '';
+  const otherSeat = inlineEffectSeat(state);
+  const otherButton = (action, label, attrs = '') => button(action, label, `data-effect-seat="${otherSeat}" ${attrs}`);
+  let otherEffects = '';
+  if(otherSeat !== null){
+    otherEffects = state.stage==='offence'
+      ? canMesmerize(state,otherSeat) ? otherButton('mesmerize','Spend Mesmerize') : ''
+      : matchEffects(effectPriorityView(state,otherSeat),otherSeat,otherButton);
+  }
+  const otherEffectsTitle = allowed.defend && otherSeat === state.active
+    ? `${activeName} · effects before the defence roll` : `Available effects · ${names[otherSeat]}`;
   const playing = state.stage !== 'finished';
   const decisionName = names[decisionSeat];
   return `<section class="arena" aria-label="Match actions">
@@ -2023,7 +2033,7 @@ function arena(seat, responding, decisionSeat) {
     ${p?.paralyzePrevented?.length?`<p>Paralyze prevented: ${p.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}
     <div class="decision-actions">${content}</div>
     ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
-    ${attackerEffects?`<details class="match-effects" data-disclosure="defence-attacker-effects"><summary>${activeName} · effects before the defence roll</summary><div class="effect-options">${attackerEffects}</div></details>`:''}
+    ${otherEffects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${otherSeat}"><summary>${otherEffectsTitle}</summary><div class="effect-options">${otherEffects}</div></details>`:''}
     <details class="action-log" data-disclosure="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
     ${matchTools(responding)}
     </section>`;
@@ -2089,7 +2099,7 @@ function matchEffects(state, responding, renderButton = button) {
     [{type:'spiderSenseReroll',limit:state.defenceDice.length,label:'Reroll with Spider-Sense · discard Invisibility'}]);
   if(loki.canIllusion(state,responding))content+=renderButton('spendIllusion',`${names[responding]} · spend Illusion`);
   if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>previewableOption(state,state.active,id,renderButton('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`))).join('')}</div></div>`;
-  if(doctorStrange.canDeja(state,state.active))content+=renderButton('spendDejaVu',`${names[state.active]} · spend Déjà Vu and restart the roll`);
+  if((responding===state.active||!state.response||state.response.action)&&doctorStrange.canDeja(state,state.active))content+=renderButton('spendDejaVu',`${names[state.active]} · spend Déjà Vu and restart the roll`);
   if(captainMarvel.canRay(state,responding))content+=renderButton('spendCosmicRay','Spend Cosmic Ray · roll 2 dice');
   for(const die of captainMarvel.radianceDice(state,responding))content+=renderButton('spendRadiance',`Spend Radiance · defence die ${die.index+1} (${die.value}) → 6`,`data-index="${die.index}"`);
   if(blackWidow.canCovert(state,responding))content+=renderButton('spendCovertOps','Spend Covert Ops');
@@ -2368,7 +2378,7 @@ function handleAction(event) {
     action.index = action.indices[0];
   }
   rerollPicks.clear();
-  if(target.dataset.attackerEffect)action.attackerEffect=true;
+  if(target.dataset.effectSeat!==undefined)action.effectSeat=Number(target.dataset.effectSeat);
   if(type==='playCard') {
     if(!canPlayFromHand(state, handSeat))return;
     action.seat=handSeat;
@@ -2384,7 +2394,7 @@ function handleAction(event) {
     }
   }
   if(type==='deadpoolLuckyHope')action.amount=Number(document.getElementById('deadpool-lucky-hope').value);
-  if(type==='alchemistLab')action.choice=Number(document.getElementById(`alchemist-lab-${action.attackerEffect?state.active:oldSeat}`).value);
+  if(type==='alchemistLab')action.choice=Number(document.getElementById(`alchemist-lab-${action.effectSeat??oldSeat}`).value);
   if(type==='stormOppReroll')action.indices=action.status==='both'?[0,1]:action.status==='first'?[0]:[1];
   const rollTitle = type === 'playCard' ? seatCard(state, handSeat, action.id).name : target.textContent?.trim();
   const safeTitle = rollTitle?.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -2491,6 +2501,14 @@ window.addEventListener('resize',()=>{if(viewer.open)setZoom(zoom);});
 if (rollRequest?.reveal && rollsOnCurrentScreen(state, rollRequest.rollType)) {
   state = rollRequest.next;
   names = heroNames(state);
+  rollRequest = null;
+}
+
+// Older Phoenix Burn prompts paused the damage itself at the removal roll.
+if (state?.sideDamage?.jeanBurnCheck !== undefined &&
+    (rollRequest?.action?.type === 'resolveSideDamage' ||
+      rollRequest?.action?.type === 'passResponse' && state.response?.action?.type === 'resolveSideDamage')) {
+  state = rollRequest.next ?? transition({...state,response:null},{type:'resolveSideDamage'},roll,Math.random,true);
   rollRequest = null;
 }
 
