@@ -1,7 +1,7 @@
 const moonElf = (() => {
   const board = { name: 'Moon Elf', symbols: ['Arrow','Arrow','Arrow','Foot','Foot','Moon'], defence: 'Missed Me',
     abilities: [
-      { name: 'Longbow', text: '3–5 Arrows · 3 / 5 / 7 damage', symbols: {Arrow:3}, damage: count => 2 * count.Arrow - 3 },
+      { name: 'Longbow', text: '3–5 Arrows · 4 / 5 / 7 damage', symbols: {Arrow:3}, damage: count => count.Arrow === 3 ? 4 : 2 * count.Arrow - 3 },
       { name: 'Covered Shot', text: '2 Arrows + 3 Feet · 7 damage, gain Evasive', symbols: {Arrow:2, Foot:3}, damage: () => 7, evasive:true },
       { name: 'Entangling Shot', text: 'Small straight · 7 damage, inflict Entangle', straight:4, damage: () => 7, entangle:true },
       { name: 'Blinding Shot', text: 'Large straight · 8 damage, gain Evasive and inflict Blind', straight:5, damage: () => 8, evasive:true, blind:true },
