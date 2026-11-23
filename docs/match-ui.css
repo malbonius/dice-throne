@@ -258,8 +258,18 @@ main {
   overflow-wrap: anywhere;
 }
 
-button.hero-sheet-trigger {
+button.hero-sheet-trigger,
+.hero-token-strip {
   display: none;
+}
+
+#token-info {
+  width: min(100% - 24px, 420px);
+}
+
+#token-info p {
+  margin: 12px 0 0;
+  line-height: 1.5;
 }
 
 #hero-sheet {
@@ -303,6 +313,11 @@ body:has(#hero-sheet[open]) {
   display: block;
   width: 100%;
   text-align: start;
+}
+
+.hero-reference-row {
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
 }
 
 #board-sections[hidden], #viewer-zoom[hidden] { display: none; }
@@ -719,7 +734,7 @@ button.card-preview:hover:not(:disabled) {
 .ability small.ability-effect { color: var(--ink); }
 
 .match-effects {
-  margin-top: 14px;
+  margin: 8px 0;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: #182126;
@@ -727,7 +742,7 @@ button.card-preview:hover:not(:disabled) {
 
 .match-effects > summary {
   border: 0;
-  color: var(--ink);
+  color: var(--gold);
   font-weight: 680;
 }
 
@@ -860,6 +875,7 @@ button.card-preview:hover:not(:disabled) {
     min-width: 0;
     align-items: center;
     gap: 5px;
+    justify-content: space-between;
     padding-inline: 10px;
     border: 0;
     border-top: 1px solid var(--line);
@@ -870,12 +886,46 @@ button.card-preview:hover:not(:disabled) {
     text-align: start;
   }
 
-  .hero-summary-text {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .hero-token-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 0 8px 8px;
+  }
+
+  .hero-token-button {
+    position: relative;
+    display: grid;
+    place-items: center;
+    padding: 4px;
+    width: 36px;
+    min-height: 36px;
+    background: var(--surface);
+    border-color: var(--line);
+  }
+
+  .hero-token-button img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+  }
+
+  .token-initial {
+    font-size: .72rem;
+    font-weight: 700;
+  }
+
+  .token-count {
+    position: absolute;
+    inset: auto 0 0 auto;
+    min-width: 14px;
+    padding-inline: 2px;
+    border-radius: 6px;
+    background: var(--gold);
+    color: #191e28;
+    font-size: .63rem;
+    font-weight: 750;
+    text-align: center;
   }
 
   .hero-sheet-trigger::after {

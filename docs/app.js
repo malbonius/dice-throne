@@ -230,24 +230,33 @@ const token = (seat,key,label,suffix=key,bombId,scope='hero') => {
 };
 const urgentStatuses = new Set(['timeBomb','phoenixBurn','poison','burn','delayedPoison',
   'bleed','wound','powderKeg','concussion','knockdown','disarm','blind','blindingLight']);
+const undeadNotes = {
+  warrior: 'Bone Spear adds 1 damage to your attack.',
+  mage: 'Withering inflicts Decrep-ify. After using three Bone Spears, Scything Touch can steal 1 Health.',
+  golem: 'Bone Spur adds 2 damage to your attack. When defending, you can remove the Golem to prevent 2 damage and deal 2 damage back.'
+};
+const botNotes = {
+  nanobot: 'Detonate Nanites during your Upkeep. Deal 1, 3 or 5 damage for 1, 2 or 3 Nanites on each affected hero.',
+  shockbot: 'Add 3 damage to your attack once per turn.',
+  healbot: 'When an eligible attack deals at least 6 damage, roll to heal 1 on a Wrench or 2 on another symbol. Up to twice per attack.'
+};
 
-function heroStatuses(seat, scope) {
+function heroStatuses(seat) {
   const p = state.players[seat];
-  const statusLabels = [];
-  const status = (key, label, suffix, bombId) => {
-    statusLabels.push({key, label});
-    return token(seat, key, label, suffix, bombId, scope);
-  };
-  const statuses = [p.evasive && status('evasive',`Evasive ×${p.evasive}`),p.entangle && status('entangle','Entangle'),p.blind && status('blind','Blind'),p.targeted && status('targeted','Targeted'),
-    p.pirateCoins?.[seat]&&status('doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`),
-    p.pirateCoins?.[1-seat]&&status('doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent'),
+  const status = (key, label, suffix, bombId, count = Number.isInteger(p[key]) ? p[key] : undefined) =>
+    ({key, label, suffix, bombId, count, note:statusNotes[key], icon:tokenImage(state,seat,key,bombId)});
+  return [p.evasive && status('evasive',`Evasive ×${p.evasive}`),p.entangle && status('entangle','Entangle'),p.blind && status('blind','Blind'),p.targeted && status('targeted','Targeted'),
+    p.pirateCoins?.[seat]&&status('doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`,undefined,undefined,p.pirateCoins[seat]),
+    p.pirateCoins?.[1-seat]&&status('doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent',undefined,p.pirateCoins[1-seat]),
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&status(key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
     ...['flight','blindingLight','holyPresence'].map(key=>p[key]&&status(key,statusLabel(key)+(key==='blindingLight'?'':` ×${p[key]}`))),
     ...['bloodPower','bleed','mesmerize'].map(key=>p[key]&&status(key,statusLabel(key)+(key==='mesmerize'?'':` ×${p[key]}`))),
     ...Object.entries(p.armor??{}).filter(([,tier])=>tier).map(([slot,tier])=>{
       const name=forgemaster.armorName(slot,tier);
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
-      return `<span class="token"><img src="${art[imageKey]}" alt="">${name}</span>`;
+      const note = slot==='helm' ? `When defending against a normal attack, deal ${tier} damage back.`
+        : `Prevent ${Math.min(2,tier)} incoming damage from ${tier===3?'a normal, undefendable or pure attack':'a normal attack'}.`;
+      return {label:name, note, icon:`<img src="${art[imageKey]}" alt="">`};
     }),
     p.combo&&status('combo','Combo'),
     p.invisibility&&status('invisibility','Invisibility'),
@@ -274,7 +283,7 @@ function heroStatuses(seat, scope) {
     p.chargedGem&&status('chargedGem','Charged Gem'),
     p.guardBreak>0&&status('guardBreak',`Guard Break ×${p.guardBreak}`),
     p.disarm&&status('disarm','Disarm'),
-    p.shapeShift>0&&status('shapeshift',`Shape Shift ×${p.shapeShift}`),
+    p.shapeShift>0&&status('shapeshift',`Shape Shift ×${p.shapeShift}`,undefined,undefined,p.shapeShift),
     p.regenerate>0&&status('regenerate',`Regenerate (2) ×${p.regenerate}`),
     p.regenerate1>0&&status('regenerate1',`Regenerate (1) ×${p.regenerate1}`),
     p.wound>0&&status('wound',`Wound ×${p.wound}`),
@@ -284,7 +293,7 @@ function heroStatuses(seat, scope) {
     p.prey>0&&status('prey',`Prey ×${p.prey}`),
     ...Object.entries(p.undead??{}).filter(([,count])=>count).map(([kind,count])=>{
       const {name}=necromancer.undead[kind], key={warrior:'skeletalWarrior',mage:'skeletalMage',golem:'boneGolem'}[kind];
-      return `<span class="token"><img src="${art[key]}" alt="">${name} ×${count}</span>`;
+      return {label:`${name} ×${count}`, count, icon:`<img src="${art[key]}" alt="">`, note:undeadNotes[kind]};
     }),
     p.resurrect&&status('resurrect','Resurrect'),
     p.decrepify&&status('decrepify','Decrep-ify'),
@@ -328,7 +337,11 @@ function heroStatuses(seat, scope) {
     p.backStrike&&status('backStrike','Back Strike'),
     p.reload&&status('reload',`Reload ×${p.reload}`),p.bounty&&status('bounty','Bounty'),
     p.synth&&status('synth',`Synth ×${p.synth}`),p.nanite&&status('nanite',`Nanite ×${p.nanite}`),
-    ...Object.entries(p.bots??{}).map(([bot,level])=>`<span class="token"><img src="${art.artificerBots[bot][level-1]}" alt="">${level===2?'Advanced':'Basic'} ${artificer.bots[bot]}</span>`),
+    ...Object.entries(p.bots??{}).map(([bot,level])=>({
+      label:`${level===2?'Advanced':'Basic'} ${artificer.bots[bot]}`,
+      icon:`<img src="${art.artificerBots[bot][level-1]}" alt="">`,
+      note:`Costs ${artificer.cost(p,bot)} Synth to activate. ${botNotes[bot]}`
+    })),
     p.barbed&&status('barbed','Barbed Vine'),p.wellspring&&status('wellspring','Wellspring'),
     ...spiritTypes.map(key=>p[key]&&status(key,`${statusLabel(key)} ×${p[key]}`)),
     p.delayedPoison&&status('delayedPoison',`Delayed Poison ×${p.delayedPoison}`),
@@ -339,7 +352,18 @@ function heroStatuses(seat, scope) {
     p.burn&&status('burn','Burn'),p.knockdown&&status('knockdown','Knockdown'),
     p.fireMastery&&status('fireMastery',`Fire Mastery ${p.fireMastery}/${statusCap(p,'fireMastery')}`),
     p.concussion && status('concussion','Concussion')].filter(Boolean);
-  return {statuses, statusLabels};
+}
+
+function mobileTokens(seat, statuses) {
+  if (!statuses.length) return '';
+  return `<div class="hero-token-strip" aria-label="${names[seat]}’s attached tokens">
+    ${statuses.map(({icon, label, count},index)=>{
+      const symbol = icon || `<span class="token-initial" aria-hidden="true">${label.slice(0,2)}</span>`;
+      const badge = count>0 ? `<small class="token-count" aria-hidden="true">${count}</small>` : '';
+      return button('inspect-token',symbol+badge,
+        `class="hero-token-button" data-seat="${seat}" data-index="${index}" aria-label="${label}" aria-haspopup="dialog" aria-controls="token-info"`);
+    }).join('')}
+  </div>`;
 }
 
 function heroStateRows(seat, scope) {
@@ -370,11 +394,11 @@ function heroStateRows(seat, scope) {
 
 function hero(seat, decisionSeat, responding) {
   const p = state.players[seat];
-  const {statuses, statusLabels} = heroStatuses(seat);
-  const summaryLabels = statusLabels.filter(({key}) => urgentStatuses.has(key))
-    .concat(statusLabels.filter(({key}) => !urgentStatuses.has(key)));
+  const statuses = heroStatuses(seat);
+  const summaryLabels = statuses.filter(({key}) => urgentStatuses.has(key))
+    .concat(statuses.filter(({key}) => !urgentStatuses.has(key)));
   const visibleStatuses = summaryLabels.slice(0, 2).map(({label}) => label).join(' · ');
-  const moreStatuses = statusLabels.length > 2 ? `+${statusLabels.length - 2}` : '';
+  const moreStatuses = statuses.length > 2 ? `+${statuses.length - 2}` : '';
   const statusSummary = visibleStatuses || 'Hero details';
   const ready = seat === decisionSeat && state.stage !== 'finished';
   return `<section class="hero seat-${seat}" aria-label="${names[seat]}" data-deciding="${ready}" style="--hero:${seat ? '#89cbc5' : '#e9a987'}">
@@ -394,8 +418,9 @@ function hero(seat, decisionSeat, responding) {
       ${heroId(state,seat)===deadpool.id&&seat===responding&&seat===state.active&&isMain(state)&&!state.cardRoll&&!state.mainAction&&!rollRequest?
         button('toggleCurmudgeon',`<img src="${art.curmudgeonCoin}" alt="" width="24" height="24"><span>Curmudgeon coin · ${p.curmudgeon?'On':'Off'}</span>`,`class="curmudgeon-toggle" aria-pressed="${!!p.curmudgeon}" title="Waive Deadpool’s spoken bonus requirements"`):''}
     </div>
-    ${button('open-hero-details',`<span class="hero-summary-text">${statusSummary}</span>${moreStatuses?`<span>${moreStatuses}</span>`:''}`,
-      `class="hero-sheet-trigger" data-index="${seat}" aria-label="${names[seat]}’s details · ${statusSummary}${moreStatuses?` · ${moreStatuses}`:''}" aria-haspopup="dialog" aria-controls="hero-sheet"`)}
+    ${mobileTokens(seat,statuses)}
+    ${button('open-hero-details','Hero details',
+      `class="hero-sheet-trigger" data-index="${seat}" aria-label="${names[seat]}’s hero details" aria-haspopup="dialog" aria-controls="hero-sheet"`)}
     <details class="hero-information" data-disclosure="hero-${seat}">
       <summary>${statusSummary}${moreStatuses?` · ${moreStatuses}`:''}</summary>
       ${heroInformation(seat,statuses)}
@@ -413,15 +438,17 @@ function heroInformation(seat, statuses, compact = false) {
   const spellBookLabel = `Book of Vishanti · ${p.spellBook?.length ?? 0} prepared`;
   return `<div class="hero-information-body">
         ${heroStateRows(seat,compact?'sheet':undefined)}
-        <div class="tokens">${statuses.join('') || 'No tokens'}</div>
+        <div class="tokens">${statuses.map(({key,label,suffix,bombId,icon})=>key
+          ? token(seat,key,label,suffix,bombId,compact?'sheet':undefined)
+          : `<span class="token">${icon}${label}</span>`).join('') || 'No tokens'}</div>
         <div class="inventory">
           ${button('open-deck',`<img src="${art.back}" alt="">Draw ${drawCount}`,`class="draw-count" data-index="${seat}" aria-label="Draw ${drawCount}. View ${names[seat]}’s ${compact?'draw pile':'deck list'}" aria-haspopup="dialog"${compact?' data-location="draw"':''}`)}
           ${compact?button('open-deck',`Discard ${discardCount}`,`data-index="${seat}" data-location="discard" aria-label="Discard ${discardCount}. View ${names[seat]}’s discard pile" aria-haspopup="dialog"`):`<span>Discard ${discardCount}</span><span>${p.hand.length ?? p.hand} in hand</span>`}
         </div>
-        ${p.undead?button('inspect-undead','Undead reference',`data-index="${seat}"`):''}
+        ${p.undead?`<div class="hero-reference-row">${button('inspect-undead','Undead reference',`class="hero-component-link" data-index="${seat}" aria-haspopup="dialog"`)}</div>`:''}
         ${heroComponents(seat)}
     ${heroId(state,seat)===deadpool.id?(compact
-      ? button('inspect-shoot',shootLabel,`class="hero-component-link" data-index="${seat}" aria-haspopup="dialog"`)
+      ? `<div class="hero-reference-row">${button('inspect-shoot',shootLabel,`class="hero-component-link" data-index="${seat}" aria-haspopup="dialog"`)}</div>`
       : `<details class="token-actions deadpool-shoot" data-disclosure="shoot-${seat}"><summary>${shootLabel}</summary><div class="controls">${button('inspect-shoot',`<img src="${art.deadpoolShoot[p.shootActive?0:1]}" alt="${shootLabel}" style="max-width:120px;width:100%">`,`data-index="${seat}"`)}</div><p>The Shoot card is separate from the draw deck.</p></details>`):''}
     ${spellBook?(compact
       ? `<details class="forge-inventory"><summary>${spellBookLabel}</summary>${spellBook}</details>`
@@ -573,7 +600,7 @@ function selectableDie(context, index, seat, action, enabled, selected, face, op
   return button(action,picture,`${classes} ${description} data-index="${index}" aria-pressed="${selected}"${expanded} ${attrs}`);
 }
 
-function rerollTray(context, options) {
+function rerollTray(context, options, renderButton = button) {
   if (!options.length) return rollDisplay(context);
   const group = options[0].type;
   const picks = rerollPicks.get(group) ?? new Set();
@@ -590,7 +617,7 @@ function rerollTray(context, options) {
     const ready = picks.size>0 && picks.size<=option.limit && [...picks].every(index=>permits(option,index));
     const label = option.label ?? (options.length>1 ? `Ability reroll · up to ${option.limit}`
       : option.limit===1 ? 'Reroll selected die' : 'Reroll selected dice');
-    return button(option.type,label,`data-reroll-group="${group}" ${option.type==='retryDie'?'class="primary"':''} ${ready?'':'disabled'}`);
+    return renderButton(option.type,label,`data-reroll-group="${group}" ${option.type==='retryDie'?'class="primary"':''} ${ready?'':'disabled'}`);
   }).join('');
   const description = max===1 ? 'Select a die to reroll.' : `Select up to ${max} dice to reroll.`;
   return `<p>${description}</p>${dice}<div class="controls">${actions}</div>`;
@@ -2056,13 +2083,8 @@ function arena(seat, responding, decisionSeat) {
   }
   const effects = matchEffects(state, responding);
   const otherSeat = inlineEffectSeat(state);
-  const otherButton = (action, label, attrs = '') => button(action, label, `data-effect-seat="${otherSeat}" ${attrs}`);
-  let otherEffects = '';
-  if(otherSeat !== null){
-    otherEffects = state.stage==='offence'
-      ? canMesmerize(state,otherSeat) ? otherButton('mesmerize','Spend Mesmerize') : ''
-      : matchEffects(effectPriorityView(state,otherSeat),otherSeat,otherButton);
-  }
+  const otherEffects = otherSeat===null ? '' : matchEffects(effectPriorityView(state,otherSeat),otherSeat,
+    (action, label, attrs = '') => button(action,label,`data-effect-seat="${otherSeat}" ${attrs}`));
   const otherEffectsTitle = allowed.defend && otherSeat === state.active
     ? `${activeName} · effects before the defence roll` : `Available effects · ${names[otherSeat]}`;
   const playing = state.stage !== 'finished';
@@ -2075,11 +2097,11 @@ function arena(seat, responding, decisionSeat) {
     </div>`:''}
     <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${detail?`<p>${detail}</p>`:''}
+    ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
+    ${otherEffects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${otherSeat}"><summary>${otherEffectsTitle}</summary><div class="effect-options">${otherEffects}</div></details>`:''}
     ${defenceReference()}
     ${p?.paralyzePrevented?.length?`<p>Paralyze prevented: ${p.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}
     <div class="decision-actions">${content}</div>
-    ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
-    ${otherEffects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${otherSeat}"><summary>${otherEffectsTitle}</summary><div class="effect-options">${otherEffects}</div></details>`:''}
     <details class="action-log" data-disclosure="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
     ${matchTools(responding)}
     </section>`;
@@ -2142,7 +2164,7 @@ function matchEffects(state, responding, renderButton = button) {
   }
   if(spiderMan.canInvisibility(state,responding))content+=renderButton('spendInvisibility','Spend Invisibility · activate a Defensive Ability');
   if(state.response&&spiderMan.canSenseReroll(state,responding))content+=rerollTray({dice:state.defenceDice,seat:responding},
-    [{type:'spiderSenseReroll',limit:state.defenceDice.length,label:'Reroll with Spider-Sense · discard Invisibility'}]);
+    [{type:'spiderSenseReroll',limit:state.defenceDice.length,label:'Reroll with Spider-Sense · discard Invisibility'}],renderButton);
   if(loki.canIllusion(state,responding))content+=renderButton('spendIllusion',`${names[responding]} · spend Illusion`);
   if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>previewableOption(state,state.active,id,renderButton('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`))).join('')}</div></div>`;
   if((responding===state.active||!state.response||state.response.action)&&doctorStrange.canDeja(state,state.active))content+=renderButton('spendDejaVu',`${names[state.active]} · spend Déjà Vu and restart the roll`);
@@ -2157,13 +2179,13 @@ function matchEffects(state, responding, renderButton = button) {
     return card===undefined?select:previewableOption(state,responding,card,select);
   });
   if(forgeActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · The Mines and The Forge</strong><div class="controls">${forgeActions.join('')}</div></div>`;
-  const shapeSeats=state.response?[responding]:state.stage==='announce'?[responding,state.active]:[responding];
+  const shapeSeats=state.stage==='announce'&&!state.response&&inlineEffectSeat(state)===null?[responding,state.active]:[responding];
   for(const owner of shapeSeats){
     const options=druid.shiftChoices(state,owner);
     if(options.length)content+=`<div class="token-actions"><strong>${names[owner]} · Shape Shift</strong><div class="controls">${options.map(form=>
       renderButton('spendShapeShift',`Shift to ${druid.formName(form)} Form`,`data-target="${owner}" data-status="${form}"`)).join('')}</div></div>`;
   }
-  const featherSeats=state.response?[responding]:state.nevermoreRoll?[state.nevermoreRoll.owner,state.nevermoreRoll.target]:[responding];
+  const featherSeats=state.nevermoreRoll&&!state.response&&inlineEffectSeat(state)===null?[state.nevermoreRoll.owner,state.nevermoreRoll.target]:[responding];
   for(const owner of featherSeats){
     const options=raveness.featherChoices(state,owner);
     if(options.length)content+=`<div class="token-actions"><strong>${names[owner]} · spend Feathers</strong><div class="controls">${options.map(option=>
@@ -2331,7 +2353,7 @@ function openDeck(seat, location) {
 
 function openHeroSheet(seat) {
   document.getElementById('hero-sheet-title').textContent = names[seat];
-  heroSheetContent.innerHTML = heroInformation(seat,heroStatuses(seat,'sheet').statuses,true);
+  heroSheetContent.innerHTML = heroInformation(seat,heroStatuses(seat),true);
   heroSheetContent.scrollTop = 0;
   heroSheet.showModal();
 }
@@ -2349,6 +2371,14 @@ function handleAction(event) {
     return;
   }
   if (!state || rollRequest?.setup) return;
+  if(type==='inspect-token') {
+    const entry = heroStatuses(Number(target.dataset.seat))[index];
+    if(!entry)return;
+    document.getElementById('token-info-title').textContent = entry.label;
+    document.getElementById('token-info-note').textContent = entry.note || 'See the hero leaflet for this token’s ability.';
+    document.getElementById('token-info').showModal();
+    return;
+  }
   if(type==='open-hero-details') {
     openHeroSheet(index);
     return;

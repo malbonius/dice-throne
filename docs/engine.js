@@ -1086,9 +1086,10 @@ function transition(previous, action, roll, random=Math.random, responseMode=fal
  try{return transitionStep(previous,action,roll,random,responseMode);}finally{psylocke.leave(context);}
 }
 function inlineEffectSeat(view) {
- if(view.response||!view.cards||attackLocked(view)||view.cardRoll||view.retry)return null;
- if(view.stage==='jeanBurnRoll'&&!view.jeanBurnRoll.dice)return null;
- if(!['offence','announce','defence','defenceResponse','damage','sideDamage','effectResponse','jeanBurnRoll'].includes(view.stage))return null;
+ if(view.response||!view.cards||attackLocked(view)||view.retry)return null;
+ if(view.stage==='jeanBurnRoll'&&!view.jeanBurnRoll?.dice)return null;
+ if(['discard','finished','nyraDamage'].includes(view.stage)||view.psyReveal||
+    view.tacticalRemoval||view.tacticalOverflow||view.grimOverflow||view.honorOverflow||view.bloodOverflow)return null;
  return 1-cardActor(view);
 }
 function transitionStep(previous, action, roll, random, responseMode){

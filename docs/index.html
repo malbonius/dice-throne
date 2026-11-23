@@ -78,14 +78,15 @@ body:has(#hero-picker[open]){overflow:hidden}
 </style>
 <link rel="stylesheet" href="./match-ui.css">
 <link rel="manifest" href="./manifest.webmanifest">
-<link rel="icon" href="./icons/die-192.png">
+<link rel="icon" href="./icons/dice-throne-192.png">
+<link rel="apple-touch-icon" href="./icons/dice-throne-192.png">
 </head>
 <body>
 <header>
  <div>
   <div>
    <h1><img class="header-logo" src="./dice-throne-logo.png" alt="Dice Throne" width="1024" height="612"></h1>
-   <small>Playtest 0.53.23</small>
+   <small>Playtest 0.53.24</small>
   </div>
   <div class="header-actions">
   <button id="open-player-aid" type="button" aria-haspopup="dialog" aria-controls="viewer">Player aid</button>
@@ -131,6 +132,10 @@ body:has(#hero-picker[open]){overflow:hidden}
 <dialog id="hero-sheet" aria-labelledby="hero-sheet-title">
  <div class="viewer-head"><h2 id="hero-sheet-title"></h2><form method="dialog"><button autofocus>Close</button></form></div>
  <div id="hero-sheet-content"></div>
+</dialog>
+<dialog id="token-info" aria-labelledby="token-info-title" aria-describedby="token-info-note">
+ <div class="viewer-head"><h2 id="token-info-title"></h2><form method="dialog"><button autofocus>Close</button></form></div>
+ <p id="token-info-note"></p>
 </dialog>
 <dialog id="deck-dialog" aria-labelledby="deck-title">
  <div class="viewer-head"><h2 id="deck-title"></h2><form method="dialog"><button autofocus>Close deck</button></form></div>
