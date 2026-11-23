@@ -556,21 +556,21 @@ button.draw-count:hover {
   color: var(--gold);
 }
 
-.defence-reference {
+.ability-reference {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
   gap: 7px;
   margin-block: 10px;
 }
 
-.defence-reference > div {
+.ability-reference > div {
   padding: 8px 10px;
   background: #192125;
   border: 1px solid var(--line);
   border-radius: 8px;
 }
 
-.defence-reference > div > div {
+.ability-reference > div > div {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -578,9 +578,9 @@ button.draw-count:hover {
   gap: 2px 8px;
 }
 
-.defence-reference small { color: var(--muted); }
+.ability-reference small { color: var(--muted); }
 
-.defence-reference > div > button {
+.ability-reference > div > button {
   display: block;
   width: min(100%, 310px);
   min-height: 44px;
@@ -589,13 +589,13 @@ button.draw-count:hover {
   overflow: hidden;
 }
 
-.defence-scan {
+.ability-scan {
   position: relative;
   display: block;
   overflow: hidden;
 }
 
-.defence-scan img {
+.ability-scan img {
   position: absolute;
   max-width: none;
 }

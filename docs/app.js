@@ -653,7 +653,7 @@ function diceEditorPanel(editor) {
     <div class="phase"><span>${names[seat]} · ${picks.size} of ${limit} selected</span></div>
     <h2 tabindex="-1" id="action-title">${seatCard(state,seat,id).name}</h2>
     <p>${instruction}${cost?` ${cost}`:''}</p>
-    ${defenceReference()}
+    ${defenceReference()}${effectAbilityReference()}
     ${!context.owners&&context.seat!==seat?`<strong>${names[context.seat]}’s dice</strong>`:''}
     ${dice}${faces}
     <div class="controls">${button('confirm-card-dice',confirm,`class="primary" ${ready?'':'disabled'}`)}
@@ -798,21 +798,25 @@ const defenceUpgradeBottom = {
   15:{27:69}, 16:{25:74}, 25:{25:69}, 29:{26:87}, 32:{24:75}, 34:{24:72}
 };
 
-function printedDefence(seat, kind, name) {
-  const hero = heroId(state,seat), player = state.players[seat], upgrade = player.upgrades?.[kind];
+function printedAbility(seat, name, bounds, upgrade) {
   const hasUpgrade = Number.isInteger(upgrade);
-  const bounds = hasUpgrade ? [9, 26, 93, defenceUpgradeBottom[hero]?.[upgrade] ?? 65]
-    : alternateDefenceBounds[player.werewolf ? 'werewolf' : kind] ?? defenceBoardBounds[hero];
   const [left, top, right, bottom] = bounds;
   const width = right - left, height = bottom - top;
   const scale = hasUpgrade ? .635 : 1.64;
-  const scan = `<span class="defence-scan" style="aspect-ratio:${width * scale}/${height}">
-    <img data-defence-scan data-seat="${seat}" data-upgrade="${upgrade ?? ''}" alt="Printed ${name} effects"
+  const scan = `<span class="ability-scan" style="aspect-ratio:${width * scale}/${height}">
+    <img data-ability-scan data-seat="${seat}" data-upgrade="${upgrade ?? ''}" alt="Printed ${name} effects"
       style="width:${10000 / width}%;height:${10000 / height}%;left:${-100 * left / width}%;top:${-100 * top / height}%">
     </span>`;
   return hasUpgrade
     ? previewCard(state,seat,upgrade,scan)
     : button('inspect-board',scan,`data-index="${seat}" aria-label="View ${name} on ${names[seat]}’s board" aria-haspopup="dialog"`);
+}
+
+function printedDefence(seat, kind, name) {
+  const hero = heroId(state,seat), player = state.players[seat], upgrade = player.upgrades?.[kind];
+  const bounds = Number.isInteger(upgrade) ? [9, 26, 93, defenceUpgradeBottom[hero]?.[upgrade] ?? 65]
+    : alternateDefenceBounds[player.werewolf ? 'werewolf' : kind] ?? defenceBoardBounds[hero];
+  return printedAbility(seat,name,bounds,upgrade);
 }
 
 function defenceReference() {
@@ -825,13 +829,140 @@ function defenceReference() {
   const hero = heroRoster[heroId(state,seat)];
   const options = defenceKinds(seat);
   const kinds = choosing ? options : [state.defenceKind ?? options[0]];
-  return `<div class="defence-reference" role="group" aria-label="Defensive ability effects">${kinds.map(kind=>{
+  return `<div class="ability-reference" role="group" aria-label="Defensive ability effects">${kinds.map(kind=>{
     const count = hero.defenceDiceCount(player,kind);
     const dice = hero.id===gunslinger.id ? '1 die each' : count===1 ? '1 die' : `${count} dice`;
     const name = defenceName(state,seat,kind);
     return `<div><div>${abilityName(name,'strong')}<small>${dice}</small></div>
       ${printedDefence(seat,kind,name)}</div>`;
   }).join('')}</div>`;
+}
+
+// Crop the printed effects from the same board images used by the board viewer.
+const effectBoardBounds = {
+  Overpower:[18,70,34,81],
+  'Exploding Arrow':[18,71,32,86],
+  Pyroblast:[2,71,16,86],
+  'Shadow Dance':[68,32,82,45],
+  'Combo Strike':[2,71,16,90],
+  'Tempest Rush':[18,71,33,84],
+  'Righteous Combat':[2,70,16,82],
+  'Holy Light':[68,70,82,85],
+  'Walk the Line':[18,30,32,40],
+  'Death Blossom':[2,70,16,82],
+  'Call of the Wild':[68,72,82,84],
+  'X Marks the Spot':[20,32,34,43],
+  'Dread Mark':[20,32,34,44],
+  'Spanner Strike':[2,24,16,48],
+  'Holy Smite':[18,68,33,84],
+  Triumphant:[68,29,82,44],
+  Rend:[18,69,33,83],
+  Possess:[68,30,82,39],
+  Showdown:[66,32,79,44],
+  Masamune:[68,70,82,85],
+  Profiteer:[2,69,16,87],
+  Savage:[18,30,33,43],
+  'Spectral Assault':[68,69,83,89],
+  Harvest:[2,70,16,89],
+  'Corpse Explosion':[18,70,33,89],
+  'Full Moon':[68,71,82,83],
+  'Jaws of the Wolf':[85,28,98,40],
+  'Murder of Crows':[2,71,17,83],
+  Maul:[18,69,33,80],
+  'Forest’s Answer':[68,72,83,86],
+  'En Garde':[68,70,83,78],
+  Furnace:[18,29,33,37],
+  'Scorching Staff':[2,69,16,84],
+  'Triple Threat':[68,70,82,83],
+  Vengeance:[68,70,82,85],
+  'Barrel Roll':[2,70,16,82],
+  'Aurora Wave':[18,69,33,80],
+  'Astral Incursion':[18,71,33,84],
+  'Kneel to Me':[68,71,82,85],
+  Jinx:[2,69,16,86],
+  'Mind Blast':[18,69,33,84],
+  'Spider-Reflexes':[18,70,33,81],
+  Odinforce:[1,69,17,85],
+  'Chain Lightning':[18,69,33,87],
+  'Ice to Meet You':[18,29,33,48],
+  'Psychic Multiplier':[18,29,33,41],
+  Leach:[21,69,34,89],
+  'Light It Up':[18,30,33,45],
+  'Opposites Attract':[18,69,33,85],
+  Hunter:[18,70,33,80],
+  'Severe Threat':[68,70,82,83],
+  Rotter:[18,69,33,85],
+  'Strong Arm':[18,29,33,45],
+  'Tidal Blow':[18,70,33,85],
+  'Fireside Chat':[2,69,16,85],
+  'Naughty or Nice':[18,69,33,88],
+  Besmirched:[18,71,33,85],
+};
+
+// Percentages of the card's height. For Savage Maul and Disentomb, show the effects they activate.
+const effectUpgradeRows = {
+  'Overpower II':[24,54],
+  'Exploding Arrow II':[24,64], 'Exploding Arrow III':[24,64],
+  'Pyroblast II':[26,63], 'Pyroblast III':[26,69],
+  'Shadow Dance II':[24,59],
+  'Combo Strike II':[26,72], 'Tempest Rush II':[25,71],
+  'Righteous Combat II':[25,57], 'Righteous Combat III':[25,56], 'Holy Light II':[24,63],
+  'Death Blossom II':[25,74], 'Walk the Line II':[25,52], 'Tip of the Blade':[85,100], 'Poison Blade II':[27,63],
+  'Call of the Wild II':[27,56],
+  'Spanner Strike II':[11,73],
+  'Triumphant II':[28,65], 'Holy Smite II':[23,54],
+  'Rend II':[23,58],
+  'Showdown II':[26,58], 'Showdown III':[26,58],
+  'Masamune II':[27,58],
+  'Profiteer II':[24,70],
+  'Savage II':[25,60],
+  'Spectral Assault II':[23,66],
+  'Harvest II':[20,68], 'Corpse Explosion II':[21,64], Disentomb:[21,64],
+  'Murder of Crows II':[24,61],
+  'Maul II':[24,53], 'Savage Maul':[24,53],
+  'Scorching Staff II':[21,61],
+  'Triple Threat II':[24,58],
+  'Vengeance II':[27,62],
+  'Aurora Wave II':[23,57],
+  'Kneel to Me II':[28,64],
+  'Jinx II':[24,66], 'Mind Blast II':[24,61],
+  'Chain Lightning II':[25,68], 'Odinforce II':[23,76],
+  'Bo Staff Mastery':[79,99],
+  'Light It Up II':[24,71], 'Opposites Attract II':[24,65],
+  'Severe Threat II':[24,65],
+  'Rotter II':[24,67],
+  'Tidal Blow II':[23,62],
+  'Naughty or Nice II':[24,76],
+  'Besmirched Dos':[28,66],
+};
+
+const abilityEffectStages = new Set([
+  'effect', 'effectResponse', 'artSpanner', 'santaTarget', 'santaRoll',
+  'mysticStrongTarget', 'mysticContest', 'scarletJinx'
+]);
+
+function effectAbilityReference(heading) {
+  const {active:seat, stage, pending, gunContest, cardRoll} = state;
+  if (!pending?.name || cardRoll) return '';
+  const rolling = abilityEffectStages.has(stage) ||
+    stage==='targeting' && (pending.showdown || pending.effect==='paleJaws') ||
+    stage==='gunContest' && gunContest?.kind==='showdown' ||
+    stage==='necroChoice' && pending.explosion;
+  if (!rolling) return '';
+
+  const name = pending.name;
+  const upgrades = Object.values(state.players[seat].upgrades ?? {});
+  const upgrade = upgrades.find(id => {
+    const card = seatCard(state,seat,id);
+    return card.name === name || card.extra?.name === name;
+  });
+  const bounds = upgrade ? [8, effectUpgradeRows[name]?.[0] ?? 8, 95, effectUpgradeRows[name]?.[1] ?? 98]
+    : effectBoardBounds[name];
+  if (!bounds) return '';
+  const showTitle = heading !== name && heading !== abilityName(name);
+  return `<div class="ability-reference" role="group" aria-label="Rolled ability effects"><div>
+    ${showTitle ? `<div>${abilityName(name,'strong')}</div>` : ''}
+    ${printedAbility(seat,name,bounds,upgrade)}</div></div>`;
 }
 
 function potionSlotName(seat, slot, abilities) {
@@ -933,6 +1064,8 @@ function rollRequestPanel(request) {
     <h2 tabindex="-1" id="action-title">${request.description}</h2>
     ${tied ? '<p>Tied initiative. Roll again to break the tie.</p>' : ''}
     ${setup ? '' : defenceReference()}
+    ${!setup && (abilityRollActions.has(request.rollType) || rerollActions.has(request.rollType))
+      ? effectAbilityReference(request.description) : ''}
     ${dice}
     ${button(readyToAdvance ? 'advance-roll' : 'roll-request',label,'class="primary"')}
     ${setup ? '' : matchTools(cardActor(state))}
@@ -950,6 +1083,10 @@ const rerollActions = new Set([
 const inlineEffectRolls = new Set([
   'deadpoolLuckyRoll', 'rollTrickBag', 'widowBombRoll', 'rollPrey', 'rollNevermore',
   'rollPhoenixBurn'
+]);
+
+const abilityRollActions = new Set([
+  'rollEffect', 'resolveEffect', 'resolveScarletJinx', 'resolveTarget', 'rollSantaAbility', 'rollMysticContest'
 ]);
 
 const manualRollActions = new Set([
@@ -2099,7 +2236,7 @@ function arena(seat, responding, decisionSeat) {
     ${detail?`<p>${detail}</p>`:''}
     ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
     ${otherEffects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${otherSeat}"><summary>${otherEffectsTitle}</summary><div class="effect-options">${otherEffects}</div></details>`:''}
-    ${defenceReference()}
+    ${defenceReference()}${effectAbilityReference(heading)}
     ${p?.paralyzePrevented?.length?`<p>Paralyze prevented: ${p.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}
     <div class="decision-actions">${content}</div>
     <details class="action-log" data-disclosure="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
@@ -2264,7 +2401,7 @@ function render() {
     match.innerHTML = hero(0, decisionSeat, responding) + hero(1, decisionSeat, responding) +
       (rollRequest ? rollRequestPanel(rollRequest) : diceEdit ? diceEditorPanel(diceEdit) : arena(seat, responding, decisionSeat));
   }
-  for (const image of match.querySelectorAll('[data-defence-scan]')) {
+  for (const image of match.querySelectorAll('[data-ability-scan]')) {
     const seat = Number(image.dataset.seat), upgrade = image.dataset.upgrade;
     image.src = upgrade ? cardArtwork(state,seat,Number(upgrade)) : boardImage(state,seat,true);
   }
