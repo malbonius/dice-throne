@@ -701,7 +701,9 @@ function diceEditorPanel(editor) {
 }
 
 function confirmedDiceOptions(editor) {
-  return activeDiceOptions(editor).filter(option=>option.dice.length===editor.picks.size);
+  const ready = activeDiceOptions(editor).filter(option=>option.dice.length===editor.picks.size);
+  // A card confirms the selected faces. Token effects can offer distinct payment choices.
+  return editor.effect ? ready : ready.slice(0,1);
 }
 
 function handleDiceEditor(type, index, alternate) {
@@ -2995,6 +2997,10 @@ if (state?.sideDamage?.jeanBurnCheck !== undefined &&
   state = rollRequest.next ?? transition({...state,response:null},{type:'resolveSideDamage'},roll,Math.random,true);
   rollRequest = null;
 }
+
+// Clear any Dice Cube prompt from a save where every candidate now freezes automatically.
+if (state?.iceFreezeChoice) iceman.freeze(state);
+if (rollRequest?.next?.iceFreezeChoice) iceman.freeze(rollRequest.next);
 
 // A saved Glide announcement has no offensive roll to accept.
 if (!rollRequest && state?.stage==='announce' && state.pending?.iceman &&

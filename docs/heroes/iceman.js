@@ -70,9 +70,14 @@ const iceman=(()=>{
   if(!['offence','announce'].includes(phase(s)))return;
   f.selected??=[];
   while(f.selected.length<count){
-   const rest=f.values.map((v,i)=>({v:dieValue(v,p),i})).filter(x=>x.v&&!f.selected.includes(x.i));if(!rest.length)return;
+   const rest=f.values.map((v,i)=>({v:dieValue(v,p),i})).filter(x=>x.v&&!f.selected.includes(x.i));
+   if(!rest.length)break;
    const min=Math.min(...rest.map(x=>x.v)),candidates=rest.filter(x=>x.v===min).map(x=>x.i);
-   if(candidates.length===1)f.selected.push(candidates[0]);else {s.iceFreezeChoice={seat:f.seat,candidates};return;}
+   if(candidates.length>count-f.selected.length){
+    s.iceFreezeChoice={seat:f.seat,candidates};
+    return;
+   }
+   f.selected.push(...candidates);
   }
   delete s.iceFreezeChoice;
  }
