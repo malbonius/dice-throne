@@ -2098,6 +2098,13 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     }
     else continueOffence(p);
   }
+  function acceptAbility(){
+    if(attacker.blind){
+      attacker.blind=false;
+      state.effectDie=roll();
+      state.stage='blind';
+    }else checkBlindingLight();
+  }
   function checkBlindingLight(){
     if(attacker.blindingLight&&!state.pending.ultimate){
       removeStatus(attacker,'blindingLight');
@@ -3213,7 +3220,8 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         pirateRemove:ability.pirateRemove,pirateCoinDamage:ability.pirateCoinDamage,piratePlank:ability.piratePlank
       });
       add(`${names[state.active]} announces ${ability.name}.`);
-      state.stage = 'announce';
+      state.stage='announce';
+      if(previous.stage==='iceGlideDeclare')acceptAbility();
       break;
     }
     case 'end':
@@ -3279,11 +3287,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'finishWidowAbility':
       resolveAbility();break;
     case 'accept':
-      if (attacker.blind) {
-        attacker.blind = false;
-        state.effectDie = roll();
-        state.stage = 'blind';
-      } else checkBlindingLight();
+      acceptAbility();
       break;
     case 'resolveBlind':
       if (state.effectDie <= 2&&dieValue(state.effectDie,attacker)) {

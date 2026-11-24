@@ -811,6 +811,24 @@ button.card-preview:hover:not(:disabled) {
 }
 
 .match-tools button[data-responding="true"] { border-color: #a68652; }
+.dice:has(.die.frozen) {
+  padding-bottom: 19px;
+  row-gap: 20px;
+}
+.die.frozen {
+  position: relative;
+  outline: 2px solid #b8f5ff;
+}
+.frozen-label {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: #b8f5ff;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .die.kept { background: #665132; border-color: var(--gold); }
 
 .dice:has(.die.rerolled) {

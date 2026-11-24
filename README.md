@@ -1,6 +1,6 @@
 # Dice Throne Offline Engine
 
-**Playtest 0.53.27**
+**Playtest 0.53.28**
 
 An offline Dice Throne engine for playing and testing two-hero matches. Play both sides in a browser or install the game as a web app on supported Windows and Android browsers. The roster includes 45 heroes from Season One Rerolled, Season Two, Outcasts, Vanguard, Marvel, X-Men and Singles.
 
@@ -13,6 +13,11 @@ python -m http.server 8000 --directory docs
 ```
 
 Open [http://localhost:8000/](http://localhost:8000/), choose both heroes in **Match setup** and select **Set up initiative**. Wait for **Ready for offline play** before disconnecting. If your browser offers **Install app**, you can install from an HTTPS deployment or localhost. The game saves your current match automatically. Open the same address with the same browser profile to resume it after an update.
+
+## What changed in 0.53.28
+
+- Select dice directly for Dice Cube ties, Cosmic Ray, Chain Lightning and other roll effects. The Frozen label sits below the highlighted die.
+- Iceman’s Glide activates its linked ability without an Accept Roll screen. Required status checks still resolve.
 
 ## What changed in 0.53.27
 

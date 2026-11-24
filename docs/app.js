@@ -26,7 +26,8 @@ let names = state ? heroNames(state) : [];
 let selectedCard=null;
 let handSeat;
 let diceEdit;
-const rerollPicks = new Map();
+const dicePicks = new Map();
+const effectDicePlans = [];
 let selectedPotion;
 const handDialog=document.getElementById('hand-dialog');
 const handTitle=document.getElementById('hand-title');
@@ -488,7 +489,7 @@ function tray(values,seat,editable,held=[],view=state,rerolled=values.rerolled) 
   return `<div class="dice" role="group" aria-label="${names[seat]} dice">${values.map((value,i) => {
     if (!value) return blankDie;
     const {label,picture} = dieFace(values,seat,i,view);
-    if(values===view.dice&&iceman.locked(view,seat,i))return `<span class="die frozen" style="outline:2px solid #b8f5ff" aria-label="Die ${i+1}, ${label}, frozen by Dice Cube">${picture}<small>Frozen</small></span>`;
+    if(values===view.dice&&iceman.locked(view,seat,i))return `<span class="die frozen" aria-label="Die ${i+1}, ${label}, frozen by Dice Cube">${picture}<small class="frozen-label" aria-hidden="true">Frozen</small></span>`;
     const fresh = rerolled?.includes(i);
     const face = picture + (fresh ? rerollBadge : '');
     const classes = `class="die${fresh?' rerolled':''}"`;
@@ -611,35 +612,51 @@ function selectableDie(context, index, seat, action, enabled, selected, face, op
   const {label,picture} = dieFace(context.dice,seat,index,state,face);
   const frozen = iceman.contextLocked(state,context,index);
   const fresh = face===undefined && rerolledIndices(context,state).includes(index);
-  const content = picture + (fresh ? rerollBadge : '');
+  const content = picture + (fresh ? rerollBadge : '') +
+    (frozen ? '<small class="frozen-label" aria-hidden="true">Frozen</small>' : '');
   const classes = `class="die${selected?' kept':''}${open?' face-picker-open':''}${enabled?'':' unavailable-die'}${frozen?' frozen':''}${fresh?' rerolled':''}"`;
   const description = `aria-label="Die ${index+1}, ${label}${frozen?', frozen':''}${fresh?', rerolled':''}"`;
-  if (!enabled) return `<span ${classes} ${description}>${content}${frozen?'<small>Frozen</small>':''}</span>`;
+  if (!enabled) return `<span ${classes} ${description}>${content}</span>`;
   const expanded = action==='pick-card-die' && diceEdit?.mode==='change' ? ` aria-expanded="${open}"` : '';
   return button(action,content,`${classes} ${description} data-index="${index}" aria-pressed="${selected}"${expanded} ${attrs}`);
 }
 
-function rerollTray(context, options, renderButton = button) {
-  if (!options.length) return rollDisplay(context);
+function diceSelectionTray(context, options, instruction, pickAction, renderButton) {
   const group = options[0].type;
-  const picks = rerollPicks.get(group) ?? new Set();
+  const picks = dicePicks.get(group) ?? new Set();
   const max = Math.max(...options.map(option=>option.limit));
   const permits = (option,index) => option.canPick?.(context.dice[index],index) ?? true;
   const dice = selectableRoll(context,(index,owner)=>{
     const selected = picks.has(index);
     const enabled = selected || options.some(option=>permits(option,index) &&
       (max===1 || picks.size<option.limit && [...picks].every(pick=>permits(option,pick))));
-    return selectableDie(context,index,owner,'pick-reroll-die',enabled,selected,undefined,false,
-      `data-reroll-group="${group}" data-limit="${max}"`);
+    return selectableDie(context,index,owner,pickAction,enabled,selected,undefined,false,
+      `data-dice-group="${group}" data-limit="${max}"`);
   });
   const actions = options.map(option=>{
-    const ready = picks.size>0 && picks.size<=option.limit && [...picks].every(index=>permits(option,index));
-    const label = option.label ?? (options.length>1 ? `Ability reroll · up to ${option.limit}`
-      : option.limit===1 ? 'Reroll selected die' : 'Reroll selected dice');
-    return renderButton(option.type,label,`data-reroll-group="${group}" ${option.type==='retryDie'?'class="primary"':''} ${ready?'':'disabled'}`);
+    const ready = picks.size >= (option.minimum ?? 1) && picks.size<=option.limit &&
+      [...picks].every(index=>permits(option,index));
+    const label = typeof option.label==='function' ? option.label(picks) : option.label;
+    const choice = ready && option.choice ? `data-choice="${option.choice(picks)}"` : '';
+    return renderButton(option.type,label,`data-dice-group="${group}" ${choice} ${option.primary?'class="primary"':''} ${ready?'':'disabled'}`);
   }).join('');
-  const description = max===1 ? 'Select a die to reroll.' : `Select up to ${max} dice to reroll.`;
-  return `<p>${description}</p>${dice}<div class="controls">${actions}</div>`;
+  return `${instruction?`<p>${instruction}</p>`:''}${dice}<div class="controls">${actions}</div>`;
+}
+
+function rerollTray(context, options, renderButton = button) {
+  if (!options.length) return rollDisplay(context);
+  const max = Math.max(...options.map(option=>option.limit));
+  const instruction = max===1 ? 'Select a die to reroll.' : `Select up to ${max} dice to reroll.`;
+  return diceSelectionTray(context,options.map(option=>({
+    ...option, primary:option.type==='retryDie',
+    label:option.label ?? (options.length>1 ? `Ability reroll · up to ${option.limit}`
+      : option.limit===1 ? 'Reroll selected die' : 'Reroll selected dice')
+  })),instruction,'pick-reroll-die',renderButton);
+}
+
+function chooseDiceTray(context, type, label, {count = 1, canPick, choice} = {}) {
+  return diceSelectionTray(context,[{type,label,minimum:count,limit:count,canPick,choice,primary:true}],
+    '', 'pick-match-die', button);
 }
 
 function faceChoices(editor, index) {
@@ -648,7 +665,8 @@ function faceChoices(editor, index) {
 }
 
 function diceEditorPanel(editor) {
-  const {context,mode,picks,open,seat,id,limit,cost} = editor;
+  const {context,mode,picks,open,seat,id,limit,cost,effect} = editor;
+  const title = editor.title ?? seatCard(state,seat,id).name;
   const changing = mode==='change';
   const dice = selectableRoll(context, (index,owner)=>{
     const selected=picks.has(index);
@@ -662,7 +680,7 @@ function diceEditorPanel(editor) {
       return button('pick-card-face',picture,`class="die" data-index="${value}" aria-label="${label}" aria-pressed="${picks.get(open)===value}"`);
     }).join('')}
     ${picks.has(open)?button('undo-card-face','Undo change'):''}</div></div>`;
-  const ready=activeDiceOptions(editor).find(option=>option.dice.length===picks.size);
+  const ready=confirmedDiceOptions(editor);
   const confirm=changing?'Confirm changes':mode==='reroll'?'Reroll selected dice':'Confirm target';
   const instruction=changing?'Select a die, then choose its new face.':mode==='reroll'
     ? id===12 ? 'Select dice to reroll. If you roll one die, you can choose to reroll again after seeing the result.'
@@ -670,14 +688,20 @@ function diceEditorPanel(editor) {
     : 'Choose a die to target.';
   return `<section class="arena dice-editor" aria-label="Choose dice">
     <div class="phase"><span>${names[seat]} · ${picks.size} of ${limit} selected</span></div>
-    <h2 tabindex="-1" id="action-title">${seatCard(state,seat,id).name}</h2>
+    <h2 tabindex="-1" id="action-title">${title}</h2>
     <p>${instruction}${cost?` ${cost}`:''}</p>
-    ${cardRollReference(state.cardRoll, seatCard(state,seat,id).name) || defenceReference()+effectAbilityReference()}
+    ${cardRollReference(state.cardRoll,title) || defenceReference()+effectAbilityReference()}
     ${!context.owners&&context.seat!==seat?`<strong>${names[context.seat]}’s dice</strong>`:''}
     ${dice}${faces}
-    <div class="controls">${button('confirm-card-dice',confirm,`class="primary" ${ready?'':'disabled'}`)}
+    <div class="controls">${ready.length>1
+      ? ready.map(option=>button('confirm-card-dice',option.confirm ?? confirm,`data-choice="${option.choiceIndex}"`)).join('')
+      : button('confirm-card-dice',ready[0]?.confirm ?? confirm,`class="primary" ${ready.length?'':'disabled'}`)}
     ${editor.options.filter(option=>!option.dice.length).map(option=>button('confirm-card-dice',option.label,`data-choice="${option.choiceIndex}"`)).join('')}
     ${button('cancel-card-dice','Cancel')}</div></section>`;
+}
+
+function confirmedDiceOptions(editor) {
+  return activeDiceOptions(editor).filter(option=>option.dice.length===editor.picks.size);
 }
 
 function handleDiceEditor(type, index, alternate) {
@@ -685,23 +709,33 @@ function handleDiceEditor(type, index, alternate) {
   const {picks,open,mode} = editor;
   if (type==='cancel-card-dice') {
     diceEdit = null;
-    handSeat = editor.seat;
-    selectedCard = editor.id;
     render();
-    renderHand();
-    handDialog.showModal();
+    if (editor.effect) {
+      const source = match.querySelector(`button[data-action="open-effect-dice"][data-index="${editor.effect.index}"]`);
+      const section = source?.closest?.('details.match-effects');
+      if (section) section.open = true;
+      source?.focus();
+    } else {
+      handSeat = editor.seat;
+      selectedCard = editor.id;
+      renderHand();
+      handDialog.showModal();
+    }
     return;
   }
   if (type==='confirm-card-dice') {
-    const option = alternate===undefined
-      ? activeDiceOptions(editor).find(option=>option.dice.length===picks.size)
-      : editor.options.find(option=>!option.dice.length && option.choiceIndex===Number(alternate));
+    const ready = confirmedDiceOptions(editor);
+    const option = alternate===undefined ? ready[0]
+      : [...ready,...editor.options.filter(option=>!option.dice.length)].find(option=>option.choiceIndex===Number(alternate));
     if (!option) return;
-    const action = {type:'playCard',id:editor.id,seat:editor.seat,choice:option.choiceIndex};
+    const action = editor.effect
+      ? {...option.action,effectSeat:editor.effect.seat}
+      : {type:'playCard',id:editor.id,seat:editor.seat,choice:option.choiceIndex};
     diceEdit=null;
+    dicePicks.clear();
     selectedCard=null;
     state=mode==='reroll' ? transitionWithRerolls(action,roll,Math.random).next
-      : applyMatchAction(action,seatCard(state,editor.seat,editor.id).name);
+      : applyMatchAction(action,editor.title ?? seatCard(state,editor.seat,editor.id).name);
     render();
     focusRollAction();
     return;
@@ -1133,7 +1167,8 @@ function effectRollOnCurrentScreen(view, type) {
 }
 
 function rollsOnCurrentScreen(view, type) {
-  if (type === 'roll' || type === 'defend' || type === 'retryDie' || effectRollOnCurrentScreen(view,type)) return true;
+  if (['roll','defend','retryDie','gambitMagicReroll','rerollUndead','rerollMesmerized','stormOppReroll'].includes(type) ||
+      effectRollOnCurrentScreen(view,type)) return true;
   if (!rerollActions.has(type)) return false;
   const context = rollContext(view);
   return !!context && (context.dice === view.dice || context.dice === view.defenceDice ||
@@ -1392,7 +1427,8 @@ function arena(seat, responding, decisionSeat) {
     phase='Upkeep · The Lab II';heading=names[state.alchemistRoll.seat];detail='Solution attaches 1 Potion. Composition or Crucible attaches 2. A blank attaches none.';content=tray(state.alchemistRoll.dice,state.alchemistRoll.seat,false)+button('resolveAlchemistLab','Resolve The Lab roll','class="primary"');
   } else if(state.iceFreezeChoice){
     const f=state.iceFreezeChoice;phase='Dice Cube';heading=`${names[f.seat]} chooses a tied lowest die`;detail='The chosen original die will remain frozen for this Roll Phase, unless its Dice Cube is removed.';
-    content=tray(state.dice,f.seat,false)+f.candidates.map(i=>button('iceChooseFrozen',`Freeze die ${i+1} (${state.dice[i]})`,`data-index="${i}"`)).join('');
+    content=chooseDiceTray({dice:state.dice,seat:f.seat},'iceChooseFrozen','Confirm freeze',
+      {canPick:(_,i)=>f.candidates.includes(i)});
   } else if(!state.response&&state.wolverineRageRoll&&!state.cardRoll&&!state.retry){
     const t=state.wolverineRageRoll;phase='Rage discard · Recovery';heading=seatCard(state,t.seat,t.id).name;detail='Any Mask returns this discarded card to hand. Astonishing Recovery heals 2 instead if no Mask is rolled.';content=tray(t.dice,t.seat,false)+button('resolveRageRecovery','Resolve Recovery roll','class="primary"');
   } else if(!state.response&&state.alphaRoll&&!state.cardRoll&&!state.retry){
@@ -1435,7 +1471,9 @@ function arena(seat, responding, decisionSeat) {
   } else if(!state.response&&state.gambitRoll&&!state.cardRoll&&!state.retry){
     const r=state.gambitRoll;phase=r.kind==='high'?'Upkeep · High Stakes':'Ace explosion';heading=r.kind==='high'?`${names[r.seat]} resolves High Stakes`:r.kind==='heartRoll'?'Heart Ace · healing roll':'Club Ace · damage roll';
     detail=r.kind==='high'?`${r.dice.length} dice. With five dice, any 1 busts the whole ability. Super Charge accelerates any Ace; Spade/Club charges a black Ace; Heart/Diamond charges a red Ace.`:'Half the final numerical value, rounded up.';
-    content=tray(r.dice,r.seat,false)+(r.kind==='high'&&r.magicLeft?r.dice.map((v,i)=>button('gambitMagicReroll',`Card Magic · reroll die ${i+1} (${v}) · ${r.magicLeft} remaining`,`data-index="${i}"`)).join(''):'')+button('gambitResolveRoll','Resolve roll','class="primary"');
+    const rerolls = r.kind==='high' && r.magicLeft
+      ? [{type:'gambitMagicReroll',limit:1,label:`Card Magic · reroll selected die · ${r.magicLeft} left`}] : [];
+    content=rerollTray({dice:r.dice,seat:r.seat},rerolls)+button('gambitResolveRoll','Resolve roll','class="primary"');
   } else if(!state.response&&state.gambitTask&&state.stage==='gambitSequence'&&!state.cardRoll&&!state.retry){
     const t=state.gambitTask,h=t.queue[0];phase='Gambit';heading=names[t.seat];
     if(h.kind==='accelerate'){
@@ -1548,7 +1586,11 @@ function arena(seat, responding, decisionSeat) {
   } else if(!state.response&&state.cosmicRayRoll&&!state.cardRoll&&!state.retry){
     phase='Cosmic Ray';heading=`${actingName} chooses the damage bonus`;
     detail=state.cosmicRayRoll.locked?'Ultimate: these dice cannot be altered. Choose one die.':'Choose one of the two dice to add to your attack. Dice may be altered before this choice is final.';
-    content=tray(state.cosmicRayRoll.dice,seat,false)+state.cosmicRayRoll.dice.map((value,index)=>button('chooseCosmicRay',`Choose die ${index+1} · +${dieValue(value,state.players[seat])} damage`,`data-index="${index}"`)).join('');
+    const dice = state.cosmicRayRoll.dice;
+    content=chooseDiceTray({dice,seat},'chooseCosmicRay',picks=>{
+      const [index] = picks;
+      return index===undefined ? 'Confirm damage bonus' : `Add ${dieValue(dice[index],state.players[seat])} damage`;
+    });
   } else if(!state.response&&state.cosmicRayOverflow&&!state.cosmicRayRoll){
     phase='Cosmic Ray';heading='Make room for Cosmic Ray';
     detail='You are about to gain Cosmic Ray at the stack limit. You may spend an eligible existing token first. Only one Cosmic Ray may be spent per turn.';
@@ -1665,8 +1707,9 @@ function arena(seat, responding, decisionSeat) {
     phase='Status effect roll'; heading='Mesmerize';
     if(effect.choosing){
       const context=rollContext({...state,stage:effect.resume,mesmerizeRoll:null});
-      content=rollDisplay(context)+diceOwnedBy(context,1-effect.seat,state).map((value,index)=>
-        button('rerollMesmerized',`Reroll die ${index+1} (${value})`,`data-index="${index}"`)).join('')+
+      detail='Choose one of the opponent’s dice to reroll.';
+      const eligible = diceOwnedBy(context,1-effect.seat,state);
+      content=chooseDiceTray(context,'rerollMesmerized','Reroll selected die',{canPick:(_,i)=>Boolean(eligible[i])})+
         button('rerollMesmerized','Keep the current roll','data-index="-1"');
     } else {
       detail='A 5 or 6 lets you reroll one of the opponent’s dice.';
@@ -1780,9 +1823,9 @@ function arena(seat, responding, decisionSeat) {
       const pending=state.undeadRoll;
       phase='Undead';heading='Roll for activated Undead';
       detail='Remove one Undead of your choice for each Bones result.';
-      content=tray(pending.dice,seat,false)+
-        (pending.rerolls?pending.dice.map((value,i)=>button('rerollUndead',`Reroll die ${i+1} (${value}) · ${pending.rerolls} left`,`data-index="${i}"`)).join(''):'')+
-        button('resolveUndead','Resolve Undead roll','class="primary"');
+      const rerolls = pending.rerolls
+        ? [{type:'rerollUndead',limit:1,label:`Reroll selected die · ${pending.rerolls} left`}] : [];
+      content=rerollTray({dice:pending.dice,seat},rerolls)+button('resolveUndead','Resolve Undead roll','class="primary"');
       break;
     }
     case 'undeadRemove':
@@ -2094,13 +2137,18 @@ function arena(seat, responding, decisionSeat) {
     case 'effectResponse':
       if(p.effect==='thorChain'){
         phase='Chain Lightning';heading='Choose any two dice';detail=`Their total becomes the attack damage. The separate ${p.thor.chain} collateral damage resolves first.`;
-        const dice=effectiveDice(p.effectDice,state.players[state.active]);let choice=0;
-        content=effectRoll;for(let i=0;i<dice.length;i++)for(let j=i+1;j<dice.length;j++)content+=button('chooseThorChain',`Dice ${i+1} + ${j+1} · ${dice[i]+dice[j]} damage`,`data-choice="${choice++}"`);break;
+        const dice=effectiveDice(p.effectDice,state.players[state.active]);
+        content=chooseDiceTray({dice:p.effectDice,seat:state.active},'chooseThorChain',picks=>
+          picks.size===2 ? `Confirm ${[...picks].reduce((total,i)=>total+dice[i],0)} damage` : 'Confirm selected dice', {
+            count:2, choice:picks=>thor.chainPairs(dice.length).findIndex(pair=>pair.every(i=>picks.has(i)))
+          });
+        break;
       }
       phase='Ability roll'; heading=pendingAbility;
       detail='Modify the ability roll or resolve it.';
       const rerolls=[];
       if (allowed.abilityReroll) rerolls.push({type:'abilityReroll',limit:p.ninjaRerolls});
+      if (storm.oppReroll(state,state.active)) rerolls.push({type:'stormOppReroll',limit:2,label:'Reroll with Charged Effect'});
       if (allowed.effectRetry) rerolls.push({type:'effectRetry',limit:1,
         label:p.tempestChi?'Spend 1 Chi to reroll':'Reroll selected die'});
       content=rerollTray({dice:p.effectDice,seat:state.active},rerolls)+button('resolveEffect','Resolve effect roll','class="primary"');
@@ -2320,34 +2368,63 @@ function arena(seat, responding, decisionSeat) {
 }
 
 function matchEffects(state, responding, renderButton = button) {
+  function pickDice(type, title, choices, {mode = 'reroll', context = rollContext(state), byIndex = false} = {}) {
+    if (!context) return '';
+    const options = choices.flatMap((choice, choiceIndex) => Number.isInteger(choice.index) ? [{
+      choiceIndex, confirm:choice.confirm,
+      dice:[[choice.index, mode==='change' ? choice.to : null]],
+      action:byIndex ? {type,index:choice.index} : {type,choice:choice.choice ?? choiceIndex}
+    }] : []);
+    if (!options.length) return '';
+    const index = effectDicePlans.push({context,mode,seat:responding,limit:1,options,title})-1;
+    return renderButton('open-effect-dice',title,`data-index="${index}"`);
+  }
+  const dieChoices = dice => dice?.map((_,index)=>({index})) ?? [];
   let content = '';
   if(!state.psyReveal){
-  for(const [choice,c] of deadpool.onomChoices(state,responding).entries())content+=renderButton('spendOnomatopoeia',c.label,`data-choice="${choice}"`);
+  const onomatopoeia = deadpool.onomChoices(state,responding);
+  if(onomatopoeia.length){
+    const title = state.players[responding].curmudgeon ? 'Spend Onomatopoeia' : 'Say a sound · spend Onomatopoeia';
+    content+=pickDice('spendOnomatopoeia',title,onomatopoeia,{mode:'change',context:rollContext(deadpool.view(state))});
+  }
   if(deadpool.canRps(state,responding))content+=renderButton('spendRps','Spend RPS · play Rock, Paper, Scissors');
   if(deadpool.canDonut(state,responding))content+=renderButton('spendDonut','Spend Donut · roll for healing');
-  for(const [choice,c] of santa.cheerChoices(state,responding).entries())content+=renderButton('spendCheer',c.label,`data-choice="${choice}"`);
+  const cheer = santa.cheerChoices(state,responding).map((choice,index)=>({...choice,choice:index}));
+  for(const {kind,ctx:context} of cheer.length ? santa.contexts(state) : []){
+    const available = cheer.filter(choice=>choice.kind===kind);
+    const target = kind==='board'?'a board die':'a die';
+    content+=pickDice('spendCheer',`Spend Cheer · reroll ${target}`,available.filter(choice=>!choice.value),{context});
+    content+=pickDice('spendCheer',`Spend 3 Cheer · set ${target} to 6`,available.filter(choice=>choice.value),{context,mode:'target'});
+  }
   if(santa.canNog(state,responding))content+=renderButton('spendEggNog','Spend 3 Egg Nog · roll for a benefit');
   for(const n of mysticBrawler.oceanChoices(state,responding))content+=renderButton('spendOcean',n===1?'Spend 1 Ocean · gain 1 CP':'Spend 2 Ocean · gain 1 CP and heal 2',`data-amount="${n}"`);
   if(krampus.canGift(state,responding))content+=renderButton('spendGift','Spend Gift · draw 1 Reject');
   if(!(state.krampusTask&&state.stage==='krampusChoices'&&state.krampusTask.queue[0]?.kind==='free'))for(const [i,c] of krampus.options(state,responding).entries())content+=renderButton('activateReject',c.label,`data-choice="${i}"`);
   const lab=alchemist.labChoices(state,responding);
-  if(lab.length)content+=`<div class="token-actions"><label>The Lab <select id="alchemist-lab-${responding}">${lab.map((c,i)=>`<option value="${i}">${c.label}</option>`).join('')}</select></label>${renderButton('alchemistLab','Remove Potion and reroll')}</div>`;
+  if(lab.length){
+    const potions=new Map(alchemist.tokens(state,responding).map(token=>[token.id,token]));
+    for(const choice of lab)choice.confirm=`Remove ${alchemist.tokenLabel(potions.get(choice.tokenId))} and reroll`;
+  }
+  content+=pickDice('alchemistLab','The Lab · remove a Potion and reroll',lab);
   for(const [i,c] of wolverine.rageChoices(state,responding).entries())content+=renderButton('spendRage',c.label,`data-choice="${i}"`);
   }
   if(!state.deadpoolRps&&!(state.deadpoolTask&&state.stage==='deadpoolChoices')&&!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
   if(storm.canTornado(state,responding))content+=renderButton('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
   if(storm.canWind(state,responding))content+=renderButton('spendWindShear',state.players[responding].ragingWindsTurn===state.turn?'Spend Wind Shear · prevent 4 and deal 4 isolated damage':'Spend Wind Shear · prevent 2 and deal 2 isolated damage');
-  if(storm.oppReroll(state,responding))content+=`<div class="controls">${renderButton('stormOppReroll','Reroll effect die 1','data-status="first"')}${renderButton('stormOppReroll','Reroll effect die 2','data-status="second"')}${renderButton('stormOppReroll','Reroll both effect dice','data-status="both"')}</div>`;
   for(const c of rogue.ionicChoices(state,responding))content+=renderButton('spendIonic',c.label,`data-status="${c.key}"`);
   if(rogue.canExpand(state,responding))content+=renderButton('expandIonic','Pay 1 CP · allow four Ionic tokens this turn');
   if(rogue.canSkyward(state,responding))content+=renderButton('spendSkyward','Spend Skyward · both players roll');
   if(rogue.boostLeach(state,responding))content+=renderButton('rogueLeachBoost','Pay 1 CP · add 1 to Leach die');
   }
   if(!state.deadpoolRps&&!(state.deadpoolTask&&state.stage==='deadpoolChoices')&&!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!state.rogueGain&&!(state.stormTask&&state.stage==='stormChoices')){
-  for(const c of psylocke.swaps(state,responding))content+=renderButton('manifestSwap',c.label,`data-index="${c.index}"`);
+  const manifest = psylocke.swaps(state,responding);
+  if(manifest.length)content+=pickDice('manifestSwap',`Use Manifest ${state.players[responding].manifestDie} · replace a die`,
+    manifest,{mode:'target',byIndex:true,context:{dice:state.dice,seat:responding}});
   if(psylocke.canBoost(state,responding))content+=renderButton('manifestBoost',`Use Manifest ${state.players[responding].manifestDie} · add ${Math.ceil(dieValue(state.players[responding].manifestDie,state.players[responding])/2)} attack damage`);
-  for(const [i,c] of psylocke.infiltrationChoices(state,responding).entries())content+=renderButton('spendInfiltration',c.label,`data-choice="${i}"`);
-  for(const [i,c] of jeanGrey.acuityChoices(state,responding).entries())content+=renderButton('spendAcuity',c.label,`data-choice="${i}"`);
+  content+=pickDice('spendInfiltration','Spend Infiltration · reroll a defence die',psylocke.infiltrationChoices(state,responding));
+  const acuity = jeanGrey.acuityChoices(state,responding);
+  content+=pickDice('spendAcuity','Spend 1 Acuity · reroll a die',acuity);
+  for(const [i,c] of acuity.entries())if(c.kind!=='reroll')content+=renderButton('spendAcuity',c.label,`data-choice="${i}"`);
   for(const [i,c] of jeanGrey.flameChoices(state,responding).entries())content+=renderButton('spendFlameBlast',c.label,`data-choice="${i}"`);
   for(const [i,c] of jeanGrey.fieldChoices(state,responding).entries())content+=renderButton('spendForceField',c.label,`data-choice="${i}"`);
   if(!state.iceFreezeChoice&&iceman.canConvert(state,responding))content+=renderButton('iceConvert','Spend 5 board Ice Shards · gain Glide');
@@ -2356,16 +2433,19 @@ function matchEffects(state, responding, renderButton = button) {
   if(explode.length)content+=`<div class="token-actions"><strong>Explode one Ace · Attack Modifier</strong><div class="controls">${explode.map(suit=>renderButton('gambitExplode',`Explode ${statusLabel(suit)}`,`data-status="${suit}"`)).join('')}</div></div>`;
   if(dissolve.length)content+=`<details class="token-actions"><summary>Spend Dissolution</summary><div class="controls">${dissolve.map((choice,i)=>renderButton('spendDissolution',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   const support=state.iceFreezeChoice||gambit.forced(state)?[]:cyclops.supportChoices(state,responding),battlePlan=state.iceFreezeChoice||gambit.forced(state)?[]:cyclops.battleChoices(state,responding);
-  if(support.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Support</summary><div class="controls">${support.map((choice,i)=>renderButton('spendSupport',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  if(support.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Support</summary><div class="controls">
+    ${pickDice('spendSupport','Spend Support · reroll a die',support)}
+    ${support.map((choice,i)=>choice.kind==='reroll'?'':renderButton('spendSupport',choice.label,`data-choice="${i}"`)).join('')}
+    </div></details>`;
   if(battlePlan.length)content+=`<details class="token-actions"><summary>${names[responding]} · spend Battle Plan</summary><div class="controls">${battlePlan.map((choice,i)=>renderButton('spendBattlePlan',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
   if(cyclops.canRecourse(state,responding))content+=renderButton('cyclopsRecourse','Remove 2 Battle Plan · activate Recourse II against this undefendable attack');
   if(thor.canDraw(state,responding)&&!state.thorOverflow)content+=renderButton('thorDraw','Spend 4 Electrokinesis · draw a card');
   if(thor.canMove(state,responding))content+=`<details class="token-actions"><summary>Mjölnir · discard a card to ${thor.holder(state,responding)===responding?'throw':'retrieve'}</summary><div class="controls">${state.players[responding].hand.map((id,i)=>previewableOption(state,responding,id,renderButton('thorPassive',`Discard ${seatCard(state,responding,id).name}`,`data-index="${i}"`))).join('')}</div></details>`;
   if(!state.iceFreezeChoice&&!gambit.forced(state)&&!cyclops.choosing(state)&&!state.thorOverflow&&!(state.thorTask&&state.stage==='thorSequence')&&!state.conjureTask&&!state.lokiTask&&!state.lokiIllusion&&state.lokiBag?.kind!=='choose'){
-  const probability=scarletWitch.probabilityChoices(state,responding);
-  if(probability.length)content+=`<div class="token-actions"><strong>${names[responding]} · Probability Manipulation</strong><div class="controls">${probability.map((choice,i)=>renderButton('spendProbability',choice.label,`data-choice="${i}"`)).join('')}</div></div>`;
-  const scarletChanges=scarletWitch.defenceChanges(state,responding);
-  if(scarletChanges.length)content+=`<details class="token-actions"><summary>${abilityName('Double Trouble II')} · discard Probability Manipulation to change any die</summary><div class="controls">${scarletChanges.map((choice,i)=>renderButton('scarletDefenceChange',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
+  content+=pickDice('spendProbability','Spend Probability Manipulation · change a die',
+    scarletWitch.probabilityChoices(state,responding),{mode:'change'});
+  content+=pickDice('scarletDefenceChange','Double Trouble II · change a die',
+    scarletWitch.defenceChanges(state,responding),{mode:'change',context:{dice:state.defenceDice,seat:responding}});
   if(scarletWitch.canCrackle(state,responding))content+=renderButton('spendCrackle',`Spend Crackle · +${Math.min(3,Math.max(0,scarletWitch.countedStatuses(state.players[responding])-1))} damage`);
   const conjure=scarletWitch.conjureChoices(state,responding);
   if(conjure.length)content+=`<details class="token-actions"><summary>Spend Conjure</summary><div class="controls">${conjure.map((choice,i)=>renderButton('spendConjure',choice.label,`data-choice="${i}"`)).join('')}</div></details>`;
@@ -2381,15 +2461,27 @@ function matchEffects(state, responding, renderButton = button) {
   if(doctorStrange.canPrepare(state,state.active))content+=`<div class="token-actions"><strong>Book of Vishanti · prepare once per turn</strong><div class="controls">${state.players[state.active].hand.filter(doctorStrange.isSpell).map(id=>previewableOption(state,state.active,id,renderButton('prepareSpell',`Prepare ${doctorStrange.spells[id]}`,`data-index="${id}"`))).join('')}</div></div>`;
   if((responding===state.active||!state.response||state.response.action)&&doctorStrange.canDeja(state,state.active))content+=renderButton('spendDejaVu',`${names[state.active]} · spend Déjà Vu and restart the roll`);
   if(captainMarvel.canRay(state,responding))content+=renderButton('spendCosmicRay','Spend Cosmic Ray · roll 2 dice');
-  for(const die of captainMarvel.radianceDice(state,responding))content+=renderButton('spendRadiance',`Spend Radiance · defence die ${die.index+1} (${die.value}) → 6`,`data-index="${die.index}"`);
+  content+=pickDice('spendRadiance','Spend Radiance · set a defence die to 6',
+    captainMarvel.radianceDice(state,responding),{mode:'target',byIndex:true});
   if(blackWidow.canCovert(state,responding))content+=renderButton('spendCovertOps','Spend Covert Ops');
   if(state.players[responding].agility&&blackWidow.incoming(state,responding))content+=renderButton('spendAgility','Spend Agility · roll to prevent half damage');
   if(state.players[responding].vibraniumSuit&&blackPanther.incoming(state,responding))
     content+=renderButton('spendVibraniumSuit','Spend Vibranium Suit · prevent 3 damage');
-  const forgeActions=forgemaster.choices(state,responding).map(({label,card},i)=>{
-    const select=renderButton('forgemasterAction',label,`data-choice="${i}"`);
+  const forge = forgemaster.choices(state,responding).map((choice,i)=>({...choice,choice:i}));
+  const forgeActions=forge.filter(choice=>choice.index===undefined).map(({label,card,choice})=>{
+    const select=renderButton('forgemasterAction',label,`data-choice="${choice}"`);
     return card===undefined?select:previewableOption(state,responding,card,select);
   });
+  for(const kind of ['reroll','six']){
+    const choices = forge.filter(choice=>choice.kind===kind);
+    for(const card of new Set(choices.map(choice=>choice.card))){
+      const ore = seatCard(state,responding,card).name;
+      const title = `Scrap ${ore} · ${kind==='reroll'?'reroll a die':'set a die to 6'}`;
+      const select = pickDice('forgemasterAction',title,choices.filter(choice=>choice.card===card),
+        {mode:kind==='reroll'?'reroll':'target'});
+      if(select)forgeActions.push(previewableOption(state,responding,card,select));
+    }
+  }
   if(forgeActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · The Mines and The Forge</strong><div class="controls">${forgeActions.join('')}</div></div>`;
   const shapeSeats=state.stage==='announce'&&!state.response&&inlineEffectSeat(state)===null?[responding,state.active]:[responding];
   for(const owner of shapeSeats){
@@ -2404,11 +2496,15 @@ function matchEffects(state, responding, renderButton = button) {
       renderButton('spendFeather',`${option.cost} Feather · ${option.label}`,`data-target="${owner}" data-status="${option.kind}"`)).join('')}</div></div>`;
   }
   const tokens=tokenChoices(state,responding);
-  const tacticalActions=tacticalChoices(state,responding).map((choice,index)=>{
+  const tactical = tacticalChoices(state,responding);
+  const tacticalActions=tactical.map((choice,index)=>{
+    if(choice.kind==='reroll')return '';
     const label = `${choice.cost} Tactical Advantage · ${choice.label}`;
     return renderButton('spendTactical',choice.status==='timeBomb'
       ? tokenChoiceLabel(state,{...choice,label},choice.from) : label,`data-choice="${index}"`);
-  });
+  }).filter(Boolean);
+  const tacticalReroll = pickDice('spendTactical','Spend 1 Tactical Advantage · reroll a die',tactical);
+  if(tacticalReroll)tacticalActions.push(tacticalReroll);
   const grimActions=grimChoices(state,responding).map(kind=>renderButton('spendGrim',
     kind==='attempt'?'Grim Pursuit · extra Roll Attempt':'Grim Pursuit · roll for attack damage',`data-status="${kind}"`));
   const tokenActions=state.grimOverflow?grimActions:state.stage==='nyraDamage'?[]:state.tacticalOverflow||state.tacticalRemoval?tacticalActions:[
@@ -2416,7 +2512,7 @@ function matchEffects(state, responding, renderButton = button) {
     ...grimActions,
     ...necroActions(state,responding).map(({kind,label})=>renderButton('necroAction',label,`data-status="${kind}"`)),
     ...(canHealNyra(state,responding)?[renderButton('healNyra','Nyra’s Bond · heal Nyra by 2')]:[]),
-    ...nyraRerolls(state,responding).map((value,i)=>renderButton('nyraReroll',`Nyra takes 1 damage · reroll die ${i+1} (${value})`,`data-index="${i}"`)),
+    pickDice('nyraReroll','Nyra takes 1 damage · reroll a die',dieChoices(nyraRerolls(state,responding)),{byIndex:true}),
     ...artificerActions(state,responding).map(({key,label})=>renderButton('artificerAction',label,`data-status="${key}"`)),
     ...(canBackStrike(state,responding)?[renderButton('backStrike','Spend Back Strike')]:[]),
     ...Array.from({length:honorChoices(state,responding)},(_,i)=>renderButton('spendHonor',
@@ -2426,7 +2522,7 @@ function matchEffects(state, responding, renderButton = button) {
     ...bloodPowerChoices(state,responding).map(({cost,label},index)=>
       renderButton('bloodPower',`${cost} Blood Power · ${label}`,`data-choice="${index}"`)),
     ...(tokens.flight?[renderButton('flight',tokens.flight==='attack'?'Flight · make the attack undefendable':'Flight · avoid incoming damage')]:[]),
-    ...tokens.seedling.map((v,i)=>renderButton('seedling',`Seedling · reroll die ${i+1} (${v})`,`data-index="${i}"`)),
+    pickDice('seedling','Spend Seedling · reroll a die',dieChoices(tokens.seedling),{byIndex:true}),
     ...(tokens.sapling?[renderButton('sapling','Sapling · heal 1 and gain 1 CP')]:[]),
     ...(tokens.saplingDraw?[renderButton('saplingDraw','Sapling · draw for 1 CP')]:[]),
     ...(tokens.dryad?[renderButton('dryad','Dryad · add 3 damage')]:[]),
@@ -2439,13 +2535,13 @@ function matchEffects(state, responding, renderButton = button) {
     ...tokens.cleanse.flatMap(status=>status==='spellbound'?(state.players[responding].boundAbilities??[]).map(b=>renderButton('useCleanse',`Cleanse Spellbound · ${b.key}`,`data-status="spellbound" data-index="${b.id}"`)):status==='bagOfTricks'?(state.players[responding].trickBags??[]).map(b=>renderButton('useCleanse',`Cleanse Bag of Tricks from ${names[b.owner]}`,`data-status="bagOfTricks" data-index="${b.id}"`)):status==='timeBomb'?(state.players[responding].timeBombTimers??[]).map(b=>renderButton('useCleanse',tokenChoiceLabel(state,{key:'timeBomb',bombId:b.id,label:`Cleanse Time Bomb 0:0${b.ticks}`},responding),`data-status="timeBomb" data-index="${b.id}"`)):[renderButton('useCleanse',`Cleanse ${statusLabel(status)}`,`data-status="${status}"`)]),
     ...Array.from({length:tokens.boost},(_,i)=>renderButton('boostChi',`Spend ${i+1} Chi · +${i+1} damage`,`data-amount="${i+1}"`)),
     ...Array.from({length:tokens.prevent},(_,i)=>renderButton('preventChi',`Spend ${i+1} Chi · prevent ${i+1}`,`data-amount="${i+1}"`))
-  ];
+  ].filter(Boolean);
   if(tokenActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · spend tokens</strong><div class="controls">${tokenActions.join('')}</div></div>`;
   const tithe=state.stage==='nyraDamage'||state.grimOverflow?{}:titheChoices(state,responding);
   const titheActions=[
     ...(tithe.draw?[renderButton('titheDraw',`Draw 1 card · ${titheDrawCost(state.players[responding])} CP`)]:[]),
-    ...(tithe.dice??[]).map((value,i)=>renderButton('titheReroll',`Reroll die ${i+1} (${value}) · 1 CP`,`data-index="${i}"`))
-  ];
+    pickDice('titheReroll','Tithe · pay 1 CP to reroll a die',dieChoices(tithe.dice),{byIndex:true})
+  ].filter(Boolean);
   if(titheActions.length)content+=`<div class="token-actions"><strong>${names[responding]} · ${abilityName(state.players[responding].upgrades?.Tithe?'Tithe II':'Tithe')}</strong><div class="controls">${titheActions.join('')}</div></div>`;
   }
   }
@@ -2465,6 +2561,7 @@ function matchTools(responding) {
   </nav>`;
 }
 function render() {
+  effectDicePlans.length = 0;
   const open = new Set(Array.from(match.querySelectorAll('details[data-disclosure][open]'), detail => detail.dataset.disclosure));
   if (!state || rollRequest?.setup) {
     match.innerHTML = rollRequest ? rollRequestPanel(rollRequest) :
@@ -2659,6 +2756,15 @@ function handleAction(event) {
     return;
   }
   if (rollRequest) return;
+  if (type==='open-effect-dice') {
+    const plan = effectDicePlans[index];
+    if (!plan) return;
+    const seat = target.dataset.effectSeat===undefined ? undefined : Number(target.dataset.effectSeat);
+    diceEdit={...plan,picks:new Map(),effect:{index,seat}};
+    render();
+    focusRollAction();
+    return;
+  }
   if (type==='select-potion'||type==='back-to-potions') {
     const potion=target.dataset.status, task=state.alchemistTask;
     if (state.stage!=='alchemistChoices'||task?.queue[0]?.kind!=='attach'||
@@ -2668,29 +2774,29 @@ function handleAction(event) {
     focusRollAction();
     return;
   }
-  const rerollGroup = target.dataset.rerollGroup;
-  if (type==='pick-reroll-die') {
-    const picks = rerollPicks.get(rerollGroup) ?? new Set();
+  const diceGroup = target.dataset.diceGroup;
+  if (type==='pick-reroll-die'||type==='pick-match-die') {
+    const picks = dicePicks.get(diceGroup) ?? new Set();
     if (picks.has(index)) picks.delete(index);
     else {
       if (Number(target.dataset.limit)===1) picks.clear();
       picks.add(index);
     }
-    rerollPicks.set(rerollGroup,picks);
+    dicePicks.set(diceGroup,picks);
     render();
-    match.querySelector(`button[data-action="pick-reroll-die"][data-index="${index}"][data-reroll-group="${rerollGroup}"]`)?.focus({preventScroll:true});
+    match.querySelector(`button[data-action="${type}"][data-index="${index}"][data-dice-group="${diceGroup}"]`)?.focus({preventScroll:true});
     return;
   }
   if (type==='sell' && (handSeat!==state.active || !canPlayFromHand(state, handSeat))) return;
   const oldState=state, oldStage=state.stage, oldSeat=cardActor(state);
   const action={type,index,id:index,ability:abilitiesFor(state,state.active)[Number(target.dataset.ability)]?.name,
     choice:Number(target.dataset.choice??0), target:Number(target.dataset.target),status:target.dataset.status, amount:Number(target.dataset.nyraSplit?document.getElementById('nyra-damage').value:target.dataset.amount), defence:target.dataset.defence};
-  if (rerollGroup) {
-    action.indices = [...(rerollPicks.get(rerollGroup) ?? [])].sort((a,b)=>a-b);
+  if (diceGroup) {
+    action.indices = [...(dicePicks.get(diceGroup) ?? [])].sort((a,b)=>a-b);
     if (!action.indices.length) return;
     action.index = action.indices[0];
   }
-  rerollPicks.clear();
+  dicePicks.clear();
   if(target.dataset.effectSeat!==undefined)action.effectSeat=Number(target.dataset.effectSeat);
   if(type==='playCard') {
     if(!canPlayFromHand(state, handSeat))return;
@@ -2707,8 +2813,6 @@ function handleAction(event) {
     }
   }
   if(type==='deadpoolLuckyHope')action.amount=Number(document.getElementById('deadpool-lucky-hope').value);
-  if(type==='alchemistLab')action.choice=Number(document.getElementById(`alchemist-lab-${action.effectSeat??oldSeat}`).value);
-  if(type==='stormOppReroll')action.indices=action.status==='both'?[0,1]:action.status==='first'?[0]:[1];
   const rollTitle = type === 'playCard' ? seatCard(state, handSeat, action.id).name : target.textContent?.trim();
   const safeTitle = rollTitle?.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   state = applyMatchAction(action, safeTitle || 'Roll dice');
@@ -2892,6 +2996,12 @@ if (state?.sideDamage?.jeanBurnCheck !== undefined &&
   rollRequest = null;
 }
 
+// A saved Glide announcement has no offensive roll to accept.
+if (!rollRequest && state?.stage==='announce' && state.pending?.iceman &&
+    !state.attempts && !state.dice.length && state.players[state.active].glideTurn===state.turn && !state.response) {
+  state=applyMatchAction({type:'accept'},'Resolve Glide ability');
+}
+
 // Resume an old pre-defence response on the unrolled tray.
 if (!rollRequest && state?.stage === 'defence' && state.response?.action?.type === 'defend') {
   state.response = null;
@@ -2983,7 +3093,7 @@ document.getElementById('reset').addEventListener('click',()=>{
       !confirm('Start a new match and replace the current one?')) return;
   if (handDialog.open) handDialog.close();
   diceEdit=undefined;
-  rerollPicks.clear();
+  dicePicks.clear();
   selectedPotion=undefined;
   rollRequest = {
     setup: {promo: document.getElementById('promos').checked, heroes: setupHeroes.slice()},

@@ -97,7 +97,13 @@ const thor=(()=>{
  function canMove(s,seat){return !!(s.cards&&heroId(s,seat)===id&&s.players[seat].hand.length&&!busy(s)&&s.stage!=='finished'&&(!s.thorTask||s.thorTask.queue[0]?.kind==='repeat')&&(!attackLocked(s)||seat===s.active));}
  function incoming(s,seat){if(seat!==s.active&&attackLocked(s))return null;return blackPanther.incoming(s,seat);}
  function will(s,seat){return !!(seat!==s.active&&!s.sideDamage&&s.pending?.attack&&!s.pending.ultimate&&!s.pending.stun&&['defence','defenceResponse','damage'].includes(s.stage)&&incomingDamage(s)>=s.players[seat].hp&&s.players[seat].hp>0);}
+ function chainPairs(count) {
+   const pairs=[];
+   for(let i=0;i<count;i++)for(let j=i+1;j<count;j++)pairs.push([i,j]);
+   return pairs;
+ }
  return {
+  chainPairs,
   leafletPositives: {
    guardBreak: true,
    electrokinesis: (state, seat) => gain(state, seat)
@@ -144,7 +150,7 @@ const thor=(()=>{
    if(['thorHammerChoice','thorHammerStop'].includes(a.type)&&!bypass&&!attackLocked(previous)&&hasResponse(previous,1-t.seat))return {...previous,response:{seat:1-t.seat,action:a}};
    if(a.type==='chooseThorChain'){
     if(previous.stage!=='effectResponse'||previous.pending?.effect!=='thorChain'||previous.response)return previous;
-    const n=previous.pending.effectDice.length,pairs=[];for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)pairs.push([i,j]);if(!pairs[a.choice])return previous;
+    if(!chainPairs(previous.pending.effectDice.length)[a.choice])return previous;
     if(!bypass&&!attackLocked(previous)&&hasResponse(previous,1-previous.active))return {...previous,response:{seat:1-previous.active,action:a}};
    }
    const s=structuredClone(previous);s.response=null;
@@ -154,8 +160,8 @@ const thor=(()=>{
    if(a.type==='thorHammerStop')s.thorTask.queue.shift();
    if(a.type==='thorHammerChoice'){s.thorTask.queue[0].left--;move(s,t.seat,'toggle',t.exclude);}
    if(a.type==='chooseThorChain'){
-    const dice=effectiveDice(s.pending.effectDice,s.players[s.active]),pairs=[];for(let i=0;i<dice.length;i++)for(let j=i+1;j<dice.length;j++)pairs.push([i,j]);
-    const pair=pairs[a.choice];s.pending.damage=dice[pair[0]]+dice[pair[1]];s.log.unshift(`Chain Lightning chooses dice ${pair[0]+1} and ${pair[1]+1} for ${s.pending.damage} damage.`);
+    const dice=effectiveDice(s.pending.effectDice,s.players[s.active]);
+    const pair=chainPairs(dice.length)[a.choice];s.pending.damage=dice[pair[0]]+dice[pair[1]];s.log.unshift(`Chain Lightning chooses dice ${pair[0]+1} and ${pair[1]+1} for ${s.pending.damage} damage.`);
     begin(s,s.active,[{kind:'isolated',amount:s.pending.thor.chain}],'thorAbility');
    }
    return s;
