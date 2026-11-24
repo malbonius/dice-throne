@@ -781,6 +781,18 @@ function offenceDice() {
   return state.dice.length ? state.dice : Array(5+(state.stormDice?.count??0)).fill(null);
 }
 
+function manifestRoll(seat, canRoll) {
+  const player = state.players[seat];
+  if (heroId(state,seat)!==psylocke.id) return '';
+  const unrolled = state.attempts===0 && canRoll;
+  if (!unrolled && !player.manifestReady) return '';
+  const die = unrolled ? blankDie
+    : `<span class="die"><img src="${art.manifestDice[player.manifestDie-1]}" alt="Manifest die rolled ${player.manifestDie}"></span>`;
+  return `<div class="manifest-roll" role="group" aria-label="${unrolled?'Unrolled Manifest die':'Manifest die'}">
+    ${die}<span>Manifest die</span>
+  </div>`;
+}
+
 function abilityRequirement(ability) {
   if (ability.straight) {
     const length = ability.straight;
@@ -1778,7 +1790,7 @@ function arena(seat, responding, decisionSeat) {
       heading=`${actingName} rolls`;
       detail=state.budget===0?'Influence removed all Roll Attempts. End this phase, spend Déjà Vu, or play One More Time! to gain a Roll Attempt.':state.players[state.active].decrepify&&state.attempts?'Decrep-ify · hold at least three dice to reroll.':state.attempts ? 'Tap dice to keep them, reroll the rest, or announce an available ability.' : 'Roll all five dice to begin.';
       if(state.stormDice)detail+=` ${state.stormDice.count} borrowed ${HEROES[state.stormDice.hero].name} ${state.stormDice.count===1?"die":"dice"} join the five ordinary dice.`;
-      content=tray(offenceDice(),seat,!!allowed.hold,state.held)
+      content=tray(offenceDice(),seat,!!allowed.hold,state.held) + manifestRoll(seat,allowed.roll)
         + `<div class="controls">${button('roll',state.attempts?(constrictCost(state)?'Reroll · 1 CP':'Reroll'):'Roll dice',`class="primary" ${allowed.roll?'':'disabled'}`)}
         ${button('end','End without an ability',allowed.end?'':'disabled')}</div>`
         + offenceAbilities(seat, allowed.declare);
@@ -2195,13 +2207,16 @@ function arena(seat, responding, decisionSeat) {
         content+=`<div class="controls">${allowed.evade?button('evade','Spend Evasive before resolving defence'):''}
           ${button('resolveDefence','Resolve defence','class="primary"')}</div>`;
       } else {
-        const defences=defenceKinds(seat);
-        const options=allowed.defend?defences.map(kind=>button('defend',`Roll ${abilityName(defenceName(state,seat,kind))}`,`class="primary" data-defence="${kind}"`)).join(''):'';
-        const defender = heroRoster[heroId(state,seat)];
-        const readyDice = !allowed.defend ? '' : defender.id === gunslinger.id
-          ? blankRoll(2,[state.active,seat])
-          : defences.length === 1 ? blankRoll(defender.defenceDiceCount(state.players[seat],defences[0])) : '';
-        content=effectRoll+readyDice+`<div class="controls">${options}${button('skipDefence',allowed.defend?'Decline defence':'Continue with Shadows')}</div>`;
+        const defender=heroRoster[heroId(state,seat)];
+        const options=allowed.defend ? defenceKinds(seat).map(kind=>{
+          const name=defenceName(state,seat,kind);
+          const dice=defender.id===gunslinger.id ? blankRoll(2,[state.active,seat])
+            : blankRoll(defender.defenceDiceCount(state.players[seat],kind));
+          return `<div role="group" aria-label="${name}">${dice}
+            ${button('defend',`Roll ${abilityName(name)}`,`class="primary" data-defence="${kind}"`)}</div>`;
+        }).join('') : '';
+        content=effectRoll+`<div class="defence-roll-options">${options}</div>`+
+          button('skipDefence',allowed.defend?'Decline defence':'Continue with Shadows');
       } break;
     case 'nyraDamage': {
       phase='Damage assignment'; heading='Huntress and Nyra';
