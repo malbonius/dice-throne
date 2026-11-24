@@ -14,11 +14,13 @@ const storageKey = 'dice-throne-card-pilot-v2';
 const roll = () => 1 + Math.floor(Math.random()*6);
 let state;
 let rollRequest;
+let selectedDefence;
 try {
   const saved = JSON.parse(localStorage.getItem(storageKey));
   if (saved?.version === 2 && saved.cards && saved.players?.length === 2 && Array.isArray(saved.log)) {
-    const {uiRollRequest, ...matchState} = saved;
+    const {uiRollRequest, uiDefenceChoice, ...matchState} = saved;
     state = matchState;
+    selectedDefence = uiDefenceChoice;
     if (uiRollRequest?.action || uiRollRequest?.setup) rollRequest = uiRollRequest;
   } else if (saved?.uiRollRequest?.setup) rollRequest = saved.uiRollRequest;
 } catch {}
@@ -908,7 +910,8 @@ function defenceReference() {
   const player = state.players[seat];
   const hero = heroRoster[heroId(state,seat)];
   const options = defenceKinds(seat);
-  const kinds = choosing ? options : [state.defenceKind ?? options[0]];
+  const kinds = choosing && !selectedDefence ? options
+    : [choosing ? selectedDefence : state.defenceKind ?? options[0]];
   return `<div class="ability-reference" role="group" aria-label="Defensive ability effects">${kinds.map(kind=>{
     const count = hero.defenceDiceCount(player,kind);
     const dice = hero.id===gunslinger.id ? '1 die each' : count===1 ? '1 die' : `${count} dice`;
@@ -2207,16 +2210,22 @@ function arena(seat, responding, decisionSeat) {
         content+=`<div class="controls">${allowed.evade?button('evade','Spend Evasive before resolving defence'):''}
           ${button('resolveDefence','Resolve defence','class="primary"')}</div>`;
       } else {
-        const defender=heroRoster[heroId(state,seat)];
-        const options=allowed.defend ? defenceKinds(seat).map(kind=>{
-          const name=defenceName(state,seat,kind);
-          const dice=defender.id===gunslinger.id ? blankRoll(2,[state.active,seat])
+        const kinds=defenceKinds(seat);
+        const kind=selectedDefence ?? (kinds.length===1 ? kinds[0] : null);
+        let dice='', options='';
+        if(allowed.defend && kind){
+          const defender=heroRoster[heroId(state,seat)];
+          dice=defender.id===gunslinger.id ? blankRoll(2,[state.active,seat])
             : blankRoll(defender.defenceDiceCount(state.players[seat],kind));
-          return `<div role="group" aria-label="${name}">${dice}
-            ${button('defend',`Roll ${abilityName(name)}`,`class="primary" data-defence="${kind}"`)}</div>`;
-        }).join('') : '';
-        content=effectRoll+`<div class="defence-roll-options">${options}</div>`+
-          button('skipDefence',allowed.defend?'Decline defence':'Continue with Shadows');
+          options=button('defend',`Roll ${abilityName(defenceName(state,seat,kind))}`,`class="primary" data-defence="${kind}"`);
+          if(kinds.length>1)options+=button('change-defence','Change defence');
+        }else if(allowed.defend){
+          heading=`${actingName} chooses a defence`;
+          options=kinds.map(option=>button('choose-defence',`Choose ${abilityName(defenceName(state,seat,option))}`,
+            `data-defence="${option}"`)).join('');
+        }
+        content=effectRoll+dice+`<div class="controls">${options}
+          ${button('skipDefence',allowed.defend?'Decline defence':'Continue with Shadows')}</div>`;
       } break;
     case 'nyraDamage': {
       phase='Damage assignment'; heading='Huntress and Nyra';
@@ -2578,6 +2587,9 @@ function matchTools(responding) {
   </nav>`;
 }
 function render() {
+  if (state?.stage!=='defence' || rollRequest?.setup || !defenceKinds(1-state.active).includes(selectedDefence)) {
+    selectedDefence = undefined;
+  }
   effectDicePlans.length = 0;
   const open = new Set(Array.from(match.querySelectorAll('details[data-disclosure][open]'), detail => detail.dataset.disclosure));
   if (!state || rollRequest?.setup) {
@@ -2600,7 +2612,7 @@ function render() {
   if(handDialog.open)renderHand();
   try {
     if (state || rollRequest) {
-      const saved = rollRequest ? {...state, uiRollRequest: rollRequest} : state;
+      const saved = {...state, uiRollRequest: rollRequest ?? undefined, uiDefenceChoice: selectedDefence};
       localStorage.setItem(storageKey, JSON.stringify(saved));
     }
   } catch {}
@@ -2773,6 +2785,16 @@ function handleAction(event) {
     return;
   }
   if (rollRequest) return;
+  if (type==='choose-defence'||type==='change-defence') {
+    if (state.stage!=='defence'||!legal(state).defend) return;
+    const kinds=defenceKinds(1-state.active);
+    const choosing=type==='choose-defence';
+    if (kinds.length<2 || choosing&&!kinds.includes(target.dataset.defence)) return;
+    selectedDefence=choosing ? target.dataset.defence : undefined;
+    render();
+    match.querySelector(`button[data-action="${choosing?'defend':'choose-defence'}"]`)?.focus();
+    return;
+  }
   if (type==='open-effect-dice') {
     const plan = effectDicePlans[index];
     if (!plan) return;
