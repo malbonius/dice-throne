@@ -153,7 +153,7 @@ const cyclops=(()=>{
      const taskCard=task?.seat===target?task.exclude:undefined;
      drawCards(s.players[target],1,random,taskCard??pendingRollCard(s,target));
     }
-    if(option.kind==='reroll'){const ctx=rollContext(s),before=ctx.dice.slice();ctx.dice[option.index]=roll();if(ctx.scalar)s.effectDie=ctx.dice[0];releaseChangedAnnouncement(s,ctx,before);}
+    if(option.kind==='reroll'){const ctx=rollContext(s),before=ctx.dice.slice();ctx.dice[option.index]=rerollDie(roll,ctx.dice,option.index,ctx.scalar);if(ctx.scalar)s.effectDie=ctx.dice[0];releaseChangedAnnouncement(s,ctx,before);}
     s.log.unshift(`${heroNames(s)[seat]} spends Support: ${option.label}.`);
    }
    if(a.type==='spendBattlePlan'){

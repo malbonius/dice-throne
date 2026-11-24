@@ -172,7 +172,7 @@ const gambit=(()=>{
    if(a.type==='gambitLoseCharge'){p.aces[a.status].charge--;s.gambitTask.queue.shift();}
    if(a.type==='gambitHighStakes'){const owner=s.active;s.players[owner].highStakesTurn=s.turn;s.gambitRoll={seat:owner,kind:'high',dice:rollBatch(roll,a.amount),resume:'upkeep'};s.stage='gambitRoll';}
    if(a.type==='gambitResolveRoll')resolveRoll(s,roll,random);
-   if(a.type==='gambitMagicReroll'){s.gambitRoll.dice[a.index]=roll();s.gambitRoll.magicLeft--;}
+   if(a.type==='gambitMagicReroll'){s.gambitRoll.dice[a.index]=rerollDie(roll,s.gambitRoll.dice,a.index);s.gambitRoll.magicLeft--;}
    if(a.type==='gambitPayDisruption'||a.type==='gambitTakeDisruption'){const owner=s.players[s.active];if(a.type==='gambitPayDisruption')owner.cp--;else s.upkeepDisruptionDamage=2;removeStatus(owner,'disruption');}
    return s;
   }

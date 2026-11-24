@@ -475,7 +475,7 @@ function applyTactical(s,seat,option,roll,random){
    case 'cp': gainCP(p,1);break;
    case 'reroll': {
      const ctx=rollContext(s), before=ctx.dice.slice();
-     ctx.dice[option.index]=roll();
+     ctx.dice[option.index]=rerollDie(roll,ctx.dice,option.index,ctx.scalar);
      if(ctx.scalar)s.effectDie=ctx.dice[0];
      releaseChangedAnnouncement(s,ctx,before);
      s.log.unshift(`${names[seat]} rerolls die ${option.index+1} to ${ctx.dice[option.index]}.`);
@@ -689,7 +689,7 @@ function applyCard(s,seat,id,choice,roll,random,add,bypassSanta=false) {
  if (rules.applyCard?.(card)) return;
  const rollSize = id === 3 || id === 33 && hero!==cursedPirate.id && hero!==artificer.id && hero!==seraph.id && hero!==vampireLord.id && hero!==gunslinger.id && hero!==samurai.id && hero!==tactician.id && hero!==huntress.id && hero!==headlessHorseman.id && hero!==necromancer.id&&hero!==paleLady.id&&hero!==raveness.id&&hero!==druid.id&&hero!==duelist.id&&hero!==forgemaster.id&&hero!==sunElf.id&&hero!==blackPanther.id&&hero!==blackWidow.id&&hero!==captainMarvel.id&&hero!==doctorStrange.id&&hero!==loki.id&&hero!==scarletWitch.id&&hero!==spiderMan.id&&hero!==thor.id&&hero!==cyclops.id&&hero!==gambit.id&&hero!==iceman.id&&hero!==jeanGrey.id&&hero!==psylocke.id&&hero!==rogue.id&&hero!==storm.id&&hero!==wolverine.id&&hero!==alchemist.id&&hero!==krampus.id&&hero!==mysticBrawler.id&&hero!==santa.id&&hero!==deadpool.id ? 1 : rules.cardRollSize?.(id,{s,seat}) ?? 0;
  if(rollSize){
-  s.cardRoll={seat,id,dice:rollBatch(roll,rollSize),ninjaRerolls:hero===6&&id===28||hero===paleLady.id&&id===20?5:0};
+  s.cardRoll={seat,id,dice:rollBatch(roll,rollSize,undefined,{seat,id}),ninjaRerolls:hero===6&&id===28||hero===paleLady.id&&id===20?5:0};
   if(hero===gunslinger.id&&id===30||hero===huntress.id&&id===32||hero===sunElf.id&&id===34)s.cardRoll.target=choice.target;
   // During an Ultimate, the ability's dice and subsidiary rolls are final.
   if((s.stage==='locked'||[jeanGrey.id,psylocke.id,rogue.id,storm.id,wolverine.id,alchemist.id,krampus.id,mysticBrawler.id,deadpool.id].includes(hero)&&attackLocked(s))&&s.pending.ultimate&&!(hero===6&&id===28)&&!(hero===paleLady.id&&id===20)&&!(hero===mysticBrawler.id&&id===28))completeCardRoll(s,roll,random,add);
@@ -716,8 +716,8 @@ function applyCard(s,seat,id,choice,roll,random,add,bypassSanta=false) {
  if(!ctx)return;
  const {dice}=ctx, before=dice.slice();
  if(id===12||id===16){
-  dice[choice.i]=roll();
-  if(Number.isInteger(choice.j))dice[choice.j]=roll();
+  dice[choice.i]=rerollDie(roll,dice,choice.i,ctx.scalar);
+  if(Number.isInteger(choice.j))dice[choice.j]=rerollDie(roll,dice,choice.j);
   else if(id===12)s.retry={seat,before};
  } else {
   dice[choice.i]=choice.v;
@@ -1263,7 +1263,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       raveness.activate(s,seat,1,s.ravenFeathers?'featherSpent':undefined);
     } else {
       const dice=s.nevermoreRoll.dice;
-      dice[0]=option.kind==='reroll'?roll():dice[0]+(option.kind==='up'?1:-1);
+      dice[0]=option.kind==='reroll'?rerollDie(roll,dice,0):dice[0]+(option.kind==='up'?1:-1);
     }
     s.log.unshift(`${heroNames(s)[seat]} spends ${option.cost} Feather to ${option.label.toLowerCase()}.`);
     return s;
@@ -1297,7 +1297,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         if(kind==='oreDraw')drawCards(p,2,random,card);
         if(kind==='reroll'||kind==='six'){
           const ctx=rollContext(s), before=ctx.dice.slice();
-          ctx.dice[option.index]=kind==='reroll'?roll():6;
+          ctx.dice[option.index]=kind==='reroll'?rerollDie(roll,ctx.dice,option.index,ctx.scalar):6;
           if(ctx.scalar)s.effectDie=ctx.dice[0];
           releaseChangedAnnouncement(s,ctx,before);
         }
@@ -1371,7 +1371,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       s.response=null;
       p.nyra.rerollTurn=s.turn;
       huntress.changeHealth(p,-1);
-      ctx.dice[index]=roll();
+      ctx.dice[index]=rerollDie(roll,ctx.dice,index,ctx.scalar);
       if(ctx.scalar)s.effectDie=ctx.dice[0];
       releaseChangedAnnouncement(s,ctx,before);
       s.log.unshift(`Nyra takes 1 damage. Huntress rerolls die ${index+1} to ${ctx.dice[index]}.`);
@@ -1500,7 +1500,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       } else {
         p.cp--;
         const ctx=rollContext(s),before=ctx.dice.slice();
-        ctx.dice[action.index]=roll();
+        ctx.dice[action.index]=rerollDie(roll,ctx.dice,action.index,ctx.scalar);
         if(ctx.scalar)s.effectDie=ctx.dice[0];
         releaseChangedAnnouncement(s,ctx,before);
       }
@@ -1519,7 +1519,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       if(action.type==='seedling'){
         spendSpirit(p,'seedling');
         const ctx=rollContext(s),before=ctx.dice.slice();
-        ctx.dice[action.index]=roll();
+        ctx.dice[action.index]=rerollDie(roll,ctx.dice,action.index,ctx.scalar);
         if(ctx.scalar)s.effectDie=ctx.dice[0];
         releaseChangedAnnouncement(s,ctx,before);
       } else if(action.type==='dryadPrevent'){
@@ -2673,7 +2673,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       const context=rollContext(state);
       if(!context||!Number.isInteger(index)||!context.dice[index]||dieOwner(context,index)===result.seat)return previous;
       const before=context.dice.slice();
-      context.dice[index]=roll();
+      context.dice[index]=rerollDie(roll,context.dice,index,context.scalar);
       if(context.scalar)state.effectDie=context.dice[0];
       releaseChangedAnnouncement(state,context,before);
       add(`Mesmerize rerolls die ${index+1} to ${context.dice[index]}.`);
@@ -2718,7 +2718,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'rerollUndead': {
       const d=state.undeadRoll,i=action.index;
       if(!Number.isInteger(i)||!d.dice[i])return previous;
-      d.dice[i]=roll();d.rerolls--;
+      d.dice[i]=rerollDie(roll,d.dice,i);d.rerolls--;
       break;
     }
     case 'resolveUndead': {
@@ -2843,7 +2843,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         p.tempestChi=false;
       }
       if(canRerollMaul(state))p.maulRerolled=true;
-      p.effectDice[i]=roll();p.effectRetry=false;
+      p.effectDice[i]=rerollDie(roll,p.effectDice,i);p.effectRetry=false;
       add(`${p.name} reroll: ${p.effectDice.join(', ')}.`);
       break;
     }
@@ -2854,7 +2854,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       const ctx=rollContext(state), {before,seat}=state.retry;
       if(action.type==='retryDie'){
         if(!Number.isInteger(action.index)||action.index<0||action.index>=ctx.dice.length||dieOwner(ctx,action.index)!==seat||iceman.contextLocked(state,ctx,action.index))return previous;
-        ctx.dice[action.index]=roll();
+        ctx.dice[action.index]=rerollDie(roll,ctx.dice,action.index,ctx.scalar);
         if(ctx.scalar)state.effectDie=ctx.dice[0];
         add(`${names[seat]} uses ${state.retry.remaining?'a Tsunami reroll':'the second reroll'}: ${ctx.dice.join(', ')}.`);
         if(state.retry.remaining>1){state.retry.remaining--;break;}
@@ -2940,7 +2940,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     }
     case 'rerollDuel':
-      state.gunContest.dice[0]=roll();
+      state.gunContest.dice[0]=rerollDie(roll,state.gunContest.dice,0);
       state.extraDefence--;
       break;
     case 'chooseDuel':
@@ -2956,7 +2956,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       const reload=state.gunReload, hit=state.pending;
       if(!reloadRerolls(state).some(([key])=>key===action.status))return previous;
       reload.used.push(action.status);
-      reload.dice[0]=roll();
+      reload.dice[0]=rerollDie(roll,reload.dice,0);
       if(action.status==='wildWest'){
         hit.wildWestUsed=true;
         reload.extra++;
@@ -3054,12 +3054,17 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       }
       activate();break;
     }
-    case 'roll':
+    case 'roll': {
       if(constrictCost(state)){
         attacker.cp--;
         add(`${names[state.active]} pays 1 CP to reroll under Constrict.`);
       }
-      state.dice = Array.from({length:5+(state.stormDice?.count??0)}, (_,i) => state.held[i]||iceman.locked(state,state.active,i) ? state.dice[i] : roll());
+      const dice = Array.from({length:5+(state.stormDice?.count??0)}, (_,i) => state.dice[i]);
+      for (let index = 0; index < dice.length; index++) {
+        if (state.held[index] || iceman.locked(state,state.active,index)) continue;
+        dice[index] = state.attempts ? rerollDie(roll,dice,index) : roll();
+      }
+      state.dice = dice;
       state.held = state.dice.map((_,i)=>Boolean(state.held[i]));
       state.attempts++;
       if(state.attempts===1){iceman.capture(state);psylocke.initialRoll(state,roll);}
@@ -3067,6 +3072,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         state.vineAttempts=Math.min(2-(state.vinePaid??0),(state.vineAttempts??0)+1);
       add(`${names[state.active]} rolls ${state.dice.join(', ')}.`);
       break;
+    }
     case 'hold':
       state.held[action.index] = !state.held[action.index];
       break;
@@ -3457,7 +3463,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       const source=card??p,indices=action.indices;
       if(!Array.isArray(indices)||!indices.length||indices.length>source[key]||new Set(indices).size!==indices.length||
         !indices.every(i=>Number.isInteger(i)&&i>=0&&i<ctx.dice.length&&(!card||heroId(state,card.seat)===paleLady.id||![4,5].includes(ctx.dice[i]))))return previous;
-      for(const i of indices)ctx.dice[i]=roll();
+      for(const i of indices)ctx.dice[i]=rerollDie(roll,ctx.dice,i,ctx.scalar);
       source[key]=0;
       add(`${names[ctx.seat]} rerolls ${indices.length} dice: ${ctx.dice.join(', ')}.`);
       break;
@@ -3465,7 +3471,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     case 'extraDefence': {
       if(!Array.isArray(action.indices)||!action.indices.length||new Set(action.indices).size!==action.indices.length||
          !action.indices.every(i=>Number.isInteger(i)&&i>=0&&i<state.defenceDice.length)) return previous;
-      for(const i of action.indices)state.defenceDice[i]=roll();
+      for(const i of action.indices)state.defenceDice[i]=rerollDie(roll,state.defenceDice,i);
       state.extraDefence--;break;
     }
     case 'skipDefence':
@@ -3680,7 +3686,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         if(event.woundCheck){state.woundRoll=[roll()];state.stage='woundRoll';}
         if(event.ravenActivation)finishNevermore(state.ravenActivation);
         if(event.ravage){
-          state.cardRoll={seat:event.seat,id:20,dice:rollBatch(roll,5),ninjaRerolls:5};
+          state.cardRoll={seat:event.seat,id:20,dice:rollBatch(roll,5,undefined,{seat:event.seat,id:20}),ninjaRerolls:5};
         }
         if(event.terrorize){
           gainGrim(state,state.active,1);

@@ -55,7 +55,11 @@ const scarletWitch=(()=>{
   const crowns=c.Crown&&(up||once('Crown'))?(up?c.Crown:1):0;
   h.damage+=crowns;
   const left=(s.scarletJinx?.left??0)+crowns;
-  if(left){s.scarletJinx={seat:s.active,left,dice:[roll()]};s.stage='scarletJinx';return true;}
+  if(left){
+   const dice=[];
+   dice[0]=rerollDie(roll,dice,0);
+   s.scarletJinx={seat:s.active,left,dice};s.stage='scarletJinx';return true;
+  }
   s.scarletJinx=null;return false;
  }
  return {

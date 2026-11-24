@@ -69,7 +69,7 @@ const storm=(()=>{
    if(card===28){chargeEffect(s,random);return true;}
    if(card===29){p.tornado-=3;borrow(s,5);return true;}
    if(card===30){removeStatus(p,'tornado');p.ragingWindsTurn=s.turn;return true;}
-   if(card===31||card===32){const c=rollContext(s),before=c.dice.slice();c.dice[choice.i]=card===31?choice.v:roll();if(c.scalar)s.effectDie=c.dice[0];if(card===32)s.retry={seat,before,remaining:2};else releaseChangedAnnouncement(s,c,before);return true;}return false;
+   if(card===31||card===32){const c=rollContext(s),before=c.dice.slice();c.dice[choice.i]=card===31?choice.v:rerollDie(roll,c.dice,choice.i,c.scalar);if(c.scalar)s.effectDie=c.dice[0];if(card===32)s.retry={seat,before,remaining:2};else releaseChangedAnnouncement(s,c,before);return true;}return false;
   },
   cardRollSize:card=>({25:3,27:4,33:1})[card]??0,
   resolveCardRoll({id:card,s,seat,p,counts:c,hit,random}){
@@ -95,7 +95,7 @@ const storm=(()=>{
     const h=s.stormTask.queue[0],key=a.status;h.left--;if(h.used)h.used.push(key);p.lightningCharges??=Object.fromEntries(slots.map(k=>[k,false]));
     if(p.lightningCharges[key]){p.lightningCharges[key]=false;startSideDamage(s,1-seat,2,'Lightning',false,{keepPending:true,pantherLocked:t.locked});}else p.lightningCharges[key]=true;
    }
-   if(a.type==='stormOppReroll'){for(const i of a.indices)s.pending.effectDice[i]=roll();s.pending.storm.oppRerolled=true;}
+   if(a.type==='stormOppReroll'){for(const i of a.indices)s.pending.effectDice[i]=rerollDie(roll,s.pending.effectDice,i);s.pending.storm.oppRerolled=true;}
    return s;
   }
  };

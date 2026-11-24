@@ -118,7 +118,7 @@ const alchemist=(()=>{
    }
    if(a.type==='alchemistDone')s.alchemistTask.queue.shift();
    if(a.type==='alchemistLab'){
-    remove(p,c.key,c.tokenId);const d=rollContext(s);if(d.scalar)s.effectDie=roll();else d.dice[c.index]=roll();
+    remove(p,c.key,c.tokenId);const d=rollContext(s);d.dice[c.index]=rerollDie(roll,d.dice,c.index,d.scalar);if(d.scalar)s.effectDie=d.dice[c.index];
     if(['offence','announce'].includes(s.stage))s.held[c.index]=false;
     if(s.stage==='announce'){s.stage='offence';s.pending=null;}
    }

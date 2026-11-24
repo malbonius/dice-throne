@@ -116,7 +116,7 @@ const jeanGrey=(()=>{
    if(a.type==='jeanCollect'&&(h.kind!=='gain'||!h.overflow)||a.type==='jeanPassive'&&(h.kind!=='passive'||!['damage','burn'].includes(a.status)||a.status==='damage'&&previous.pending.pure)||a.type==='jeanEssence'&&(h.kind!=='essence'||!['acuity','flameBlast'].includes(a.status)))return previous;
    const s=structuredClone(previous),p=s.players[seat];s.response=null;
    if(a.type==='spendAcuity'){
-    if(option.kind==='reroll'){p.acuity--;const ctx=rollContext(s),before=ctx.dice.slice();ctx.dice[option.index]=roll();if(ctx.scalar)s.effectDie=ctx.dice[option.index];releaseChangedAnnouncement(s,ctx,before);}
+    if(option.kind==='reroll'){p.acuity--;const ctx=rollContext(s),before=ctx.dice.slice();ctx.dice[option.index]=rerollDie(roll,ctx.dice,option.index,ctx.scalar);if(ctx.scalar)s.effectDie=ctx.dice[option.index];releaseChangedAnnouncement(s,ctx,before);}
     if(option.kind==='cp'){p.acuity-=2;gainCP(p,1);}
     if(option.kind==='burn'){p.acuity-=4;grantStatus(s.players[1-seat],'phoenixBurn');}
    }

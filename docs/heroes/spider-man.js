@@ -83,7 +83,7 @@ const spiderMan=(()=>{
    if(type==='spiderSenseReroll'&&(!canSenseReroll(previous,seat)||!Array.isArray(action.indices)||!action.indices.length||new Set(action.indices).size!==action.indices.length||!action.indices.every(i=>Number.isInteger(i)&&i>=0&&i<previous.defenceDice.length)))return previous;
    const s=structuredClone(previous);s.response=null;removeStatus(s.players[seat],'invisibility');
    if(type==='spendInvisibility'){s.pending.spiderInvisibleDefence=true;s.stage='defence';s.log.unshift(`${heroNames(s)[seat]} spends Invisibility to activate a defence.`);}
-   if(type==='spiderSenseReroll'){s.pending.spiderSenseRerolled=true;for(const i of action.indices)s.defenceDice[i]=roll();s.log.unshift(`Spider-Sense additional Roll Attempt: ${s.defenceDice.join(', ')}.`);}
+   if(type==='spiderSenseReroll'){s.pending.spiderSenseRerolled=true;for(const i of action.indices)s.defenceDice[i]=rerollDie(roll,s.defenceDice,i);s.log.unshift(`Spider-Sense additional Roll Attempt: ${s.defenceDice.join(', ')}.`);}
    return s;
   }
  };

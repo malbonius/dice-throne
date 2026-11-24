@@ -75,7 +75,7 @@ const psylocke=(()=>{
   applyCard({id:card,s,seat,p,choice,roll}){
    if(card===25){startSideDamage(s,1-seat,2,'Shattered!',false,{keepPending:true});return true;}
    if(card===26){s.psyReveal={seat,cards:s.players[1-seat].hand.slice()};return true;}
-   if(card===27){p.manifestDie=roll();return true;}
+   if(card===27){p.manifestDie=rerollDie(roll,[p.manifestDie],0);return true;}
    if(card===29){removeStatus(p,'agility');blackWidow.half(s,'attack');return true;}
    if(card===30){if(s.pending.manifestBonus)p.hp=bounded(p.hp+s.pending.manifestBonus,60);else s.pending.manifestHeal=true;return true;}
    if(card===31){s.pending.forcedUsed=true;gainCopiedStatus(s,seat,choice.key,s.active);return true;}
@@ -99,7 +99,7 @@ const psylocke=(()=>{
     releaseChangedAnnouncement(s,rollContext(s),before);
    }
    if(a.type==='manifestBoost'){const n=Math.ceil(dieValue(p.manifestDie,p)/2);p.manifestUsedTurn=s.turn;p.manifestReady=false;s.pending.manifestBonus=n;damage(s,n);if(s.pending.manifestHeal)p.hp=bounded(p.hp+n,60);}
-   if(a.type==='spendInfiltration'){p.infiltration--;const c=rollContext(s);c.dice[choice.index]=roll();}
+   if(a.type==='spendInfiltration'){p.infiltration--;const c=rollContext(s);c.dice[choice.index]=rerollDie(roll,c.dice,choice.index,c.scalar);}
    if(a.type==='psyRevealDone')s.psyReveal=null;
    return s;
   }

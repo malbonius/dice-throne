@@ -122,7 +122,7 @@ const cursedPirate = (() => {
             gainCP(opponent,2);
           } else {
             const ctx=rollContext(state), before=ctx.dice.slice();
-            ctx.dice[index]=roll();
+            ctx.dice[index]=rerollDie(roll,ctx.dice,index,ctx.scalar);
             if (ctx.scalar) state.effectDie=ctx.dice[0];
             releaseChangedAnnouncement(state,ctx,before);
             add(`Ransom! rerolls die ${index+1} to ${ctx.dice[index]}.`);

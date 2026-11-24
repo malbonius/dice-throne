@@ -236,10 +236,16 @@ function cardActor(state) {
   return actor(state);
 }
 
+function rerollDie(roll, dice, index, scalar = false) {
+  const face = roll();
+  roll.onReroll?.(dice, index, scalar);
+  return face;
+}
+
 // The app can pause an action at the first roll while the engine and its tests
 // continue to accept an ordinary synchronous die roller.
-function rollBatch(roll, count, owners) {
+function rollBatch(roll, count, owners, card) {
   if (!count) return [];
-  if (roll.requestBatch) return roll.requestBatch(count, owners);
+  if (roll.requestBatch) return roll.requestBatch(count, owners, card);
   return Array.from({length: count}, () => roll());
 }

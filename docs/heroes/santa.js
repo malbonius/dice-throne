@@ -94,7 +94,7 @@ const santa=(()=>{
    if(['rollSantaAbility','resolveSantaRoll','resolveEggNog'].includes(a.type)&&!bypassResponse&&!attackLocked(previous)&&hasResponse(previous,1-seat))return {...previous,response:{seat:1-seat,action:a}};
    const s=structuredClone(previous),p=s.players[seat];psylocke.setState(s);s.response=null;
    if(a.type==='santaRemovalReady')s.santaRemoval.choosing=true;
-   if(a.type==='spendCheer'){p.cheer-=c.cost;const d=contexts(s).find(v=>v.kind===c.kind).ctx,before=d.dice.slice();d.dice[c.index]=c.value||roll();if(d.scalar)s.effectDie=d.dice[c.index];releaseChangedAnnouncement(s,d,before);}
+   if(a.type==='spendCheer'){p.cheer-=c.cost;const d=contexts(s).find(v=>v.kind===c.kind).ctx,before=d.dice.slice();d.dice[c.index]=c.value||rerollDie(roll,d.dice,c.index,d.scalar);if(d.scalar)s.effectDie=d.dice[c.index];releaseChangedAnnouncement(s,d,before);}
    if(a.type==='spendEggNog'){p.eggNog-=3;s.santaNogRoll={seat,dice:[roll()],resume:s.stage,locked:!!attackLocked(s)};s.stage='santaNogRoll';}
    if(a.type==='resolveEggNog'){const r=s.santaNogRoll,n=dieValue(r.dice[0],s.players[r.seat]);delete s.santaNogRoll;s.stage=r.resume;const player=s.players[r.seat];if(n>=1&&n<=3)startSideDamage(s,1-r.seat,2,'Egg Nog',false,{keepPending:true,pantherLocked:r.locked});if(n>=4){player.hp=bounded(player.hp+2,60);if(n<=5)gainCP(player,1);else drawCards(player,1,random);}}
    if(a.type==='collectSantaTokens'){const q=s.santaTask.queue.shift();psylocke.withoutAbility(s,()=>grantStatus(s.players[q.target??s.santaTask.seat],q.key,q.amount));}

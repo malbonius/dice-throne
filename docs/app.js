@@ -482,13 +482,19 @@ function dieFace(values, seat, index, view, value = values[index], showFace = fa
   return {label,picture};
 }
 
-function tray(values,seat,editable,held=[],view=state) {
+const rerollBadge = '<small class="reroll-badge" aria-hidden="true">New</small>';
+
+function tray(values,seat,editable,held=[],view=state,rerolled=values.rerolled) {
   return `<div class="dice" role="group" aria-label="${names[seat]} dice">${values.map((value,i) => {
     if (!value) return blankDie;
     const {label,picture} = dieFace(values,seat,i,view);
     if(values===view.dice&&iceman.locked(view,seat,i))return `<span class="die frozen" style="outline:2px solid #b8f5ff" aria-label="Die ${i+1}, ${label}, frozen by Dice Cube">${picture}<small>Frozen</small></span>`;
-    return editable ? button('hold',picture,`class="die" data-index="${i}" aria-pressed="${!!held[i]}" aria-label="Die ${i+1}, ${label}, ${held[i]?'held':'available to reroll'}"`)
-      : `<span class="die${held[i]?' kept':''}"${held[i]?` aria-label="Die ${i+1}, ${label}, held"`:''}>${picture}</span>`;
+    const fresh = rerolled?.includes(i);
+    const face = picture + (fresh ? rerollBadge : '');
+    const classes = `class="die${fresh?' rerolled':''}"`;
+    const description = `Die ${i+1}, ${label}${fresh?', rerolled':''}`;
+    return editable ? button('hold',face,`${classes} data-index="${i}" aria-pressed="${!!held[i]}" aria-label="${description}, ${held[i]?'held':'available to reroll'}"`)
+      : `<span class="die${held[i]?' kept':''}${fresh?' rerolled':''}"${held[i]||fresh?` aria-label="${description}${held[i]?', held':''}"`:''}>${face}</span>`;
   }).join('')}</div>`;
 }
 function handCardChoices(choices, seat) {
@@ -554,9 +560,20 @@ function opposedTray(dice, owners, first, playerNames, renderDie) {
     .map(({value, owner, index}) => `<div><strong>${playerNames[owner]}</strong>${renderDie(value, owner, index)}</div>`).join('')}</div>`;
 }
 
+function rerolledIndices(context, view) {
+  return context.rerolled ?? context.dice.rerolled ??
+    (context.scalar && view.uiScalarReroll === view.stage ? [0] : []);
+}
+
 function rollDisplay(context, view = state, first = view.active) {
-  if (!context.owners) return tray(context.dice, context.seat, false, context.held, view);
-  return opposedTray(context.dice, context.owners, first, names, (value, owner) => tray([value], owner, false, [], view));
+  const rerolled = rerolledIndices(context,view);
+  if (!context.owners) return tray(context.dice, context.seat, false, context.held, view, rerolled);
+  return opposedTray(context.dice, context.owners, first, names, (value, owner, index) =>
+    tray([value], owner, false, [], view, rerolled.includes(index) ? [0] : []));
+}
+
+function scalarTray(seat) {
+  return rollDisplay({dice:[state.effectDie],seat,scalar:true});
 }
 
 function cardDicePlan(seat, id, choices) {
@@ -593,11 +610,13 @@ function selectableRoll(context, renderDie) {
 function selectableDie(context, index, seat, action, enabled, selected, face, open = false, attrs = '') {
   const {label,picture} = dieFace(context.dice,seat,index,state,face);
   const frozen = iceman.contextLocked(state,context,index);
-  const classes = `class="die${selected?' kept':''}${open?' face-picker-open':''}${enabled?'':' unavailable-die'}${frozen?' frozen':''}"`;
-  const description = `aria-label="Die ${index+1}, ${label}${frozen?', frozen':''}"`;
-  if (!enabled) return `<span ${classes} ${description}>${picture}${frozen?'<small>Frozen</small>':''}</span>`;
+  const fresh = face===undefined && rerolledIndices(context,state).includes(index);
+  const content = picture + (fresh ? rerollBadge : '');
+  const classes = `class="die${selected?' kept':''}${open?' face-picker-open':''}${enabled?'':' unavailable-die'}${frozen?' frozen':''}${fresh?' rerolled':''}"`;
+  const description = `aria-label="Die ${index+1}, ${label}${frozen?', frozen':''}${fresh?', rerolled':''}"`;
+  if (!enabled) return `<span ${classes} ${description}>${content}${frozen?'<small>Frozen</small>':''}</span>`;
   const expanded = action==='pick-card-die' && diceEdit?.mode==='change' ? ` aria-expanded="${open}"` : '';
-  return button(action,picture,`${classes} ${description} data-index="${index}" aria-pressed="${selected}"${expanded} ${attrs}`);
+  return button(action,content,`${classes} ${description} data-index="${index}" aria-pressed="${selected}"${expanded} ${attrs}`);
 }
 
 function rerollTray(context, options, renderButton = button) {
@@ -653,7 +672,7 @@ function diceEditorPanel(editor) {
     <div class="phase"><span>${names[seat]} · ${picks.size} of ${limit} selected</span></div>
     <h2 tabindex="-1" id="action-title">${seatCard(state,seat,id).name}</h2>
     <p>${instruction}${cost?` ${cost}`:''}</p>
-    ${defenceReference()}${effectAbilityReference()}
+    ${cardRollReference(state.cardRoll, seatCard(state,seat,id).name) || defenceReference()+effectAbilityReference()}
     ${!context.owners&&context.seat!==seat?`<strong>${names[context.seat]}’s dice</strong>`:''}
     ${dice}${faces}
     <div class="controls">${button('confirm-card-dice',confirm,`class="primary" ${ready?'':'disabled'}`)}
@@ -681,7 +700,7 @@ function handleDiceEditor(type, index, alternate) {
     const action = {type:'playCard',id:editor.id,seat:editor.seat,choice:option.choiceIndex};
     diceEdit=null;
     selectedCard=null;
-    state=mode==='reroll' ? transitionOnMatchScreen(state,action,roll,Math.random)
+    state=mode==='reroll' ? transitionWithRerolls(action,roll,Math.random).next
       : applyMatchAction(action,seatCard(state,editor.seat,editor.id).name);
     render();
     focusRollAction();
@@ -718,7 +737,8 @@ function blankRoll(count, owners, playerNames = names, first = state?.active) {
 function initiativeTray(request, playerNames) {
   if (!request.initiative) return blankRoll(2, request.owners, playerNames, 0);
   return opposedTray(request.initiative, request.owners, 0, playerNames, (value, seat) =>
-    `<div class="dice"><span class="die"><img src="${art.dice[request.setup.heroes[seat]][value - 1]}" alt="${playerNames[seat]} rolled ${value}"></span></div>`);
+    `<div class="dice"><span class="die${request.tieBreak?' rerolled':''}"><img src="${art.dice[request.setup.heroes[seat]][value - 1]}"
+      alt="${playerNames[seat]} ${request.tieBreak?'rerolled':'rolled'} ${value}">${request.tieBreak?rerollBadge:''}</span></div>`);
 }
 
 function offenceDice() {
@@ -798,17 +818,17 @@ const defenceUpgradeBottom = {
   15:{27:69}, 16:{25:74}, 25:{25:69}, 29:{26:87}, 32:{24:75}, 34:{24:72}
 };
 
-function printedAbility(seat, name, bounds, upgrade) {
-  const hasUpgrade = Number.isInteger(upgrade);
+function printedAbility(seat, name, bounds, card) {
+  const fromCard = Number.isInteger(card);
   const [left, top, right, bottom] = bounds;
   const width = right - left, height = bottom - top;
-  const scale = hasUpgrade ? .635 : 1.64;
+  const scale = fromCard ? .635 : 1.64;
   const scan = `<span class="ability-scan" style="aspect-ratio:${width * scale}/${height}">
-    <img data-ability-scan data-seat="${seat}" data-upgrade="${upgrade ?? ''}" alt="Printed ${name} effects"
+    <img data-ability-scan data-seat="${seat}" data-card="${card ?? ''}" alt="Printed ${name} effects"
       style="width:${10000 / width}%;height:${10000 / height}%;left:${-100 * left / width}%;top:${-100 * top / height}%">
     </span>`;
-  return hasUpgrade
-    ? previewCard(state,seat,upgrade,scan)
+  return fromCard
+    ? previewCard(state,seat,card,scan)
     : button('inspect-board',scan,`data-index="${seat}" aria-label="View ${name} on ${names[seat]}’s board" aria-haspopup="dialog"`);
 }
 
@@ -817,6 +837,18 @@ function printedDefence(seat, kind, name) {
   const bounds = Number.isInteger(upgrade) ? [9, 26, 93, defenceUpgradeBottom[hero]?.[upgrade] ?? 65]
     : alternateDefenceBounds[player.werewolf ? 'werewolf' : kind] ?? defenceBoardBounds[hero];
   return printedAbility(seat,name,bounds,upgrade);
+}
+
+const cardEffectBounds = [6, 52, 96, 98];
+
+function cardRollReference(source, heading) {
+  if (!Number.isInteger(source?.id)) return '';
+  const {seat,id} = source;
+  const {name} = seatCard(state,seat,id);
+  return `<div class="ability-reference" role="group" aria-label="Card roll effects"><div>
+    ${heading===name?'':`<div><strong>${name}</strong></div>`}
+    ${printedAbility(seat,name,cardEffectBounds,id)}
+  </div></div>`;
 }
 
 function defenceReference() {
@@ -1063,9 +1095,9 @@ function rollRequestPanel(request) {
     <div class="phase"><span>${phase}</span></div>
     <h2 tabindex="-1" id="action-title">${request.description}</h2>
     ${tied ? '<p>Tied initiative. Roll again to break the tie.</p>' : ''}
-    ${setup ? '' : defenceReference()}
-    ${!setup && (abilityRollActions.has(request.rollType) || rerollActions.has(request.rollType))
-      ? effectAbilityReference(request.description) : ''}
+    ${setup ? '' : cardRollReference(request.card ?? rollCardSource(request.action), request.description) ||
+      defenceReference() + (abilityRollActions.has(request.rollType) || rerollActions.has(request.rollType)
+        ? effectAbilityReference(request.description) : '')}
     ${dice}
     ${button(readyToAdvance ? 'advance-roll' : 'roll-request',label,'class="primary"')}
     ${setup ? '' : matchTools(cardActor(state))}
@@ -1125,13 +1157,46 @@ function transitionOnMatchScreen(view, action, roller, random) {
   return next;
 }
 
+function transitionWithRerolls(action, roller, random) {
+  const updates = new Map();
+  let scalarRerolled = false;
+  const observed = () => roller();
+  observed.requestBatch = roller.requestBatch;
+  observed.onReroll = (dice, index, scalar) => {
+    roller.onReroll?.();
+    if (scalar) scalarRerolled = true;
+    if (!updates.has(dice)) updates.set(dice,new Set());
+    updates.get(dice).add(index);
+  };
+  const next = transitionOnMatchScreen(state,action,observed,random);
+  if (next === state) return {next};
+
+  // Array properties follow the dice through structuredClone and stay out of the save.
+  for (const [dice,indices] of updates) dice.rerolled = [...indices];
+  if (scalarRerolled) next.uiScalarReroll = next.stage;
+  else if (state.effectDie!==next.effectDie || state.stage!==next.stage) delete next.uiScalarReroll;
+  const context = rollContext(next);
+  const rerolled = context?.scalar && scalarRerolled ? [0] : [...(updates.get(context?.dice) ?? [])];
+  return {next, context, rerolled};
+}
+
+function rollCardSource(action) {
+  if (action?.type==='passResponse') action=state.response?.action;
+  switch(action?.type) {
+    case 'playCard': return {seat:action.seat ?? cardActor(state), id:action.id};
+    case 'finishMainCard': return state.mainAction;
+    case 'resolveMainChoice': return state.mainChoice;
+    default: return state.cardRoll;
+  }
+}
+
 // Stop just before an incidental roll so the player can roll explicitly.
 function beforeDice(action, onRoll, random) {
   const stop = Symbol('pause before dice');
   const before = structuredClone(state);
   const wait = () => wait.requestBatch(1);
-  wait.requestBatch = (count, owners) => {
-    onRoll?.(count, owners);
+  wait.requestBatch = (count, owners, card) => {
+    onRoll?.(count, owners, card);
     throw stop;
   };
   try {
@@ -1147,7 +1212,7 @@ function revealRoll(request, random = Math.random) {
   const {action, rollType} = request;
   if (rollsOnCurrentScreen(state, rollType)) {
     rollRequest = null;
-    return transitionOnMatchScreen(state, action, roll, random);
+    return transitionWithRerolls(action,roll,random).next;
   }
   const batches = [];
   let singles;
@@ -1160,21 +1225,24 @@ function revealRoll(request, random = Math.random) {
     singles.dice.push(face);
     return face;
   };
+  record.onReroll = () => {
+    (singles.rerolled ??= []).push(singles.dice.length-1);
+  };
   record.requestBatch = (count, owners) => {
     singles = undefined;
     const dice = Array.from({length: count}, roll);
     batches.push({dice, owners});
     return dice;
   };
-  const next = transitionOnMatchScreen(state, action, record, random);
-  if (!batches.length || next === state) {
+  const {next, context, rerolled} = transitionWithRerolls(action,record,random);
+  if (!batches.length || next === state ||
+      batches.length===1 && next.cardRoll?.dice===batches[0].dice) {
     rollRequest = null;
     return next;
   }
-  const context = rollContext(next);
   const seat = context?.seat ?? action.seat ?? cardActor(state);
-  const reveal = rerollActions.has(rollType) && context?.dice?.length
-    ? [{...context, primary: context.dice === next.dice}]
+  const reveal = context?.dice.length && (rerolled.length || rerollActions.has(rollType))
+    ? [{...context, rerolled, current: true, primary: context.dice === next.dice}]
     : batches.map(batch => ({...batch, seat}));
   rollRequest = {...request, reveal, next};
   return state;
@@ -1188,9 +1256,11 @@ function applyMatchAction(action, description) {
     return revealRoll({action, description, rollType});
   }
   const randomPrefix = [];
-  return beforeDice(action, (count, owners) => {
-    const title = owners ? state.pending?.name ?? description : description;
-    rollRequest = {action, rollType, description: title, count, owners, randomPrefix};
+  return beforeDice(action, (count, owners, card) => {
+    const source = card ?? rollCardSource(action);
+    const title = Number.isInteger(source?.id) ? seatCard(state,source.seat,source.id).name
+      : owners ? state.pending?.name ?? description : description;
+    rollRequest = {action, rollType, description: title, count, owners, randomPrefix, card};
   }, () => {
     const value = Math.random();
     randomPrefix.push(value);
@@ -1214,10 +1284,15 @@ function resolveRollRequest() {
 function advanceRollRequest() {
   const request = rollRequest;
   if (request.setup && request.initiative[0] === request.initiative[1]) {
-    rollRequest = {...request, initiative: undefined};
+    rollRequest = {...request, initiative: undefined, tieBreak:true};
   } else {
     let index = 0;
     state = request.setup ? createMatch(() => request.initiative[index++], request.setup) : request.next;
+    const revealed = request.reveal?.[0];
+    if (revealed?.current && revealed.rerolled?.length && !revealed.scalar) {
+      const context = rollContext(state);
+      if (context) context.dice.rerolled = revealed.rerolled;
+    }
     names = heroNames(state);
     rollRequest = null;
     if (handDialog.open) handDialog.close();
@@ -1607,7 +1682,7 @@ function arena(seat, responding, decisionSeat) {
       ?tray(state.nevermoreRoll.dice,seat,false)+button('resolveNevermore','Resolve Nevermore die','class="primary"')
       :blankRoll(1)+button('rollNevermore','Roll the Nevermore die','class="primary"');
   } else if(state.cardRoll) {
-    phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,seat,state.cardRoll.id).name;
+    phase='Effect roll'; heading=state.cardRoll.id===null?'Wellspring':seatCard(state,state.cardRoll.seat,state.cardRoll.id).name;
     detail=`${names[seat]} can modify the roll before it resolves.`;
     const rerolls=[];
     if (allowed.mysticWildReroll) rerolls.push({type:'mysticWildReroll',limit:mysticBrawler.wildLimit(state)});
@@ -1670,7 +1745,7 @@ function arena(seat, responding, decisionSeat) {
     case 'blind':
       phase='Blind check'; heading=`${actingName} checks Blind`;
       detail='A 1 or 2 cancels the ability.';
-      content=tray([state.effectDie],seat,false)+button('resolveBlind','Resolve Blind','class="primary"'); break;
+      content=scalarTray(seat)+button('resolveBlind','Resolve Blind','class="primary"'); break;
     case 'gunDuelChoice':
       phase='Defensive Roll'; heading=abilityName(defenceName(state,seat));
       content=button('chooseDuel','Deal 3 damage','data-choice="0"')+
@@ -1922,7 +1997,7 @@ function arena(seat, responding, decisionSeat) {
     case 'pirateKegRoll':
       phase='Upkeep'; heading='Powder Keg';
       detail='A 1–2 detonates the keg. A 6 lets you pass it.';
-      content=tray([state.effectDie],seat,false)+button('resolvePirateKeg','Resolve Powder Keg','class="primary"'); break;
+      content=scalarTray(seat)+button('resolvePirateKeg','Resolve Powder Keg','class="primary"'); break;
     case 'pirateChoice': {
       const {kind,seat: chooser}=state.pirateChoice;
       const titles={coins:'Gain Cursed Doubloons',remove:'Shiver Me Timbers',plank:'Walk the Plank',discard:'Choose a card to discard',inspect:'Crow’s Nest!',yoHo:'Yo Ho!',ransom:'Ransom!',passKeg:'Powder Keg'};
@@ -1962,7 +2037,7 @@ function arena(seat, responding, decisionSeat) {
       break;
     case 'sneakRoll':
       phase='Attack modifier';heading='Sneak Attack roll';
-      content=tray([state.effectDie],seat,false)+button('resolveSneak','Add die value to damage','class="primary"');
+      content=scalarTray(seat)+button('resolveSneak','Add die value to damage','class="primary"');
       break;
     case 'dryadResponse':
       phase='Status response'; heading=`${actingName} can prevent an incoming status`;
@@ -1992,10 +2067,10 @@ function arena(seat, responding, decisionSeat) {
       content=button('finishNinjaGain','Gain Ninjutsu','class="primary"'); break;
     case 'ninjutsuRoll':
       phase='Attack modifier'; heading='Ninjutsu';
-      content=tray([state.effectDie],seat,false)+button('resolveNinjutsu','Resolve Ninjutsu','class="primary"'); break;
+      content=scalarTray(seat)+button('resolveNinjutsu','Resolve Ninjutsu','class="primary"'); break;
     case 'ninjutsuChoice':
       phase='Attack modifier'; heading='Choose a Ninjutsu effect';
-      content=tray([state.effectDie],seat,false)+ninjutsuOutcomes(state).map(status=>button('chooseNinjutsu',ninjutsuLabel(status),`data-status="${status}"`)).join(''); break;
+      content=scalarTray(seat)+ninjutsuOutcomes(state).map(status=>button('chooseNinjutsu',ninjutsuLabel(status),`data-status="${status}"`)).join(''); break;
     case 'sideDamage':
       phase=state.sideDamage.strangeSpell?'Spell damage':state.sideDamage.cosmicFlare?'Upkeep damage':state.sideDamage.endTurn?'End of turn':state.sideDamage.source==='Barbed Vine'?'End of Roll Phase':state.sideDamage.source==='Powder Keg'?'Powder Keg damage':'Main Phase damage';
       heading=state.sideDamage.source;
@@ -2097,7 +2172,7 @@ function arena(seat, responding, decisionSeat) {
     case 'evasion':
       phase='Avoid damage'; heading=`${actingName} checks ${statusLabel(state.evasionToken??'evasive')}`;
       detail=state.evasionToken==='smoke'?'A 1–3 avoids the incoming damage.':'A 1 or 2 avoids the incoming damage.';
-      content=tray([state.effectDie],seat,false)+button('resolveEvade','Resolve roll','class="primary"'); break;
+      content=scalarTray(seat)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
       phase='After damage';heading='Finish Ensnare';detail='The new Webbed token and its isolated damage have resolved.';content=button('finishSpiderAfter','Conclude the Roll Phase','class="primary"');break;
     case 'deadpoolAbility':
@@ -2236,7 +2311,7 @@ function arena(seat, responding, decisionSeat) {
     ${detail?`<p>${detail}</p>`:''}
     ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
     ${otherEffects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${otherSeat}"><summary>${otherEffectsTitle}</summary><div class="effect-options">${otherEffects}</div></details>`:''}
-    ${defenceReference()}${effectAbilityReference(heading)}
+    ${cardRollReference(state.cardRoll,heading) || defenceReference()+effectAbilityReference(heading)}
     ${p?.paralyzePrevented?.length?`<p>Paralyze prevented: ${p.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}
     <div class="decision-actions">${content}</div>
     <details class="action-log" data-disclosure="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
@@ -2402,8 +2477,8 @@ function render() {
       (rollRequest ? rollRequestPanel(rollRequest) : diceEdit ? diceEditorPanel(diceEdit) : arena(seat, responding, decisionSeat));
   }
   for (const image of match.querySelectorAll('[data-ability-scan]')) {
-    const seat = Number(image.dataset.seat), upgrade = image.dataset.upgrade;
-    image.src = upgrade ? cardArtwork(state,seat,Number(upgrade)) : boardImage(state,seat,true);
+    const seat = Number(image.dataset.seat), card = image.dataset.card;
+    image.src = card ? cardArtwork(state,seat,Number(card)) : boardImage(state,seat,true);
   }
   for (const detail of match.querySelectorAll('details[data-disclosure]')) {
     if (open.has(detail.dataset.disclosure)) detail.open = true;

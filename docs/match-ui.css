@@ -813,6 +813,23 @@ button.card-preview:hover:not(:disabled) {
 .match-tools button[data-responding="true"] { border-color: #a68652; }
 .die.kept { background: #665132; border-color: var(--gold); }
 
+.dice:has(.die.rerolled) {
+  padding-top: 14px;
+  row-gap: 20px;
+}
+.die.rerolled { position: relative; }
+.reroll-badge {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--gold);
+  font-size: .65rem;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .dice-editor .dice {
   max-width: 400px;
 }

@@ -54,7 +54,7 @@ const rogue=(()=>{
   cardChoices(card,{s,seat,one}){if(card===31)return cloudy(s,seat)?one:[];if(card===32){const c=sugah(s);return c?c.dice.flatMap((v,index)=>[1,2,3,4,5,6].filter(to=>to!==v).map(to=>({index,to,label:`${heroNames(s)[dieOwner(c,index)]}’s die ${index+1}: ${v} → ${to}`}))):[];}return one;},
   applyCard({id:card,s,seat,p,choice,roll,random}){
    if(card===26){grantStatus(s.players[1-seat],'influence');drawCards(p,1,random,card);return true;}
-   if(card===27){grantStatus(s.players[1-seat],'influence');s.cardRoll={seat,roller:1-seat,id:card,dice:rollBatch(roll,s.players[1-seat].influence??0)};return true;}
+   if(card===27){grantStatus(s.players[1-seat],'influence');s.cardRoll={seat,roller:1-seat,id:card,dice:rollBatch(roll,s.players[1-seat].influence??0,undefined,{seat,id:card})};return true;}
    if(card===28){p.ionicCap=cap(p)+1;return false;}
    if(card===29){grantStatus(p,'skyward');gain(s,seat,0,1);return true;}
    if(card===30){p.ionicLimitTurn=s.turn;gain(s,seat,0,1);return true;}
@@ -82,7 +82,7 @@ const rogue=(()=>{
    if(a.type==='rogueCollect'){delete s.rogueGain;psylocke.withoutAbility(s,()=>{rawGain(p,'ionicEnergy',c.ones);rawGain(p,'ionicEnergy2',c.twos);});}
    if(a.type==='rogueLeachBoost'){p.cp--;s.pending.effectDice[0]++;}
    if(a.type==='spendSkyward'){p.skyward--;s.rogueRoll={kind:'skyward',seat,dice:rollBatch(roll,2,[seat,1-seat]),resume:s.stage};s.stage='rogueSkyward';}
-   if(a.type==='rerollSkyward'){p.cp--;s.rogueRoll.dice[0]=roll();}
+   if(a.type==='rerollSkyward'){p.cp--;s.rogueRoll.dice[0]=rerollDie(roll,s.rogueRoll.dice,0);}
    if(a.type==='resolveRogueRoll'){
     delete s.rogueRoll;
     if(r.kind==='influence'){const lost=effectiveDice(r.dice,s.players[r.seat]).filter(v=>v>0&&v<=3).length;s.budget=Math.max(0,s.budget-lost);s.players[r.seat].influence=0;s.stage='offence';s.log.unshift(`Influence removes ${lost} Roll Attempt${lost===1?'':'s'}; ${s.budget} remain.`);}

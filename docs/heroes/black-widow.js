@@ -169,7 +169,7 @@ const blackWidow=(()=>{
       } else if(type==='widowDefenceReroll'){
         if(s.stage!=='defenceResponse'||heroId(s,seat)!==id||count(p)<4||s.pending.widowDefenceRerolled||s.cardRoll)return invalid();
         const indices=action.indices;if(!Array.isArray(indices)||!indices.length||new Set(indices).size!==indices.length||!indices.every(i=>Number.isInteger(i)&&i>=0&&i<s.defenceDice.length))return invalid();
-        for(const i of indices)s.defenceDice[i]=roll();s.pending.widowDefenceRerolled=true;
+        for(const i of indices)s.defenceDice[i]=rerollDie(roll,s.defenceDice,i);s.pending.widowDefenceRerolled=true;
       }
       s.response=null;return s;
     }
