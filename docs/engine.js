@@ -763,25 +763,31 @@ function cardRecipientFields(s,seat,id,choices) {
   return [];
 }
 
-function mainTargets(s,seat,id) {
+function mainTargets(s,seat,id,paid) {
  const probe=structuredClone(s);
  probe.mainAction=null;
  probe.mainChoice=null;
  // The card has already been paid for and committed to play.
  const p=probe.players[seat];
  p.hand.push(id);
- p.cp=seatCard(s,seat,id).cost;
+ p.cp=paid===undefined?seatCard(s,seat,id).cost:p.cp+paid;
  return cardChoices(probe,seat,id);
 }
-function playOneCard(s,seat,id,choice,roll,random,add,chooseRecipient){
+function sameCardChoice(first,second){
+ const {label:firstLabel,...firstEffect}=first;
+ const {label:secondLabel,...secondEffect}=second;
+ return JSON.stringify(firstEffect)===JSON.stringify(secondEffect);
+}
+function playOneCard(s,seat,id,choice,roll,random,add,chooseRecipient,confirmedChoice){
  const names=heroNames(s),p=s.players[seat],c=seatCard(s,seat,id);
- p.cp-=price(s,seat,id);
+ const paid=price(s,seat,id);
+ p.cp-=paid;
  heroRoster[heroId(s,seat)].onCardPlayed?.(s,seat,id);
  p.hand.splice(p.hand.indexOf(id),1);
  if(c.phase!=='upgrade')p.discard.push(id);
  add(`${names[seat]} plays ${c.name}.`);
  if(c.phase==='main'&&([1,2,3,4,29,33].includes(id)||heroId(s,seat)===deadpool.id&&[28,31,32,33].includes(id)||heroId(s,seat)===santa.id&&[28,31,33].includes(id)||heroId(s,seat)===mysticBrawler.id&&[25,26,27,34].includes(id)||heroId(s,seat)===alchemist.id&&[24,25,27,29,30,31,33,34].includes(id)||heroId(s,seat)===seraph.id&&id===30||heroId(s,seat)===vampireLord.id&&[28,30,34].includes(id)||heroId(s,seat)===gunslinger.id&&[28,30].includes(id)||heroId(s,seat)===samurai.id&&[29,31,32].includes(id)||heroId(s,seat)===tactician.id&&id===28||heroId(s,seat)===huntress.id&&[31,32].includes(id)||heroId(s,seat)===3&&[27,32].includes(id)||heroId(s,seat)===4&&id===30||heroId(s,seat)===5&&[30,31].includes(id)||heroId(s,seat)===6&&id===27||heroId(s,seat)===cursedPirate.id&&[19,20,21,24,25,26,27,28,34].includes(id))&&hasResponse(s,1-seat))
-  s.mainAction={seat,id,choice,...(chooseRecipient?{chooseRecipient}: {})};
+  s.mainAction={seat,id,choice,...(chooseRecipient?{chooseRecipient}:{}),...(confirmedChoice?{paid}:{})};
  else if(chooseRecipient)s.mainChoice={seat,id};
  else applyCard(s,seat,id,choice,roll,random,add);
 }
@@ -1656,7 +1662,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       const state=structuredClone(previous);
       state.response=null;
       const chooseRecipient=!!action.chooseRecipient&&cardRecipientFields(previous,player,action.id,choices).length>0;
-      playOneCard(state,player,action.id,choice,roll,random,message=>state.log.unshift(message),chooseRecipient);
+      playOneCard(state,player,action.id,choice,roll,random,message=>state.log.unshift(message),chooseRecipient,action.confirmedChoice);
       return flushPowderKegs(state);
     }
     if(action.type==='sell'){
@@ -2948,8 +2954,16 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     case 'finishCardRoll': completeCardRoll(state,roll,random,add);break;
     case 'finishMainCard': {
-      const {seat,id,choice,chooseRecipient}=state.mainAction;
+      const {seat,id,choice,chooseRecipient,paid}=state.mainAction;
       state.mainAction=null;
+      if(paid!==undefined){
+        const choices=mainTargets(state,seat,id,paid);
+        const match=choices.find(option=>sameCardChoice(choice,option));
+        if(match)applyCard(state,seat,id,match,roll,random,add);
+        else if(choices.length)state.mainChoice={seat,id,paid};
+        else add(`${seatCard(state,seat,id).name} has no eligible choices.`);
+        break;
+      }
       if(chooseRecipient){
         if(mainTargets(state,seat,id).length)state.mainChoice={seat,id};
         else add(`${seatCard(state,seat,id).name} has no eligible choices.`);
@@ -2960,8 +2974,8 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     }
     case 'resolveMainChoice': {
-      const {seat,id}=state.mainChoice;
-      const choice=mainTargets(state,seat,id)[action.choice];
+      const {seat,id,paid}=state.mainChoice;
+      const choice=mainTargets(state,seat,id,paid)[action.choice];
       if(!choice)return previous;
       state.mainChoice=null;
       applyCard(state,seat,id,choice,roll,random,add);

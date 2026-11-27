@@ -39,6 +39,7 @@ try {
 let names = state ? heroNames(state) : [];
 let selectedCard=null;
 let cardRecipientPicks;
+let cardChoiceDraft;
 let handSeat;
 let diceEdit;
 const dicePicks = new Map();
@@ -330,7 +331,7 @@ function heroStatuses(seat) {
   const p = state.players[seat];
   const status = (key, label, suffix, bombId, count = Number.isInteger(p[key]) ? p[key] : undefined) =>
     ({key, label, suffix, bombId, count, note:statusNotes[key], icon:tokenImage(state,seat,key,bombId)});
-  return [p.nyra && {label:'Nyra',suffix:'nyra',icon:nyraIcon(p.nyra.downed),
+  return [p.nyra && {label:'Nyra',suffix:'nyra',companion:true,icon:nyraIcon(p.nyra.downed),
     note:`${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health`},
     p.evasive && status('evasive',`Evasive ×${p.evasive}`),p.entangle && status('entangle','Entangle'),p.blind && status('blind','Blind'),p.targeted && status('targeted','Targeted'),
     p.pirateCoins?.[seat]&&status('doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`,undefined,undefined,p.pirateCoins[seat]),
@@ -487,10 +488,11 @@ function heroStateRows(seat, scope) {
 function hero(seat, decisionSeat, responding) {
   const p = state.players[seat];
   const statuses = heroStatuses(seat);
-  const summaryLabels = statuses.filter(({key}) => urgentStatuses.has(key))
-    .concat(statuses.filter(({key}) => !urgentStatuses.has(key)));
+  const summaryStatuses = statuses.filter(({companion}) => !companion);
+  const summaryLabels = summaryStatuses.filter(({key}) => urgentStatuses.has(key))
+    .concat(summaryStatuses.filter(({key}) => !urgentStatuses.has(key)));
   const visibleStatuses = summaryLabels.slice(0, 2).map(({label}) => label).join(' · ');
-  const moreStatuses = statuses.length > 2 ? `+${statuses.length - 2}` : '';
+  const moreStatuses = summaryLabels.length > 2 ? `+${summaryLabels.length - 2}` : '';
   const statusSummary = visibleStatuses || 'Hero details';
   const ready = seat === decisionSeat && state.stage !== 'finished';
   return `<section class="hero seat-${seat}" aria-label="${names[seat]}" data-deciding="${ready}" style="--hero:${seat ? '#89cbc5' : '#e9a987'}">
@@ -592,8 +594,9 @@ function tray(values,seat,editable,held=[],view=state,rerolled=values.rerolled) 
       : `<span class="die${held[i]?' kept':''}${fresh?' rerolled':''}"${held[i]||fresh?` aria-label="${description}${held[i]?', held':''}"`:''}>${face}</span>`;
   }).join('')}</div>`;
 }
-function recipientPanel(seat,id,choices,fields) {
-  if (cardRecipientPicks?.task !== state.mainChoice) cardRecipientPicks = {task:state.mainChoice,values:{}};
+function recipientPanel(seat,id,choices,fields,task) {
+  const action = task === cardChoiceDraft ? 'confirm-card-choice' : 'resolveMainChoice';
+  if (cardRecipientPicks?.task !== task) cardRecipientPicks = {task,values:{}};
   const picks = cardRecipientPicks.values;
   const simple = fields.length===1;
   const fixed = heroId(state,seat)===seraph.id && id===30
@@ -607,7 +610,7 @@ function recipientPanel(seat,id,choices,fields) {
     const values = [...new Set(compatible.map(choice=>choice[key]))];
     const buttons = values.map(value => {
       const label = key==='discard' ? seatCard(state,seat,value).name : names[value];
-      if (simple) return button('resolveMainChoice',label,`data-choice="${choices.findIndex(choice=>choice[key]===value)}"`);
+      if (simple) return button(action,label,`data-choice="${choices.findIndex(choice=>choice[key]===value)}"`);
       const pick = button('pick-card-recipient',label,
         `data-field="${key}" data-index="${value}" aria-pressed="${picks[key]===value}"`);
       return key==='discard' ? previewableOption(state,seat,value,pick) : pick;
@@ -616,24 +619,42 @@ function recipientPanel(seat,id,choices,fields) {
       <div class="${key==='discard'?'card-choice-list':'controls'}">${buttons}</div></fieldset>`;
   }).join('');
   const choice = choices.findIndex(choice=>fields.every(({key})=>picks[key]===choice[key]));
-  return `<div class="card-recipient-list">${fixed}${rows}${simple?'':button('resolveMainChoice','Confirm choices',
+  return `<div class="card-recipient-list">${fixed}${rows}${simple?'':button(action,'Confirm choices',
     `class="primary" data-choice="${choice}" ${choice<0?'disabled':''}`)}</div>`;
 }
 
-function handCardChoices(choices, seat, view = state) {
-  if (!choices.length || (choices.length===1 && choices[0].label==='Play')) return '';
-  const labels=choices.map(choice=>tokenChoiceLabel(view,choice,seat));
-  const includesCards = choices.some(choice=>Number.isInteger(choice.card));
-  if (includesCards || labels.some((label,index)=>label!==choices[index].label)) {
-    return `<fieldset class="card-token-choices"><legend>${includesCards?'Choose a card':'Choose effect'}</legend>
-      ${labels.map((label,index)=>{
-        const option = `<label><input type="radio" name="card-choice" value="${index}" ${index===0?'checked':''}>${label}</label>`;
-        const {card} = choices[index];
-        return Number.isInteger(card) ? previewableOption(view,seat,card,option) : option;
-      }).join('')}
-    </fieldset>`;
-  }
-  return `<label>Choose effect <select id="card-choice">${labels.map((label,index)=>`<option value="${index}">${label}</option>`).join('')}</select></label>`;
+function cardChoiceButtons(seat,choices,action) {
+  return `<div class="card-choice-list">${choices.map((choice,index)=>{
+    const select = button(action,tokenChoiceLabel(state,choice,seat),`data-choice="${index}"`);
+    return Number.isInteger(choice.card) ? previewableOption(state,seat,choice.card,select) : select;
+  }).join('')}</div>`;
+}
+
+function cardChoicePanel(draft) {
+  const {seat,id,choices} = draft;
+  const title = seatCard(state,seat,id).name;
+  const fields = cardRecipientFields(state,seat,id,choices);
+  return `<section class="arena" aria-label="Card choices">
+    <div class="phase"><span>${names[seat]}’s card</span></div>
+    <h2 tabindex="-1" id="action-title">${title}</h2>
+    ${cardRollReference({seat,id},title)}
+    ${fields.length ? recipientPanel(seat,id,choices,fields,draft) : cardChoiceButtons(seat,choices,'confirm-card-choice')}
+    <div class="controls">${button('cancel-card-choice','Cancel')}</div>
+  </section>`;
+}
+
+function returnToCardHand({seat,id,source}) {
+  handSeat = seat;
+  selectedCard = id;
+  testCard = source;
+  render();
+  renderHand();
+  if (!handDialog.open) handDialog.showModal();
+  handContent.querySelector(`button[data-action="select-card"][data-index="${id}"]`)?.focus();
+}
+
+function backToCardHand(seat) {
+  return `<div class="controls">${button('open-hand','Back to hand',`data-index="${seat}"`)}</div>`;
 }
 
 function handOptions(seat) {
@@ -650,12 +671,10 @@ function handPanel() {
   for(const {id,choices} of options){
     const c=seatCard(state,seat,id);
     const chosen=selectedCard===id;
-    const detail=chosen&&!cardDicePlan(seat,id,choices)&&!cardRecipientFields(state,seat,id,choices).length
-      ? handCardChoices(choices,seat) : '';
     const entry=`<div class="hand-card">
       ${button('select-card',`<strong>${c.name}</strong><small>${price(state,seat,id)} CP · ${c.phase}</small>`,`data-index="${id}" aria-expanded="${chosen}"`)}
       ${previewCard(state,seat,id)}
-    </div>${chosen?`<div class="card-command">${detail}
+    </div>${chosen?`<div class="card-command">
       ${choices.length?button('playCard','Play card',`class="primary" data-index="${id}"`):'<small>Unavailable in this window.</small>'}
       ${canSell?button('sell','Sell for 1 CP',`data-index="${id}"`):''}</div>`:''}`;
     groups[choices.length?'playable':'unavailable'].push(entry);
@@ -825,7 +844,7 @@ function diceEditorPanel(editor) {
     <h2 tabindex="-1" id="action-title">${title}</h2>
     <p>${instruction}${cost?` ${cost}`:''}</p>
     ${(effect && tokenRollReference(tokenRollForAction(state,editor.options[0]?.action,seat),title)) ||
-      cardRollReference(state.cardRoll,title) || defenceReference()+effectAbilityReference()}
+      cardRollReference(effect ? state.cardRoll : {seat,id},title) || defenceReference()+effectAbilityReference()}
     ${!context.owners&&context.seat!==seat?`<strong>${names[context.seat]}’s dice</strong>`:''}
     ${dice}${faces}
     <div class="controls">${ready.length>1
@@ -853,11 +872,7 @@ function handleDiceEditor(type, index, alternate) {
       if (section) section.open = true;
       source?.focus();
     } else {
-      handSeat = editor.seat;
-      selectedCard = editor.id;
-      testCard = editor.testCard;
-      renderHand();
-      handDialog.showModal();
+      returnToCardHand({seat:editor.seat,id:editor.id,source:editor.testCard});
     }
     return;
   }
@@ -1373,6 +1388,7 @@ function rollRequestPanel(request) {
   const {setup, owners, initiative, reveal} = request;
   const token = setup ? null : testRoll?.token ?? request.token ?? tokenRollForAction(state,request.action);
   const heading = token ? tokenRollLabel(token.token) : request.description;
+  const card = setup ? null : request.card ?? rollCardSource(request.action);
   const playerNames = setup ? setup.heroes.map((id, seat) =>
     setup.heroes[0] === setup.heroes[1] ? `${HEROES[id].name} (P${seat + 1})` : HEROES[id].name) : names;
   const tied = initiative && initiative[0] === initiative[1];
@@ -1391,10 +1407,11 @@ function rollRequestPanel(request) {
     <div class="phase"><span>${phase}</span></div>
     <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${tied ? '<p>Tied initiative. Roll again to break the tie.</p>' : ''}
-    ${setup ? '' : tokenRollReference(token,heading) || cardRollReference(request.card ?? rollCardSource(request.action), heading) ||
+    ${setup ? '' : tokenRollReference(token,heading) || cardRollReference(card,heading) ||
       defenceReference() + (abilityRollActions.has(request.rollType) || rerollActions.has(request.rollType)
         ? effectAbilityReference(heading) : '')}
     ${testRoll ? testRollControls(testRoll) : dice + button(readyToAdvance ? 'advance-roll' : 'roll-request',label,'class="primary"')}
+    ${!testRoll && Number.isInteger(card?.id) ? backToCardHand(card.seat) : ''}
     ${setup ? '' : matchTools(cardActor(state))}
   </section>`;
 }
@@ -1807,8 +1824,15 @@ function handleTestRoll(type, index) {
     const selected = Array.from({length: request.count}, (_, i) => request.picks[i] ?? roll());
     testRoll = null;
     state = planTestRoll({...request, faces: [...request.faces, ...selected]});
-  } else if (type === 'test-dice-cancel') testRoll = null;
-  else return;
+  } else if (type === 'test-dice-cancel') {
+    const action = testRoll?.action;
+    testRoll = null;
+    if (action?.type==='playCard') {
+      const {seat,id,testPile} = action;
+      returnToCardHand({seat,id,source:testPile?{id,pile:testPile}:undefined});
+      return;
+    }
+  } else return;
   render();
   focusRollAction();
 }
@@ -2290,16 +2314,17 @@ function arena(seat, responding, decisionSeat) {
     phase=state.retry.remaining?'Tsunami!':'Try, Try Again!'; heading=state.retry.remaining?`${actingName} may reroll up to ${state.retry.remaining} more ${state.retry.remaining===1?"time":"times"}`:`${actingName} can reroll once more`;
     const eligible=diceOwnedBy(context,state.retry.seat,state);
     content=rerollTray(context,[{type:'retryDie',limit:1,canPick:(_,index)=>Boolean(eligible[index])}])+
-      button('finishRetry','Keep this roll');
+      button('finishRetry','Keep this roll')+backToCardHand(state.retry.seat);
   } else if(state.mainChoice) {
-    const {seat,id}=state.mainChoice;
+    const {seat,id,paid}=state.mainChoice;
     phase='Main Phase action'; heading=seatCard(state,seat,id).name;
-    const choices = mainTargets(state,seat,id);
+    const choices = mainTargets(state,seat,id,paid);
     const fields = cardRecipientFields(state,seat,id,choices);
     detail=fields.length>1 ? 'Complete each choice, then confirm.' : 'Choose a target.';
-    content=fields.length ? recipientPanel(seat,id,choices,fields) :
-      `<div class="controls">${choices.map((choice,i)=>
-        button('resolveMainChoice',tokenChoiceLabel(state,choice,seat),`data-choice="${i}"`)).join('')}</div>`;
+    content=cardRollReference({seat,id},heading) +
+      (fields.length ? recipientPanel(seat,id,choices,fields,state.mainChoice)
+        : cardChoiceButtons(seat,choices,'resolveMainChoice')) +
+      backToCardHand(seat);
   } else if(state.response) {
     phase=state.stage==='offence'?'Offensive Roll':
       ['defence','defenceResponse'].includes(state.stage)||state.gunContest?.kind==='duel'&&state.stage==='gunContest'?'Defensive Roll':'Response';
@@ -2337,7 +2362,8 @@ function arena(seat, responding, decisionSeat) {
     if (allowed.abilityReroll) rerolls.push({type:'abilityReroll',limit:state.cardRoll.ninjaRerolls,
       canPick:value=>heroId(state,seat)===paleLady.id||value!==4&&value!==5});
     content=rerollTray({dice:state.cardRoll.dice,seat:state.cardRoll.roller??seat},rerolls)+
-      button('finishCardRoll','Resolve card roll','class="primary"');
+      button('finishCardRoll','Resolve card roll','class="primary"') +
+      (Number.isInteger(state.cardRoll.id) ? backToCardHand(state.cardRoll.seat) : '');
   } else if(state.stage==='gunContest') {
     const contest=state.gunContest;
     const duel=contest.kind==='duel';
@@ -2370,7 +2396,7 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.mainAction) {
     phase='Main Phase'; heading=seatCard(state,state.mainAction.seat,state.mainAction.id).name;
     detail=`${actingName} can use an eligible card or effect before this card resolves.`;
-    content=button('finishMainCard','Resolve card','class="primary"');
+    content=button('finishMainCard','Resolve card','class="primary"')+backToCardHand(state.mainAction.seat);
   } else switch (state.stage) {
     case 'tacticalRestart':
       phase='Offensive Roll'; heading='Profiteer';
@@ -3240,7 +3266,7 @@ function matchTools(responding) {
 }
 function render() {
   if (lastTokenResult?.next !== state) lastTokenResult = undefined;
-  if (cardRecipientPicks?.task !== state?.mainChoice) cardRecipientPicks = undefined;
+  if (cardRecipientPicks?.task !== (cardChoiceDraft ?? state?.mainChoice)) cardRecipientPicks = undefined;
   if (state?.stage !== 'offence' || rollRequest?.setup) {
     editTestFaces = false;
     testAbilityMessage = undefined;
@@ -3256,10 +3282,11 @@ function render() {
   } else {
     const seat = actor(state);
     const responding = cardActor(state);
-    const decisionSeat = diceEdit?.seat ?? (state.response ? responding : seat);
+    const decisionSeat = cardChoiceDraft?.seat ?? diceEdit?.seat ?? (state.response ? responding : seat);
     match.innerHTML = hero(0, decisionSeat, responding) + hero(1, decisionSeat, responding) +
       (rollRequest ? rollRequestPanel(rollRequest) :
-        diceEdit ? diceEditorPanel(diceEdit) : arena(seat, responding, decisionSeat));
+        diceEdit ? diceEditorPanel(diceEdit) : cardChoiceDraft ? cardChoicePanel(cardChoiceDraft)
+          : arena(seat, responding, decisionSeat));
   }
   for (const image of match.querySelectorAll('[data-ability-scan]')) {
     const seat = Number(image.dataset.seat), card = image.dataset.card;
@@ -3343,6 +3370,7 @@ testToggle.addEventListener('change', () => {
     editTestFaces = false;
     testAbilityMessage = undefined;
     if (diceEdit?.testCard) diceEdit = null;
+    if (cardChoiceDraft?.source) cardChoiceDraft = undefined;
     testCard = null;
   }
   render();
@@ -3355,8 +3383,6 @@ function renderHand() {
     const choices = pileCardChoices(seat, pile, id);
     handTitle.textContent = seatCard(state, seat, id).name;
     handContent.innerHTML = `<p>${names[seat]} · ${pile === 'deck' ? 'Draw pile' : 'Discard pile'}</p>
-      ${!cardRecipientFields(state,seat,id,choices).length && choices.length && !cardDicePlan(seat,id,choices)
-        ? handCardChoices(choices,seat,viewWithPileCard(state,seat,pile,id)) : ''}
       ${choices.length ? button('playCard','Play card',`class="primary" data-index="${id}"`) : '<p>Unavailable in this window.</p>'}`;
     return;
   }
@@ -3462,10 +3488,12 @@ function handleAction(event) {
     return;
   }
   if (testRoll) return;
-  if (type === 'pick-card-recipient' && state.mainChoice && cardRecipientPicks?.task===state.mainChoice) {
+  if (type === 'pick-card-recipient' && cardRecipientPicks?.task === (cardChoiceDraft ?? state?.mainChoice)) {
+    const task = cardChoiceDraft ?? state.mainChoice;
+    if (!task) return;
     const field = target.dataset.field;
-    const {seat,id} = state.mainChoice;
-    const choices = mainTargets(state,seat,id);
+    const {seat,id,paid} = task;
+    const choices = task.choices ?? mainTargets(state,seat,id,paid);
     if (!cardRecipientFields(state,seat,id,choices).some(({key})=>key===field)) return;
     if (!choices.some(choice=>choice[field]===index)) return;
     cardRecipientPicks.values[field] = index;
@@ -3473,6 +3501,13 @@ function handleAction(event) {
     match.querySelector(`button[data-action="pick-card-recipient"][data-field="${field}"][data-index="${index}"]`)?.focus();
     return;
   }
+  if (type==='cancel-card-choice' && cardChoiceDraft) {
+    const draft = cardChoiceDraft;
+    cardChoiceDraft = undefined;
+    returnToCardHand(draft);
+    return;
+  }
+  if (cardChoiceDraft && !['confirm-card-choice','inspect-card'].includes(type)) return;
   if (type === 'test-edit-faces') {
     if (!testToggle.checked || state.stage !== 'offence' || !state.dice.length) return;
     editTestFaces = !editTestFaces;
@@ -3498,11 +3533,6 @@ function handleAction(event) {
     testCard = {id: index, pile};
     selectedCard = null;
     deckDialog.close();
-    if (choices.length > 1 && !cardDicePlan(deckSeat,index,choices) && !cardRecipientFields(state,deckSeat,index,choices).length) {
-      renderHand();
-      handDialog.showModal();
-      return;
-    }
     type = 'playCard';
   }
   if (type==='roll-request' && rollRequest && !rollRequest.initiative && !rollRequest.reveal) {
@@ -3660,9 +3690,7 @@ function handleAction(event) {
   if(type==='playCard') {
     if(!canPlayFromHand(state, handSeat))return;
     action.seat=handSeat;
-    action.choice = target.dataset.action === 'test-pile-card' ? 0
-      : Number(handContent.querySelector('input[name="card-choice"]:checked')?.value
-        ?? document.getElementById('card-choice')?.value ?? 0);
+    action.choice = 0;
     const source = testCard;
     const choices = source ? pileCardChoices(handSeat, source.pile, index) : cardChoices(state,handSeat,index);
     if (source && (!canPlayTestCard() || source.id !== index || !choices[action.choice])) return;
@@ -3676,11 +3704,29 @@ function handleAction(event) {
       document.getElementById('action-title')?.focus();
       return;
     }
-    action.chooseRecipient = cardRecipientFields(state,handSeat,index,choices).length > 0;
-    if (source || action.chooseRecipient) handDialog.close();
+    if (choices.length>1 || cardRecipientFields(state,handSeat,index,choices).length ||
+        choices.some(choice=>choice.label!=='Play')) {
+      cardChoiceDraft = {seat:handSeat,id:index,choices,source};
+      if (handDialog.open) handDialog.close();
+      render();
+      focusRollAction();
+      return;
+    }
+    if (source && handDialog.open) handDialog.close();
+  }
+  if (type==='confirm-card-choice') {
+    const draft = cardChoiceDraft;
+    if (!draft || !draft.choices[action.choice] || draft.source && !testToggle.checked) return;
+    const options = draft.source ? pileCardChoices(draft.seat,draft.source.pile,draft.id)
+      : cardChoices(state,draft.seat,draft.id);
+    if (!canPlayFromHand(state,draft.seat)) return;
+    const choice = options.findIndex(option=>sameCardChoice(option,draft.choices[action.choice]));
+    if (choice<0) return;
+    Object.assign(action,{type:'playCard',seat:draft.seat,id:draft.id,choice,confirmedChoice:true,testPile:draft.source?.pile});
+    cardChoiceDraft = undefined;
   }
   if(type==='deadpoolLuckyHope')action.amount=Number(document.getElementById('deadpool-lucky-hope').value);
-  const rollTitle = type === 'playCard' ? seatCard(state, handSeat, action.id).name : target.textContent?.trim();
+  const rollTitle = action.type === 'playCard' ? seatCard(state, action.seat, action.id).name : target.textContent?.trim();
   const safeTitle = rollTitle?.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   state = applyMatchAction(action, safeTitle || 'Roll dice');
   if(state!==oldState)selectedPotion=undefined;
@@ -3691,7 +3737,7 @@ function handleAction(event) {
     focusRollAction();
     return;
   }
-  if(oldStage!==state.stage || oldSeat!==cardActor(state) || type==='playCard' || type==='sell')selectedCard=null;
+  if(oldStage!==state.stage || oldSeat!==cardActor(state) || action.type==='playCard' || type==='sell')selectedCard=null;
   if(handDialog.open && (oldStage!==state.stage || oldSeat!==cardActor(state) || (!oldState.retry&&state.retry) || (!oldState.cardRoll&&state.cardRoll) || (!oldState.mainAction&&state.mainAction)))handDialog.close();
   render();
   const decisionChanged = oldStage!==state.stage || oldState.response?.seat!==state.response?.seat ||
@@ -3970,6 +4016,7 @@ document.getElementById('reset').addEventListener('click',()=>{
   editTestFaces=false;
   testAbilityMessage=undefined;
   testCard=null;
+  cardChoiceDraft=undefined;
   dicePicks.clear();
   selectedPotion=undefined;
   rollRequest = {

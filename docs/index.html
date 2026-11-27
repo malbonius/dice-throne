@@ -16,10 +16,9 @@ main{max-width:1650px;margin:auto;padding:clamp(10px,2.5vw,32px);display:grid;gr
 .vitals{display:inline-flex;gap:12px;align-items:center;white-space:nowrap}
 
 
-.token-help{position:relative}.token-help button{background:transparent;padding:3px 5px;min-height:28px;font-size:inherit}
+.token-help button{background:transparent;padding:3px 5px;min-height:28px;font-size:inherit}
 .token-note{display:block;margin:4px 0 0;line-height:1.4;color:var(--muted)}
 .token-note[hidden]{display:none}
-@media(hover:hover){.token-help:hover .token-note,.token-help:focus-within .token-note{display:block}}
 dialog{color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:12px;width:min(1100px,96vw);max-width:none;padding:12px}
 dialog::backdrop{background:#080a12dc}
 .viewer-head,.viewer-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:8px}.viewer-head h2{margin:0 auto 0 0;font-size:1.15rem}
@@ -86,7 +85,7 @@ body:has(#hero-picker[open]){overflow:hidden}
  <div>
   <div>
    <h1><img class="header-logo" src="./dice-throne-logo.png" alt="Dice Throne" width="1024" height="612"></h1>
-   <small>Playtest 0.53.38</small>
+   <small>Playtest 0.53.39</small>
    <label class="test-mode-label"><input id="test-mode" type="checkbox" autocomplete="off"> Test mode</label>
   </div>
   <div class="header-actions">
@@ -154,8 +153,10 @@ body:has(#hero-picker[open]){overflow:hidden}
 </dialog>
 <dialog id="token-info" aria-labelledby="token-info-title" aria-describedby="token-info-note">
  <div class="viewer-head"><h2 id="token-info-title"></h2><form method="dialog"><button autofocus>Close</button></form></div>
- <div id="token-info-icon" class="large-token-icon" aria-hidden="true"></div>
- <p id="token-info-note"></p>
+ <div class="token-info-body">
+  <div id="token-info-icon" class="large-token-icon" aria-hidden="true"></div>
+  <p id="token-info-note"></p>
+ </div>
 </dialog>
 <dialog id="deck-dialog" aria-labelledby="deck-title">
  <div class="viewer-head"><h2 id="deck-title"></h2><form method="dialog"><button autofocus>Close deck</button></form></div>
