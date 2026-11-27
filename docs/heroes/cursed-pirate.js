@@ -205,12 +205,18 @@ const cursedPirate = (() => {
         default: return false;
       }
     },
-    resolveCardRoll({id:card,p,opponent,counts,hit,s,seat,bounded,updateDamage,grantPirateStatus,drawCards,discardRandom,random,startSideDamage}) {
+    resolveCardRoll({id:card,p,opponent,counts,hit,s,seat,bounded,updateDamage,grantPirateStatus,drawCards,discardRandom,random,startSideDamage,seatCard,add}) {
       if (card===23 && counts.Booty) { drawCards(p,2,random,card); gainCP(p,2); }
       if (card===24) {
         if (counts.Cutlass) choose(s,seat,'inspect');
         else if (counts.Booty && opponent.hand.length) choose(s,1-seat,'discard');
-        else if (counts.Skull) discardRandom(opponent,random);
+        else if (counts.Skull) {
+          const discarded = discardRandom(opponent,random);
+          const target = heroNames(s)[1-seat];
+          add(discarded===undefined ? `Crow’s Nest! · ${target} has no card to discard.`
+            : `Crow’s Nest! · ${target} randomly discards ${seatCard(s,1-seat,discarded).name}.`);
+          return true;
+        }
       }
       if (card===28) {
         if (counts.Cutlass) startSideDamage(s,1-seat,2,'Swashbuckle!');

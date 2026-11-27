@@ -1,6 +1,6 @@
 # Dice Throne Offline Engine
 
-**Playtest 0.53.37**
+**Playtest 0.53.38**
 
 An offline Dice Throne engine for playing and testing two-hero matches. Play both sides in a browser or install the game as a web app on supported Windows and Android browsers. The roster includes 45 heroes from Season One Rerolled, Season Two, Outcasts, Vanguard, Marvel, X-Men and Singles.
 
@@ -13,6 +13,12 @@ python -m http.server 8000 --directory docs
 ```
 
 Open [http://localhost:8000/](http://localhost:8000/), choose both heroes in **Match setup** and select **Set up initiative**. Wait for **Ready for offline play** before disconnecting. If your browser offers **Install app**, you can install from an HTTPS deployment or localhost. The game saves your current match automatically. Open the same address with the same browser profile to resume it after an update.
+
+## What changed in 0.53.38
+
+- Card choices use one row per card with a **View** button.
+- Crow’s Nest! names the card discarded on a 6.
+- Artificer’s bots and Huntress’s Nyra use transparent backgrounds. Bot details show the activation cost and effect. Nyra appears in the token strip with her Health and status in the detail view.
 
 ## What changed in 0.53.37
 

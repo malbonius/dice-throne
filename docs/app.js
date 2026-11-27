@@ -68,8 +68,20 @@ function previewCard(state, seat, id, label = 'View') {
   const style = label === 'View' ? 'class="card-preview" ' : '';
   return button('inspect-card', label, `${style}data-index="${id}" data-seat="${seat}" aria-label="View ${seatCard(state,seat,id).name}" aria-haspopup="dialog"`);
 }
+function cardOptionRow(controls, preview) {
+  return `<div class="card-option">${controls}${preview}</div>`;
+}
 function previewableOption(state, seat, id, controls) {
-  return `<div class="card-option">${controls}${previewCard(state,seat,id)}</div>`;
+  return cardOptionRow(controls,previewCard(state,seat,id));
+}
+function rejectOption(id, controls) {
+  return cardOptionRow(controls,button('inspect-reject','View',
+    `class="card-preview" data-index="${id}" aria-label="View ${krampus.names[id]}" aria-haspopup="dialog"`));
+}
+function aceOption(seat, suit, controls) {
+  return cardOptionRow(controls,button('inspect-ace','View',
+    `class="card-preview" data-index="${gambit.suits.indexOf(suit)}" data-seat="${seat}"
+    aria-label="View ${statusLabel(suit)} Ace" aria-haspopup="dialog"`));
 }
 function boardImage(state,seat,full=false) {
   const id=heroId(state,seat);
@@ -286,11 +298,21 @@ function tokenChoiceLabel(view, choice, seat) {
   return image?`<span class="token-choice">${image}<span>${choice.label}</span></span>`:choice.label;
 }
 
-const token = (seat,key,label,suffix=key,bombId,scope='hero') => {
-  const id = `status-${scope}-${seat}-${suffix}`;
-  return `<span class="token-help">${button('status',`<span class="token">${tokenImage(state,seat,key,bombId)}${label}</span>`,
-    `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${statusNotes[key]}</span></span>`;
-};
+function tokenHelp(id,label,icon,note) {
+  return `<span class="token-help">${button('status',`<span class="token">${icon}${label}</span>`,
+    `aria-expanded="false" aria-controls="${id}" aria-describedby="${id}"`)}<span class="token-note" id="${id}" hidden>${note}</span></span>`;
+}
+
+const token = (seat,key,label,suffix=key,bombId,scope='hero') =>
+  tokenHelp(`status-${scope}-${seat}-${suffix}`,label,tokenImage(state,seat,key,bombId),statusNotes[key]);
+
+function botIcon(bot,level) {
+  return `<img class="companion-art ${bot}-${level}" src="${art.artificerBots[bot][level-1]}" alt="">`;
+}
+
+function nyraIcon(downed) {
+  return `<img class="companion-art nyra-art" src="${art.nyraDials[Number(downed)]}" alt="">`;
+}
 const urgentStatuses = new Set(['timeBomb','phoenixBurn','poison','burn','delayedPoison',
   'bleed','wound','powderKeg','concussion','knockdown','disarm','blind','blindingLight']);
 const undeadNotes = {
@@ -301,14 +323,16 @@ const undeadNotes = {
 const botNotes = {
   nanobot: 'Detonate Nanites during your Upkeep. Deal 1, 3 or 5 damage for 1, 2 or 3 Nanites on each affected hero.',
   shockbot: 'Add 3 damage to your attack once per turn.',
-  healbot: 'When an eligible attack deals at least 6 damage, roll to heal 1 on a Wrench or 2 on another symbol. Up to twice per attack.'
+  healbot: 'When attacked for at least 6 damage, roll to heal 1 on a Wrench or 2 on another symbol. Up to twice per attack.'
 };
 
 function heroStatuses(seat) {
   const p = state.players[seat];
   const status = (key, label, suffix, bombId, count = Number.isInteger(p[key]) ? p[key] : undefined) =>
     ({key, label, suffix, bombId, count, note:statusNotes[key], icon:tokenImage(state,seat,key,bombId)});
-  return [p.evasive && status('evasive',`Evasive ×${p.evasive}`),p.entangle && status('entangle','Entangle'),p.blind && status('blind','Blind'),p.targeted && status('targeted','Targeted'),
+  return [p.nyra && {label:'Nyra',suffix:'nyra',icon:nyraIcon(p.nyra.downed),
+    note:`${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health`},
+    p.evasive && status('evasive',`Evasive ×${p.evasive}`),p.entangle && status('entangle','Entangle'),p.blind && status('blind','Blind'),p.targeted && status('targeted','Targeted'),
     p.pirateCoins?.[seat]&&status('doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`,undefined,undefined,p.pirateCoins[seat]),
     p.pirateCoins?.[1-seat]&&status('doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent',undefined,p.pirateCoins[1-seat]),
     ...['powderKeg','wither','parlay'].map(key=>p[key]&&status(key,statusLabel(key)+(key==='wither'?` ×${p[key]}`:''))),
@@ -402,7 +426,8 @@ function heroStatuses(seat) {
     p.synth&&status('synth',`Synth ×${p.synth}`),p.nanite&&status('nanite',`Nanite ×${p.nanite}`),
     ...Object.entries(p.bots??{}).map(([bot,level])=>({
       label:`${level===2?'Advanced':'Basic'} ${artificer.bots[bot]}`,
-      icon:`<img src="${art.artificerBots[bot][level-1]}" alt="">`,
+      suffix:bot,
+      icon:botIcon(bot,level),
       note:`Costs ${artificer.cost(p,bot)} Synth to activate. ${botNotes[bot]}`
     })),
     p.barbed&&status('barbed','Barbed Vine'),p.wellspring&&status('wellspring','Wellspring'),
@@ -424,11 +449,12 @@ function tokenSymbol(label, icon) {
 function mobileTokens(seat, statuses) {
   if (!statuses.length) return '';
   return `<div class="hero-token-strip" aria-label="${names[seat]}’s attached tokens">
-    ${statuses.map(({icon, label, count},index)=>{
+    ${statuses.map(({icon, label, count, note},index)=>{
       const symbol = tokenSymbol(label,icon);
       const badge = count>0 ? `<small class="token-count" aria-hidden="true">${count}</small>` : '';
+      const title = note ? `title="${note.replaceAll('&','&amp;').replaceAll('"','&quot;')}"` : '';
       return button('inspect-token',symbol+badge,
-        `class="hero-token-button" data-seat="${seat}" data-index="${index}" aria-label="${label}" aria-haspopup="dialog" aria-controls="token-info"`);
+        `class="hero-token-button" data-seat="${seat}" data-index="${index}" aria-label="${label}${label==='Nyra'?', '+note:''}" ${title} aria-haspopup="dialog" aria-controls="token-info"`);
     }).join('')}
   </div>`;
 }
@@ -443,7 +469,6 @@ function heroStateRows(seat, scope) {
     player.druidForm && `${druid.formName(player.druidForm)} Form`,
     player.resurrected && 'Resurrected · CP and cards locked',
     state.stage==='locked' && state.pending.stun && seat!==state.active && note('stun','Stun'),
-    player.nyra && `<span class="token"><img src="${art.nyraDials[Number(player.nyra.downed)]}" alt="">Nyra · ${player.nyra.downed?'Downed':'Active'} · ${player.nyra.hp}/7 Health</span>`,
     ...state.players.map((owner,i)=>owner.nevermoreSeat===seat &&
       note('nevermore',`Nevermore${heroId(state,1-i)===raveness.id?` (P${i+1})`:''} · ${owner.nevermoreVitality}/3`,`nevermore-${i}`)),
     player.sunDial!==undefined && note('sunDial',`${player.sunDawn?'Dawn':'Dusk'} · ${player.sunDial}/5`),
@@ -507,8 +532,9 @@ function heroInformation(seat, statuses, compact = false) {
   const spellBookLabel = `Book of Vishanti · ${p.spellBook?.length ?? 0} prepared`;
   return `<div class="hero-information-body">
         ${heroStateRows(seat,compact?'sheet':undefined)}
-        <div class="tokens">${statuses.map(({key,label,suffix,bombId,icon})=>key
+        <div class="tokens">${statuses.map(({key,label,suffix,bombId,icon,note})=>key
           ? token(seat,key,label,suffix,bombId,compact?'sheet':undefined)
+          : suffix && note ? tokenHelp(`status-${compact?'sheet':'hero'}-${seat}-${suffix}`,label,icon,note)
           : `<span class="token">${icon}${label}</span>`).join('') || 'No tokens'}</div>
         <div class="inventory">
           ${button('open-deck',`<img src="${art.back}" alt="">Draw ${drawCount}`,`class="draw-count" data-index="${seat}" aria-label="Draw ${drawCount}. View ${names[seat]}’s ${compact?'draw pile':'deck list'}" aria-haspopup="dialog"${compact?' data-location="draw"':''}`)}
@@ -582,10 +608,12 @@ function recipientPanel(seat,id,choices,fields) {
     const buttons = values.map(value => {
       const label = key==='discard' ? seatCard(state,seat,value).name : names[value];
       if (simple) return button('resolveMainChoice',label,`data-choice="${choices.findIndex(choice=>choice[key]===value)}"`);
-      return button('pick-card-recipient',label,
+      const pick = button('pick-card-recipient',label,
         `data-field="${key}" data-index="${value}" aria-pressed="${picks[key]===value}"`);
+      return key==='discard' ? previewableOption(state,seat,value,pick) : pick;
     }).join('');
-    return `<fieldset class="card-recipient-row"><legend>${caption}</legend><div class="controls">${buttons}</div></fieldset>`;
+    return `<fieldset class="card-recipient-row"><legend>${caption}</legend>
+      <div class="${key==='discard'?'card-choice-list':'controls'}">${buttons}</div></fieldset>`;
   }).join('');
   const choice = choices.findIndex(choice=>fields.every(({key})=>picks[key]===choice[key]));
   return `<div class="card-recipient-list">${fixed}${rows}${simple?'':button('resolveMainChoice','Confirm choices',
@@ -595,9 +623,14 @@ function recipientPanel(seat,id,choices,fields) {
 function handCardChoices(choices, seat, view = state) {
   if (!choices.length || (choices.length===1 && choices[0].label==='Play')) return '';
   const labels=choices.map(choice=>tokenChoiceLabel(view,choice,seat));
-  if (labels.some((label,index)=>label!==choices[index].label)) {
-    return `<fieldset class="card-token-choices"><legend>Choose effect</legend>
-      ${labels.map((label,index)=>`<label><input type="radio" name="card-choice" value="${index}" ${index===0?'checked':''}>${label}</label>`).join('')}
+  const includesCards = choices.some(choice=>Number.isInteger(choice.card));
+  if (includesCards || labels.some((label,index)=>label!==choices[index].label)) {
+    return `<fieldset class="card-token-choices"><legend>${includesCards?'Choose a card':'Choose effect'}</legend>
+      ${labels.map((label,index)=>{
+        const option = `<label><input type="radio" name="card-choice" value="${index}" ${index===0?'checked':''}>${label}</label>`;
+        const {card} = choices[index];
+        return Number.isInteger(card) ? previewableOption(view,seat,card,option) : option;
+      }).join('')}
     </fieldset>`;
   }
   return `<label>Choose effect <select id="card-choice">${labels.map((label,index)=>`<option value="${index}">${label}</option>`).join('')}</select></label>`;
@@ -1089,9 +1122,8 @@ function tokenRollReference(source, heading) {
   const {token, seat, bombId} = source;
   const label = tokenRollLabel(token);
   const note = token==='healbot'?botNotes.healbot:token==='nyra'?'Nyra takes 1 damage to reroll a die.':statusNotes[token];
-  const image = token==='healbot'?art.artificerBots.healbot[(state.players[seat].bots?.healbot??1)-1]
-    : token==='nyra'?art.nyraDials[0]:null;
-  const icon = image ? `<img src="${image}" alt="">` : tokenImage(state,seat,token,bombId);
+  const icon = token==='healbot'?botIcon('healbot',state.players[seat].bots?.healbot??1)
+    : token==='nyra'?nyraIcon(state.players[seat].nyra?.downed??false):tokenImage(state,seat,token,bombId);
   return `<div class="token-roll-reference" role="group" aria-label="${label} token effect">
     <span class="large-token-icon">${tokenSymbol(label,icon)}</span>
     <div>${heading===label?'':`<strong>${label}</strong>`}${note?`<p>${note}</p>`:''}</div>
@@ -1900,7 +1932,14 @@ function arena(seat, responding, decisionSeat) {
   const footworkPending=!!(duelist.bonus(state,state.active)||duelist.bonus(state,1-state.active));
   if(state.deadpoolRps){
     const r=state.deadpoolRps;phase='Rock, Paper, Scissors';
-    if(['first','second'].includes(r.step)){heading=`${names[responding]} · choose privately`;detail='The first choice stays hidden until both choices are committed. A tied round is replayed.';content=deadpool.hands.map((hand,i)=>button('deadpoolRpsPick',`<img src="${art.deadpoolRps[i]}" alt="${hand}" style="max-width:110px;width:100%">${hand}`,`data-status="${hand}"`)).join('')+(r.step==='second'?button('deadpoolRpsRandom','Draw a random opponent RPS card'):'');}
+    if(['first','second'].includes(r.step)){
+      heading=`${names[responding]} · choose privately`;
+      detail='The first choice stays hidden until both choices are committed. A tied round is replayed.';
+      content=deadpool.hands.map((hand,i)=>cardOptionRow(
+        button('deadpoolRpsPick',hand,`data-status="${hand}"`),button('inspect-rps','View',
+          `class="card-preview" data-index="${i}" aria-label="View ${hand}" aria-haspopup="dialog"`)
+      )).join('')+(r.step==='second'?button('deadpoolRpsRandom','Draw a random opponent RPS card'):'');
+    }
     if(r.step==='reveal'){heading=r.winner===null?'Tie · play again':`${names[r.winner]} wins the round`;content=r.picks.map((hand,i)=>`<figure><figcaption>${names[i===0?r.seat:1-r.seat]} · ${hand}</figcaption><img src="${art.deadpoolRps[deadpool.hands.indexOf(hand)]}" alt="${hand}" style="max-width:130px;width:100%"></figure>`).join('')+button('deadpoolRpsReveal',r.winner===null?'Play the tied round again':'Continue RPS result','class="primary"');}
     if(r.step==='shoot'){heading=`${names[responding]} may use Shoot`;detail='Flip the active Shoot card to win this round, or accept the result. Once Shoot is used, the other player cannot use a second Shoot.';content=button('deadpoolShoot','Use Shoot · flip to Inactive','data-status="yes"')+button('deadpoolShoot','Keep Shoot Active · accept the result','data-status="no"');}
   } else if(state.deadpoolTask&&state.stage==='deadpoolChoices'){
@@ -1953,14 +1992,15 @@ function arena(seat, responding, decisionSeat) {
   } else if(!state.response&&state.mysticContest&&!state.cardRoll&&!state.retry){
     phase='Strong Arm';heading='Compare the opposed roll';detail='Equal or greater: gain 1 Strength and deal 6 damage. Lower: deal 7. Each die belongs to its own roller and can be altered before resolution.';content=rollDisplay(rollContext(state))+button('resolveMysticContest','Resolve Strong Arm','class="primary"');
   } else if(state.krampusOverflow!==undefined){
-    const seat=state.krampusOverflow,player=state.players[seat];phase='Reject limit';heading=`${names[seat]} must discard down to 3 Rejects`;detail='The whole draw batch has finished. Excess Rejects must be discarded without activation.';content=player.rejects.map(id=>button('discardReject',`Discard ${krampus.names[id]}`,`data-index="${id}"`)).join('');
+    const seat=state.krampusOverflow,player=state.players[seat];phase='Reject limit';heading=`${names[seat]} must discard down to 3 Rejects`;detail='The whole draw batch has finished. Excess Rejects must be discarded without activation.';content=player.rejects.map(id=>rejectOption(id,button('discardReject',`Discard ${krampus.names[id]}`,`data-index="${id}"`))).join('');
   } else if(state.krampusActivation){
     const a=state.krampusActivation;phase='Activate Reject';heading=krampus.names[a.reject];detail=`${a.free?'This activation keeps the Reject in play.':'The Reject is discarded after its effect.'} Each Reject can activate only once per global turn. Eligible Krampus cards can be played before finishing.`;content=`<img src="${art.krampusRejects[a.reject]}" alt="${krampus.names[a.reject]}" style="max-width:240px;width:100%">`+button('finishReject','Resolve Reject effect','class="primary"');
   } else if(state.krampusTask&&state.stage==='krampusChoices'){
     const h=state.krampusTask.queue[0];phase='Krampus';heading=names[state.krampusTask.seat];
     if(h.kind==='draw'){heading=`Draw ${h.amount} Reject${h.amount===1?'':'s'}`;detail='Activate eligible existing Rejects first if desired, then draw the whole batch. If over the limit, discard down to three without activating the excess.';content=button('collectRejects','Draw the whole batch','class="primary"');}
     if(h.kind==='gift'){heading=`Gain ${h.amount} Gifts`;detail='Spend existing Gifts first if desired, then collect the whole batch. Excess Gifts are lost.';content=button('collectGifts','Collect Gifts','class="primary"');}
-    if(h.kind==='free'){heading='Optional free Reject activation';detail='Activate one eligible Reject without discarding it. The once-per-turn limit still applies.';content=krampus.options(state,responding,true).map((c,i)=>button('krampusFree',c.label,`data-choice="${i}"`)).join('')+button('krampusFreeSkip','Keep the Rejects without activating','class="primary"');}
+    if(h.kind==='free'){heading='Optional free Reject activation';detail='Activate one eligible Reject without discarding it. The once-per-turn limit still applies.';content=krampus.options(state,responding,true).map((c,i)=>
+      rejectOption(c.reject,button('krampusFree',c.label,`data-choice="${i}"`))).join('')+button('krampusFreeSkip','Keep the Rejects without activating','class="primary"');}
     if(h.kind==='rejection'){heading='Rejection · choose the benefit';content=button('krampusRejection','Draw 1 Reject','data-status="draw"')+button('krampusRejection','Activate a Reject without discarding','data-status="free"');}
   } else if(!state.response&&state.alchemistTask&&state.stage==='alchemistChoices'){
     const task=state.alchemistTask, h=task.queue[0], choices=alchemist.taskChoices(state);
@@ -2034,7 +2074,8 @@ function arena(seat, responding, decisionSeat) {
       content=gambit.available(state,t.seat,h).map(suit=>button('gambitCharge',`${statusLabel(suit)} · ${state.players[t.seat].aces[suit].charge+(h.allocation[suit]??0)}/${gambit.caps[suit]} allocated`,`data-status="${suit}"`)).join('')+button('gambitChargeSkip','Finish this acceleration batch','class="primary"');
     } else if(h.kind==='regain'){
       heading=h.optional===false?`Regain ${h.left} Ace card(s)`:`Regain up to ${h.left} Ace card(s)`;detail='Regained Aces return face up with no charge tokens.';
-      content=gambit.regainChoices(state,t.seat,h).map(suit=>button('gambitRegain',`Regain ${statusLabel(suit)}`,`data-status="${suit}"`)).join('')+(h.optional===false?'':button('gambitRegainSkip','Finish regaining','class="primary"'));
+      content=gambit.regainChoices(state,t.seat,h).map(suit=>aceOption(t.seat,suit,
+        button('gambitRegain',`Regain ${statusLabel(suit)}`,`data-status="${suit}"`))).join('')+(h.optional===false?'':button('gambitRegainSkip','Finish regaining','class="primary"'));
     } else if(h.kind==='window'){
       heading='Continue ability effects';detail=h.label;content=button('gambitContinue','Continue','class="primary"');
     } else if(h.kind==='sleight'){
@@ -2065,7 +2106,10 @@ function arena(seat, responding, decisionSeat) {
       detail=h.cards.length?'This does not discard, draw or transfer any cards.':'The opponent’s hand is empty.';
     } else if(h.kind==='scout'){
       heading='Battle Plan · top three cards';detail=h.picking?'Reveal and add up to one Leadership card to your hand, or skip.':'For each remaining card, discard it or choose it as the next card returned. The first returned card will be on top.';
-      content=h.cards.map((card,i)=>`<figure class="reveal-card"><img src="${cardArtwork(state,t.seat,card)}" alt="${seatCard(state,t.seat,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,t.seat,card).name}</figcaption>${previewCard(state,t.seat,card)}${h.picking?(cyclops.isLeadership(state,t.seat,card)?button('cyclopsScoutTake','Reveal and take',`data-index="${i}"`):''):button('cyclopsScoutTop','Return next to deck',`data-index="${i}"`)+button('cyclopsScoutDiscard','Discard',`data-index="${i}"`)}</figure>`).join('')+(h.picking?button('cyclopsScoutSkip','Take no Leadership card','class="primary"'):'');
+      content=h.cards.map((card,i)=>previewableOption(state,t.seat,card,`<div class="card-option-body">
+        <strong>${seatCard(state,t.seat,card).name}</strong><div class="controls">${h.picking
+          ? (cyclops.isLeadership(state,t.seat,card)?button('cyclopsScoutTake','Reveal and take',`data-index="${i}"`):'')
+          : button('cyclopsScoutTop','Return next to deck',`data-index="${i}"`)+button('cyclopsScoutDiscard','Discard',`data-index="${i}"`)}</div></div>`)).join('')+(h.picking?button('cyclopsScoutSkip','Take no Leadership card','class="primary"'):'');
       if(h.order.length)detail+=` ${h.order.length} card(s) already ordered.`;
     } else if(h.kind==='defence'){
       heading='Recourse · Blast result';detail='This choice applies once, regardless of the number of Blast symbols.';
@@ -2097,7 +2141,10 @@ function arena(seat, responding, decisionSeat) {
     if(t.kind==='arrange'){
       heading=`${names[t.seat]} arranges the hidden cards`;detail='Attacker, look away. Choose the card for the next position, or shuffle all three.';
       if(t.order.length)detail+=' Position 1: '+loki.illusionNames[t.order[0]]+'.';
-      content=[0,1,2].filter(i=>!t.order.includes(i)).map(i=>button('arrangeIllusion',loki.illusionNames[i],`data-index="${i}"`)).join('')+button('shuffleIllusion','Shuffle the three cards');
+      content=[0,1,2].filter(i=>!t.order.includes(i)).map(i=>cardOptionRow(
+        button('arrangeIllusion',loki.illusionNames[i],`data-index="${i}"`),button('inspect-illusion','View',
+          `class="card-preview" data-index="${i}" aria-label="View ${loki.illusionNames[i]}" aria-haspopup="dialog"`)
+      )).join('')+button('shuffleIllusion','Shuffle the three cards');
     } else if(t.kind==='pick'){
       heading=`${activeName} chooses a hidden card`;detail='Choose one card to reveal. Loki may suggest a position.';
       content=[0,1,2].map(i=>button('pickIllusion',`<img src="${art.back}" alt="Face-down Illusion card" style="width:90px;display:block">Card ${i+1}`,`data-index="${i}"`)).join('');
@@ -2983,6 +3030,7 @@ function arena(seat, responding, decisionSeat) {
     </div>`:''}
     <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${detail&&!testRoll?.token?`<p>${detail}</p>`:''}
+    ${state.log[0]?.startsWith('Crow’s Nest! · ') ? `<p role="status">${state.log[0]}</p>` : ''}
     ${preparedToken&&state.stage==='announce'&&state.dice.length ? tray(state.dice,state.active,false) : ''}
     ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
     ${otherEffects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${otherSeat}"><summary>${otherEffectsTitle}</summary><div class="effect-options">${otherEffects}</div></details>`:''}
@@ -3028,14 +3076,17 @@ function matchEffects(state, responding, renderButton = button) {
   if(santa.canNog(state,responding))content+=renderButton('spendEggNog','Spend 3 Egg Nog · roll for a benefit');
   for(const n of mysticBrawler.oceanChoices(state,responding))content+=renderButton('spendOcean',n===1?'Spend 1 Ocean · gain 1 CP':'Spend 2 Ocean · gain 1 CP and heal 2',`data-amount="${n}"`);
   if(krampus.canGift(state,responding))content+=renderButton('spendGift','Spend Gift · draw 1 Reject');
-  if(!(state.krampusTask&&state.stage==='krampusChoices'&&state.krampusTask.queue[0]?.kind==='free'))for(const [i,c] of krampus.options(state,responding).entries())content+=renderButton('activateReject',c.label,`data-choice="${i}"`);
+  if(!(state.krampusTask&&state.stage==='krampusChoices'&&state.krampusTask.queue[0]?.kind==='free'))for(const [i,c] of krampus.options(state,responding).entries())content+=rejectOption(c.reject,renderButton('activateReject',c.label,`data-choice="${i}"`));
   const lab=alchemist.labChoices(state,responding);
   if(lab.length){
     const potions=new Map(alchemist.tokens(state,responding).map(token=>[token.id,token]));
     for(const choice of lab)choice.confirm=`Remove ${alchemist.tokenLabel(potions.get(choice.tokenId))} and reroll`;
   }
   content+=pickDice('alchemistLab','The Lab · remove a Potion and reroll',lab);
-  for(const [i,c] of wolverine.rageChoices(state,responding).entries())content+=renderButton('spendRage',c.label,`data-choice="${i}"`);
+  for(const [i,c] of wolverine.rageChoices(state,responding).entries()){
+    const select=renderButton('spendRage',c.label,`data-choice="${i}"`);
+    content+=Number.isInteger(c.card)?previewableOption(state,responding,c.card,select):select;
+  }
   }
   if(!state.deadpoolRps&&!(state.deadpoolTask&&state.stage==='deadpoolChoices')&&!state.santaGift&&!(state.santaTask&&state.stage==='santaChoices')&&!(state.mysticTask&&state.stage==='mysticChoices')&&!state.krampusActivation&&state.krampusOverflow===undefined&&!(state.krampusTask&&state.stage==='krampusChoices')&&!(state.alchemistTask&&state.stage==='alchemistChoices')&&!state.psyReveal&&!state.wolverineGain&&!state.wolverineIntimidate&&!(state.stormTask&&state.stage==='stormChoices')){
   if(storm.canTornado(state,responding))content+=renderButton('spendTornado',`Spend Tornado · borrow one opposing die (${state.stormDice?.count??0}/5 borrowed)`);
@@ -3502,6 +3553,18 @@ function handleAction(event) {
   if(type==='inspect-shoot'){
     const active=state.players[index].shootActive;
     openReference(art.deadpoolShoot[active?0:1],`${names[index]} · Shoot ${active?'Active':'Inactive'}`);
+    return;
+  }
+  if(type==='inspect-rps'){
+    if (['first','second'].includes(state.deadpoolRps?.step) && deadpool.hands[index]) {
+      openReference(art.deadpoolRps[index],deadpool.hands[index]);
+    }
+    return;
+  }
+  if(type==='inspect-illusion'){
+    if(state.lokiIllusion?.kind==='arrange' && [0,1,2].includes(index)) {
+      openReference(art.lokiIllusions[index],loki.illusionNames[index]);
+    }
     return;
   }
   if(type==='inspect-reject'){
