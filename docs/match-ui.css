@@ -526,6 +526,24 @@ button.draw-count:hover {
   object-fit: contain;
 }
 
+.storm-charge-slots {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.storm-charge-slots .token-help {
+  position: relative;
+}
+
+.storm-charge-slots .token-help button {
+  width: 100%;
+}
+
+.storm-charge-slots .token-note > span {
+  display: block;
+}
+
 .hero-information-body .token-help button {
   min-height: 36px;
   border-color: #435159;
@@ -654,6 +672,21 @@ button.draw-count:hover {
 
 .ability-name {
   color: var(--gold);
+}
+
+.storm-charge-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.storm-charge-icon,
+.hero-state-row .token .storm-charge-icon {
+  flex: none;
+  width: 24px;
+  height: 18px;
+  object-fit: contain;
 }
 
 .ability-reference {

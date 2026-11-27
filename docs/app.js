@@ -75,6 +75,10 @@ function cardOptionRow(controls, preview) {
 function previewableOption(state, seat, id, controls) {
   return cardOptionRow(controls,previewCard(state,seat,id));
 }
+function revealedCardRows(seat, cards) {
+  return cards.map(id=>previewableOption(state,seat,id,`<span>${seatCard(state,seat,id).name}</span>`)).join('')
+    || '<p>The opponent’s hand is empty.</p>';
+}
 function rejectOption(id, controls) {
   return cardOptionRow(controls,button('inspect-reject','View',
     `class="card-preview" data-index="${id}" aria-label="View ${krampus.names[id]}" aria-haspopup="dialog"`));
@@ -460,6 +464,29 @@ function mobileTokens(seat, statuses) {
   </div>`;
 }
 
+function lightningIndicator(charged) {
+  const source = charged ? art.lightning : './icons/storm-uncharged.webp';
+  return `<img class="storm-charge-icon" src="${source}" alt="${charged?'Charged':'Uncharged'}" width="24" height="18">`;
+}
+
+function stormChargeSlots(seat, scope) {
+  const charges = state.players[seat].lightningCharges;
+  const abilities = abilitiesFor(state,seat);
+  const count = storm.slots.filter(slot=>charges[slot]).length;
+  return `<details data-disclosure="lightning-${seat}"><summary>Lightning · ${count} charged abilities</summary>
+    <div class="storm-charge-slots">${storm.slots.map((slot,index)=>{
+      const variants = abilities.filter(ability=>(ability.upgradeSlot??ability.name)===slot);
+      const ability = variants[0];
+      const note = variants.map(({text,variant})=>{
+        const effect = text.split(' Charged: ')[1];
+        const straight = variants.length>1 ? `${variant==='large'?'Large':'Small'} straight · ` : '';
+        return `<span>${straight}${effect.charAt(0).toUpperCase()+effect.slice(1)}</span>`;
+      }).join('');
+      return tokenHelp(`status-${scope}-${seat}-lightning-${index}`,ability.label??ability.name,
+        lightningIndicator(charges[slot]),`<strong>Charged Effect</strong>${note}`);
+    }).join('')}</div></details>`;
+}
+
 function heroStateRows(seat, scope) {
   const player = state.players[seat];
   const hero = heroId(state,seat);
@@ -479,8 +506,7 @@ function heroStateRows(seat, scope) {
     hero===cyclops.id && `<span role="status">Leadership cards played this turn: <strong>${cyclops.count(state,seat)}</strong></span>`,
     state.realityDie?.seat===seat && note('realityWarp','Reality Warp · Scarlet Witch die 5','active'),
     hero===psylocke.id && note('manifestDie',`Manifest die · ${player.manifestDie||1}${!player.manifestDie?' · not rolled':''}${player.manifestUsedTurn===state.turn?' · used this turn':''}`),
-    player.lightningCharges && `<details><summary>Lightning · ${Object.values(player.lightningCharges).filter(Boolean).length} charged abilities</summary>
-      ${storm.slots.map((slot,i)=>note('lightning',`${slot}: ${player.lightningCharges[slot]?'Charged':'empty'}`,`lightning-${i}`)).join('')}</details>`
+    player.lightningCharges && stormChargeSlots(seat,scope??'hero')
   ].filter(Boolean);
   return rows.length ? `<div class="hero-states">${rows.map(row=>`<div class="hero-state-row">${row}</div>`).join('')}</div>` : '';
 }
@@ -1175,6 +1201,13 @@ function defenceReference() {
   }).join('')}</div>`;
 }
 
+function highStakesReference(seat, count) {
+  return `<div class="ability-reference" role="group" aria-label="High Stakes ability effects"><div>
+    <div>${abilityName('High Stakes','strong')}<small>${count ? `${count} dice` : '2 or 5 dice'}</small></div>
+    ${printedAbility(seat,'High Stakes',[2.6,68,15.8,87.5])}
+  </div></div>`;
+}
+
 // Crop the printed effects from the same board images used by the board viewer.
 const effectBoardBounds = {
   Overpower:[18,70,34,81],
@@ -1361,6 +1394,7 @@ function potionAttachmentChoices(seat, choices) {
 }
 
 function offenceAbilities(seat, available = []) {
+  const charges = state.players[seat].lightningCharges;
   return `<div class="abilities">${abilitiesFor(state,seat).map((a,i)=>{
     // Legacy ability copy puts the printed roll requirement before the first middle dot.
     const separator=a.text.indexOf(' · ');
@@ -1370,7 +1404,11 @@ function offenceAbilities(seat, available = []) {
     const text=separator<0?a.text:a.text.slice(separator+3);
     const effect=text.charAt(0).toUpperCase()+text.slice(1);
     const ready = available.includes(a.name);
-    return button(testToggle.checked ? 'test-ability' : 'declare',`${abilityName(a.label??a.name,'strong')}<small class="ability-requirement">${requirement}</small><small class="ability-effect">${effect}</small>`,
+    const name = abilityName(a.label??a.name,'strong');
+    const chargeSlot = a.upgradeSlot??a.name;
+    const title = charges && storm.slots.includes(chargeSlot)
+      ? `<span class="storm-charge-heading">${name}${lightningIndicator(charges[chargeSlot])}</span>` : name;
+    return button(testToggle.checked ? 'test-ability' : 'declare',`${title}<small class="ability-requirement">${requirement}</small><small class="ability-effect">${effect}</small>`,
       `class="ability" data-ability="${i}" ${testToggle.checked
         ? `data-index="${i}" data-test-ready="${ready}"` : ready ? '' : 'disabled'}`);
   }).join('')}</div>`;
@@ -1408,6 +1446,7 @@ function rollRequestPanel(request) {
     <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${tied ? '<p>Tied initiative. Roll again to break the tie.</p>' : ''}
     ${setup ? '' : tokenRollReference(token,heading) || cardRollReference(card,heading) ||
+      (request.rollType==='gambitHighStakes' ? highStakesReference(state.active,request.count) : '') ||
       defenceReference() + (abilityRollActions.has(request.rollType) || rerollActions.has(request.rollType)
         ? effectAbilityReference(heading) : '')}
     ${testRoll ? testRollControls(testRoll) : dice + button(readyToAdvance ? 'advance-roll' : 'roll-request',label,'class="primary"')}
@@ -1950,7 +1989,7 @@ function arena(seat, responding, decisionSeat) {
   const activeName=names[state.active], actingName=names[seat];
   const indomitableWill = p?.thorWill
     ? ` Indomitable Will! will leave ${names[1-state.active]} at 1 Health if the final damage is lethal.` : '';
-  let heading, phase, detail='', content='', preparedToken;
+  let heading, phase, detail='', content='', highStakes='', preparedToken;
   const stageEffects = [[],[]];
   const addEffect = (action, label, attrs = '', owner = seat) =>
     stageEffects[owner].push(button(action,label,attrs,owner));
@@ -2063,7 +2102,8 @@ function arena(seat, responding, decisionSeat) {
   } else if(!state.response&&state.rogueRoll&&!state.cardRoll&&!state.retry){
     const t=state.rogueRoll;phase=t.kind==='influence'?'Influence · start of Roll Phase':'Skyward';heading=names[t.seat];detail=t.kind==='influence'?'Each 1–3 removes one Roll Attempt, then all Influence is removed. These dice may be modified before resolution.':'Greater returns 3 damage; equal prevents 4. You may pay 1 CP for each reroll of your own die before resolving once.';content=rollDisplay(rollContext(state))+(allowed.rerollSkyward?button('rerollSkyward','Pay 1 CP · reroll own Skyward die'):'')+button('resolveRogueRoll','Resolve the roll','class="primary"');
   } else if(state.psyReveal){
-    const t=state.psyReveal;phase='Deft Maneuver';heading=`${names[t.seat]} examines ${names[1-t.seat]}’s hand`;detail=t.cards.length?'The examined hand stays unchanged.':'The opponent’s hand is empty.';content=t.cards.map(card=>`<figure class="reveal-card"><img src="${cardArtwork(state,1-t.seat,card)}" alt="${seatCard(state,1-t.seat,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,1-t.seat,card).name}</figcaption></figure>`).join('')+button('psyRevealDone','Finish examining','class="primary"');
+    const t=state.psyReveal;phase='Deft Maneuver';heading=`${names[t.seat]} examines ${names[1-t.seat]}’s hand`;
+    content=revealedCardRows(1-t.seat,t.cards)+button('psyRevealDone','Finish examining','class="primary"');
   } else if(!state.response&&state.jeanTask&&state.stage==='jeanChoices'&&!state.cardRoll&&!state.retry){
     const t=state.jeanTask,h=t.queue[0],player=state.players[t.seat];phase='Jean Grey';heading=names[t.seat];
     if(h.kind==='gain'){heading=`Gain ${h.amount} ${statusLabel(h.key)}`;detail=`You hold ${player[h.key]??0}/${statusCap(player,h.key)}. Spend existing tokens first if desired, then collect the whole batch; excess is lost.`;content=button('jeanCollect','Collect the whole batch','class="primary"');}
@@ -2090,6 +2130,7 @@ function arena(seat, responding, decisionSeat) {
   } else if(!state.response&&state.gambitRoll&&!state.cardRoll&&!state.retry){
     const r=state.gambitRoll;phase=r.kind==='high'?'Upkeep · High Stakes':'Ace explosion';heading=r.kind==='high'?`${names[r.seat]} resolves High Stakes`:r.kind==='heartRoll'?'Heart Ace · healing roll':'Club Ace · damage roll';
     detail=r.kind==='high'?`${r.dice.length} dice. With five dice, any 1 busts the whole ability. Super Charge accelerates any Ace; Spade/Club charges a black Ace; Heart/Diamond charges a red Ace.`:'Half the final numerical value, rounded up.';
+    if(r.kind==='high')highStakes=highStakesReference(r.seat,r.dice.length);
     const rerolls = r.kind==='high' && r.magicLeft
       ? [{type:'gambitMagicReroll',limit:1,label:`Card Magic · reroll selected die · ${r.magicLeft} left`}] : [];
     content=rerollTray({dice:r.dice,seat:r.seat},rerolls)+button('gambitResolveRoll','Resolve roll','class="primary"');
@@ -2109,7 +2150,7 @@ function arena(seat, responding, decisionSeat) {
       content=button('gambitSleight','Accelerate twice','data-status="accelerate"')+button('gambitSleight',h.upgraded?'Regain up to two Aces':'Regain an Ace','data-status="regain"');
     } else if(h.kind==='hand'){
       heading=`Examine ${names[h.target]}’s hand`;detail='Call Your Bluff! accelerates once if the hand contains a Roll Phase Action card.';
-      content=h.cards.map(card=>`<figure class="reveal-card"><img src="${cardArtwork(state,h.target,card)}" alt="${seatCard(state,h.target,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,h.target,card).name}</figcaption></figure>`).join('')+button('gambitHandDone','Finish examining','class="primary"');
+      content=revealedCardRows(h.target,h.cards)+button('gambitHandDone','Finish examining','class="primary"');
     } else if(h.kind==='dissolution'){
       heading=`Gain ${h.amount} Dissolution`;detail='You may spend existing Dissolution in your Main Phase before collecting the incoming tokens. Excess above two is lost.';content=button('gambitCollect','Collect Dissolution','class="primary"');
     } else if(h.kind==='loseCharge'){
@@ -2128,8 +2169,7 @@ function arena(seat, responding, decisionSeat) {
       heading='Hand to Hand · matching numbers';content=button('cyclopsTokenChoice','Gain Battle Plan','data-status="battlePlan"')+button('cyclopsTokenChoice','Gain Support','data-status="support"');
     } else if(h.kind==='hand'){
       heading=`${names[t.seat]} examines ${names[h.target]}’s hand`;
-      content=h.cards.map(card=>`<figure class="reveal-card"><img src="${cardArtwork(state,h.target,card)}" alt="${seatCard(state,h.target,card).name}" style="max-width:180px;width:100%"><figcaption>${seatCard(state,h.target,card).name}</figcaption></figure>`).join('')+button('cyclopsHandDone','Finish examining','class="primary"');
-      detail=h.cards.length?'This does not discard, draw or transfer any cards.':'The opponent’s hand is empty.';
+      content=revealedCardRows(h.target,h.cards)+button('cyclopsHandDone','Finish examining','class="primary"');
     } else if(h.kind==='scout'){
       heading='Battle Plan · top three cards';detail=h.picking?'Reveal and add up to one Leadership card to your hand, or skip.':'For each remaining card, discard it or choose it as the next card returned. The first returned card will be on top.';
       content=h.cards.map((card,i)=>previewableOption(state,t.seat,card,`<div class="card-option-body">
@@ -2232,8 +2272,7 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.widowReveal){
     const r=state.widowReveal;
     phase='Baton Strike II';heading=`${names[r.target]} reveals their hand`;
-    content=r.cards.map(id=>previewableOption(state,r.target,id,`<span>${seatCard(state,r.target,id).name}</span>`)).join('')
-      +button('widowRevealDone','Continue','class="primary"');
+    content=revealedCardRows(r.target,r.cards)+button('widowRevealDone','Continue','class="primary"');
   } else if(state.widowTask){
     const t=state.widowTask,player=state.players[t.seat];
     phase='Black Widow';heading=t.kind==='covert'?'Spend Covert Ops':t.kind==='order'?'Choose the order of your deck':t.kind==='search'?'Put upgrades into play':'Covert Ops · search your deck';
@@ -2308,6 +2347,7 @@ function arena(seat, responding, decisionSeat) {
       :testBlankRoll('rollPhoenixBurn',1,seat)+button('rollPhoenixBurn','Roll die','class="primary"');
   } else if(allowed.gambitHighStakes){
     phase='Upkeep · High Stakes';heading='Choose two or five dice';detail='With five dice, any 1 loses every reward and removes one charge token. With two dice, a 1 does not cause a bust.';
+    highStakes=highStakesReference(state.active,testRoll?.count);
     content=button('gambitHighStakes','Choose 2 dice','data-amount="2"')+button('gambitHighStakes','Choose 5 dice','data-amount="5"');
   } else if(allowed.gambitTakeDisruption){
     phase='Upkeep · Disruption';heading=`${activeName} resolves Disruption`;detail='Remove the token after choosing. Its two damage joins the other Upkeep damage and can be prevented normally.';
@@ -3067,7 +3107,7 @@ function arena(seat, responding, decisionSeat) {
     ${otherEffects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${otherSeat}"><summary>${otherEffectsTitle}</summary><div class="effect-options">${otherEffects}</div></details>`:''}
     ${tokenRollReference(tokenRoll,heading) ||
       cardRollReference(testRoll?.card ?? (testRoll && rollCardSource(testRoll.action)) ?? state.cardRoll,heading) ||
-      defenceReference()+effectAbilityReference(heading)}
+      highStakes || defenceReference()+effectAbilityReference(heading)}
     ${p?.paralyzePrevented?.length?`<p>Paralyze prevented: ${p.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}
     <div class="decision-actions">${recentTokenResult}${testRoll ? testRollControls(testRoll) : content}</div>
     <details class="action-log" data-disclosure="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
@@ -3744,7 +3784,7 @@ function handleAction(event) {
     return;
   }
   if(oldStage!==state.stage || oldSeat!==cardActor(state) || action.type==='playCard' || type==='sell')selectedCard=null;
-  const revealOpened = !oldState.widowReveal && !!state.widowReveal;
+  const revealOpened = !oldState.widowReveal && !!state.widowReveal || !oldState.psyReveal && !!state.psyReveal;
   if(handDialog.open && (oldStage!==state.stage || oldSeat!==cardActor(state) || (!oldState.retry&&state.retry) || (!oldState.cardRoll&&state.cardRoll) || (!oldState.mainAction&&state.mainAction) || revealOpened))handDialog.close();
   render();
   const decisionChanged = oldStage!==state.stage || oldState.response?.seat!==state.response?.seat || revealOpened ||
