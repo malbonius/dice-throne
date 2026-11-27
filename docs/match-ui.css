@@ -1123,3 +1123,33 @@ button.card-preview:hover:not(:disabled) {
 .test-deck-actions {
   grid-column: 1 / -1;
 }
+
+.card-recipient-list {
+  display: grid;
+  gap: 10px;
+}
+
+.card-recipient-list > .primary {
+  justify-self: start;
+}
+
+.card-recipient-row {
+  margin: 0;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.card-recipient-row legend {
+  padding-inline: 5px;
+  font-weight: 650;
+}
+
+.card-recipient-row .controls > button {
+  flex: 1 1 105px;
+}
+
+.card-recipient-list > p {
+  margin: 0;
+}

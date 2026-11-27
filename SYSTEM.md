@@ -1,6 +1,6 @@
 # Dice Throne offline engine — current handover
 
-Current version is Playtest 0.53.36.
+Current version is Playtest 0.53.37.
 
 ## Test mode
 
@@ -23,6 +23,12 @@ Playtest 0.53.3 fixes Wild Shadow! resolving as Concuss! through a legacy branch
 Regression checks cover Mighty Blow against Shadow Defense, a single change with and without enough Daggers for Poison, two changes while in Shadows and Barbarian's Concuss!.
 
 ## Match interface
+
+### Playtest 0.53.37
+
+Defence and Duel display the dice involved in that defence. Earlier offensive ability results remain in match state for rules resolution.
+
+Token action buttons use the shared status artwork, including multi-token choices such as Ninja’s Smoke Screen. Cards that grant or inflict tokens on a chosen hero open a recipient panel after play. Divine Intervention! presents Blinding Light, 2 Flight and Cleanse as separate choices and identifies Seraph as the Holy Presence recipient. The panel confirms a legal combination through the existing card choices. A single choice, such as Bunker Up!’s Protect recipient, resolves on selection. Smoke Offering! displays its recipient and discard payment separately.
 
 ### Playtest 0.53.36
 
@@ -304,7 +310,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.36.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.37.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility

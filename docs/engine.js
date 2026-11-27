@@ -733,6 +733,33 @@ function releaseChangedAnnouncement(s,ctx,before){
   if(s.cyclopsTask&&s.stage==='cyclopsSequence'){let t=s.cyclopsTask;while(t.parent)t=t.parent;t.resume='offence';}else s.stage='offence';
  }
 }
+const cardRecipientTokens = new Map([
+  [moonElf, {32:['evasive']}],
+  [paladin, {29:['crit'],30:paladinBuffs}],
+  [ninja, {30:['smoke']}],
+  [treant, {32:['wellspring']}],
+  [seraph, {29:['flight']}],
+  [gunslinger, {30:['knockdown','bounty']}],
+  [tactician, {28:['protect']}],
+  [huntress, {32:['bleed']}],
+  [headlessHorseman, {31:['hauntedHead']}],
+  [druid, {23:['wound'],25:['regenerate'],31:['regenerate']}],
+  [doctorStrange, {32:['dejaVu']}],
+]);
+
+function cardRecipientFields(s,seat,id,choices) {
+  if (!choices.length) return [];
+  const hero = heroRoster[heroId(s,seat)];
+  if (hero===seraph && id===30) {
+    return [{key:'light',tokens:['blindingLight']},{key:'flight',tokens:['flight'],amount:2},{key:'cleanse',tokens:['cleanse']}];
+  }
+  const tokens = cardRecipientTokens.get(hero)?.[id];
+  if (hero===ninja && id===30) return [{key:'target',tokens},{key:'discard'}];
+  if (tokens || choices.length>1 && choices.every(choice=>[0,1].includes(choice.target) &&
+      Object.keys(choice).every(key=>key==='label'||key==='target'))) return [{key:'target',tokens}];
+  return [];
+}
+
 function mainTargets(s,seat,id) {
  const probe=structuredClone(s);
  probe.mainAction=null;
@@ -743,7 +770,7 @@ function mainTargets(s,seat,id) {
  p.cp=seatCard(s,seat,id).cost;
  return cardChoices(probe,seat,id);
 }
-function playOneCard(s,seat,id,choice,roll,random,add){
+function playOneCard(s,seat,id,choice,roll,random,add,chooseRecipient){
  const names=heroNames(s),p=s.players[seat],c=seatCard(s,seat,id);
  p.cp-=price(s,seat,id);
  heroRoster[heroId(s,seat)].onCardPlayed?.(s,seat,id);
@@ -751,7 +778,8 @@ function playOneCard(s,seat,id,choice,roll,random,add){
  if(c.phase!=='upgrade')p.discard.push(id);
  add(`${names[seat]} plays ${c.name}.`);
  if(c.phase==='main'&&([1,2,3,4,29,33].includes(id)||heroId(s,seat)===deadpool.id&&[28,31,32,33].includes(id)||heroId(s,seat)===santa.id&&[28,31,33].includes(id)||heroId(s,seat)===mysticBrawler.id&&[25,26,27,34].includes(id)||heroId(s,seat)===alchemist.id&&[24,25,27,29,30,31,33,34].includes(id)||heroId(s,seat)===seraph.id&&id===30||heroId(s,seat)===vampireLord.id&&[28,30,34].includes(id)||heroId(s,seat)===gunslinger.id&&[28,30].includes(id)||heroId(s,seat)===samurai.id&&[29,31,32].includes(id)||heroId(s,seat)===tactician.id&&id===28||heroId(s,seat)===huntress.id&&[31,32].includes(id)||heroId(s,seat)===3&&[27,32].includes(id)||heroId(s,seat)===4&&id===30||heroId(s,seat)===5&&[30,31].includes(id)||heroId(s,seat)===6&&id===27||heroId(s,seat)===cursedPirate.id&&[19,20,21,24,25,26,27,28,34].includes(id))&&hasResponse(s,1-seat))
-  s.mainAction={seat,id,choice};
+  s.mainAction={seat,id,choice,...(chooseRecipient?{chooseRecipient}: {})};
+ else if(chooseRecipient)s.mainChoice={seat,id};
  else applyCard(s,seat,id,choice,roll,random,add);
 }
 
@@ -1619,11 +1647,13 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
     if(action.type==='playCard'){
       const player=action.seat ?? seat;
       if(!canPlayFromHand(previous,player))return previous;
-      const choice=cardChoices(previous,player,action.id)[action.choice];
+      const choices=cardChoices(previous,player,action.id);
+      const choice=choices[action.choice];
       if(!choice)return previous;
       const state=structuredClone(previous);
       state.response=null;
-      playOneCard(state,player,action.id,choice,roll,random,message=>state.log.unshift(message));
+      const chooseRecipient=!!action.chooseRecipient&&cardRecipientFields(previous,player,action.id,choices).length>0;
+      playOneCard(state,player,action.id,choice,roll,random,message=>state.log.unshift(message),chooseRecipient);
       return flushPowderKegs(state);
     }
     if(action.type==='sell'){
@@ -2915,8 +2945,13 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       break;
     case 'finishCardRoll': completeCardRoll(state,roll,random,add);break;
     case 'finishMainCard': {
-      const {seat,id,choice}=state.mainAction;
+      const {seat,id,choice,chooseRecipient}=state.mainAction;
       state.mainAction=null;
+      if(chooseRecipient){
+        if(mainTargets(state,seat,id).length)state.mainChoice={seat,id};
+        else add(`${seatCard(state,seat,id).name} has no eligible choices.`);
+        break;
+      }
       if(([1,2,4].includes(id)||heroId(state,seat)===seraph.id&&[29,30].includes(id)||heroId(state,seat)===vampireLord.id&&id===29||heroId(state,seat)===gunslinger.id&&id===30||heroId(state,seat)===tactician.id&&id===28||heroId(state,seat)===huntress.id&&id===32)&&mainTargets(state,seat,id).length)state.mainChoice={seat,id};
       else applyCard(state,seat,id,choice,roll,random,add);
       break;
