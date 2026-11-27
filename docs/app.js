@@ -1948,6 +1948,8 @@ function arena(seat, responding, decisionSeat) {
   const allowed=legal(state), p=state.pending;
   const pendingAbility=p?.name ? abilityName(p.name) : '';
   const activeName=names[state.active], actingName=names[seat];
+  const indomitableWill = p?.thorWill
+    ? ` Indomitable Will! will leave ${names[1-state.active]} at 1 Health if the final damage is lethal.` : '';
   let heading, phase, detail='', content='', preparedToken;
   const stageEffects = [[],[]];
   const addEffect = (action, label, attrs = '', owner = seat) =>
@@ -2230,7 +2232,8 @@ function arena(seat, responding, decisionSeat) {
   } else if(state.widowReveal){
     const r=state.widowReveal;
     phase='Baton Strike II';heading=`${names[r.target]} reveals their hand`;
-    content=r.cards.map(id=>button('inspect-card',seatCard(state,r.target,id).name,`data-seat="${r.target}" data-index="${id}"`)).join('')+button('widowRevealDone','Continue','class="primary"');
+    content=r.cards.map(id=>previewableOption(state,r.target,id,`<span>${seatCard(state,r.target,id).name}</span>`)).join('')
+      +button('widowRevealDone','Continue','class="primary"');
   } else if(state.widowTask){
     const t=state.widowTask,player=state.players[t.seat];
     phase='Black Widow';heading=t.kind==='covert'?'Spend Covert Ops':t.kind==='order'?'Choose the order of your deck':t.kind==='search'?'Put upgrades into play':'Covert Ops · search your deck';
@@ -2852,7 +2855,7 @@ function arena(seat, responding, decisionSeat) {
     case 'defenceResponse':
     case 'defence':
       phase='Defensive Roll'; heading=`${actingName} defends`;
-      detail=`${pendingAbility} brings ${p.damage} incoming damage.`;
+      detail=`${pendingAbility} brings ${p.damage} incoming damage.${indomitableWill}`;
       if(state.stage==='defenceResponse'){
         const rerolls=[];
         if (allowed.abilityReroll) rerolls.push({type:'abilityReroll',limit:p.seraphDefenceReroll||p.ninjaDefenceRerolls});
@@ -2893,6 +2896,7 @@ function arena(seat, responding, decisionSeat) {
     case 'damage':
       phase='Damage response'; heading=`${actingName} responds`;
       detail=`${pendingAbility ? `${pendingAbility} · ` : ''}${incomingDamage(state)} incoming damage${shadowAvoids(state)&&p.damage?' after Shadows':p.pure?' (pure)':p.undefendable?' (undefendable)':''}${returnDamageFor(state) ? ` · ${returnDamageFor(state)} return damage` : ''}.${p.recoil && incomingDamage(state) ? ` Barbarian takes ${p.recoil} recoil damage if this attack hits.` : ''}`;
+      detail+=indomitableWill;
       content=(state.defenceDice.length ? tray(state.defenceDice,seat,false):'')
         +`<div class="controls">${allowed.reopenPrey?button('reopenPrey','Use Prey'):''}${button('settle',footworkPending?'Apply Footwork bonus':nyraIncoming(state)?'Assign damage':'Resolve damage','class="primary"')}</div>`; break;
     case 'evasion':
@@ -3057,6 +3061,7 @@ function arena(seat, responding, decisionSeat) {
     <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${detail&&!testRoll?.token?`<p>${detail}</p>`:''}
     ${state.log[0]?.startsWith('Crow’s Nest! · ') ? `<p role="status">${state.log[0]}</p>` : ''}
+    ${state.thorWillNotice ? `<p role="status">${state.thorWillNotice.message}</p>` : ''}
     ${preparedToken&&state.stage==='announce'&&state.dice.length ? tray(state.dice,state.active,false) : ''}
     ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
     ${otherEffects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${otherSeat}"><summary>${otherEffectsTitle}</summary><div class="effect-options">${otherEffects}</div></details>`:''}
@@ -3624,6 +3629,7 @@ function handleAction(event) {
     return;
   }
   if (type==='status') {
+    if (desktopViewer.matches) return;
     const note=document.getElementById(target.getAttribute('aria-controls'));
     note.hidden=!note.hidden;
     target.setAttribute('aria-expanded',String(!note.hidden));
@@ -3738,9 +3744,10 @@ function handleAction(event) {
     return;
   }
   if(oldStage!==state.stage || oldSeat!==cardActor(state) || action.type==='playCard' || type==='sell')selectedCard=null;
-  if(handDialog.open && (oldStage!==state.stage || oldSeat!==cardActor(state) || (!oldState.retry&&state.retry) || (!oldState.cardRoll&&state.cardRoll) || (!oldState.mainAction&&state.mainAction)))handDialog.close();
+  const revealOpened = !oldState.widowReveal && !!state.widowReveal;
+  if(handDialog.open && (oldStage!==state.stage || oldSeat!==cardActor(state) || (!oldState.retry&&state.retry) || (!oldState.cardRoll&&state.cardRoll) || (!oldState.mainAction&&state.mainAction) || revealOpened))handDialog.close();
   render();
-  const decisionChanged = oldStage!==state.stage || oldState.response?.seat!==state.response?.seat ||
+  const decisionChanged = oldStage!==state.stage || oldState.response?.seat!==state.response?.seat || revealOpened ||
     oldState.mainChoice!==state.mainChoice || type==='alchemistChoice'&&state!==oldState;
   const effectRoll=state!==oldState&&effectRollOnCurrentScreen(oldState,type);
   const focus=decisionChanged||effectRoll ? document.getElementById('action-title')

@@ -1151,6 +1151,7 @@ function transitionStep(previous, action, roll, random, responseMode){
    if(previous.players[seat].resurrect&&!player.resurrect)next.log.unshift(`${heroNames(next)[seat]} returns with 5 Health through Resurrect.`);
  });
  if(next!==previous){
+   if(previous.thorWillNotice && next.thorWillNotice?.logLength===previous.thorWillNotice.logLength)delete next.thorWillNotice;
    blackWidow.refresh(next);spiderMan.refresh(next);
    if(next.stage!=='finished'&&!next.sideDamage&&!next.widowTask&&!next.widowReveal&&next.widowExplosions?.length){
      const event=next.widowExplosions.shift();
@@ -3652,7 +3653,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       if(p.kineticBonus!==undefined)p.kineticSettled=true;
       const thorSaved=!!(p.thorWill&&p.attack&&defenderDamage>=defender.hp);
       const defenderSaved=thorSaved?false:takeDamage(defender,defenderDamage,!p.ultimate);
-      if(thorSaved){defender.hp=1;add(`${names[1-state.active]} survives this attack through Indomitable Will.`);}
+      if(thorSaved)defender.hp=1;
       rogue.drive(state,1-state.active,defenderDamage);
       const returnDamage=returnDamageFor(state);
       const vine=consumeVine();
@@ -3671,6 +3672,11 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       if(p.webAfter||p.spiderInvisiblePunch||attacker.combo)p.spiderSettled=true;
       if(p.dawnUsed)sunElf.setDial(attacker,attacker.sunDial-4);
       add(`${names[1-state.active]} takes ${defenderDamage} damage${returnDamage ? ` and ${names[state.active]} takes ${returnDamage}` : ''}.`);
+      if(thorSaved){
+        const message=`Indomitable Will! activates. ${names[1-state.active]} survives at 1 Health.`;
+        add(message);
+        state.thorWillNotice={message,logLength:state.log.length};
+      }
       if(defenderSaved)add(`${names[1-state.active]} survives through Blessing of Divinity.`);
       if(attackerSaved)add(`${names[state.active]} survives through Blessing of Divinity.`);
       if(p.quenched&&attacker.hp&&attackDamage)paleLady.heal(attacker,p.quenched*attacker.moonShard);

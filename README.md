@@ -1,6 +1,6 @@
 # Dice Throne Offline Engine
 
-**Playtest 0.53.39**
+**Playtest 0.53.40**
 
 An offline Dice Throne engine for playing and testing two-hero matches. Play both sides in a browser or install the game as a web app on supported Windows and Android browsers. The roster includes 45 heroes from Season One Rerolled, Season Two, Outcasts, Vanguard, Marvel, X-Men and Singles.
 
@@ -13,6 +13,12 @@ python -m http.server 8000 --directory docs
 ```
 
 Open [http://localhost:8000/](http://localhost:8000/), choose both heroes in **Match setup** and select **Set up initiative**. Wait for **Ready for offline play** before disconnecting. If your browser offers **Install app**, you can install from an HTTPS deployment or localhost. The game saves your current match automatically. Open the same address with the same browser profile to resume it after an update.
+
+## What changed in 0.53.40
+
+- Mobile token descriptions are centred. Desktop mouse clicks leave token notes controlled by hover, and keyboard focus can still reveal them.
+- Baton Strike II opens the opponent’s revealed hand with one card and a **View** button per row.
+- The incoming damage notice shows when Indomitable Will! is ready to prevent a defeat. Once it actually leaves Thor at 1 Health, the match panel and action log confirm that it activated.
 
 ## What changed in 0.53.39
 

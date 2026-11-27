@@ -320,11 +320,12 @@ button.hero-sheet-trigger,
   width: 100%;
   margin: 0;
   line-height: 1.5;
+  text-align: center;
   overflow-wrap: anywhere;
 }
 
-@media (hover: hover) {
-  .hero:has(.token-help:hover, .token-help:focus-within) {
+@media (hover: hover) and (pointer: fine) {
+  .hero:has(.token-help:hover, .token-help > button:focus-visible) {
     overflow: visible;
     z-index: 1;
   }
@@ -348,7 +349,7 @@ button.hero-sheet-trigger,
   }
 
   .token-help:hover > .token-note,
-  .token-help:focus-within > .token-note {
+  .token-help:has(> button:focus-visible) > .token-note {
     display: block;
   }
 
