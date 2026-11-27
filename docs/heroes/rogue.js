@@ -37,7 +37,7 @@ const rogue=(()=>{
  function collectChoices(s){const t=s.rogueGain;if(!t)return [];const room=Math.max(0,cap(s.players[t.seat])-total(s.players[t.seat])),n=Math.min(room,t.ones+t.twos),list=[];
   for(let twos=Math.max(0,n-t.ones);twos<=Math.min(n,t.twos);twos++){const ones=n-twos;list.push({ones,twos,label:`Collect ${ones} Ionic (1) and ${twos} Ionic (2)${t.ones+t.twos>n?' · discard excess':''}`});}return list;
  }
- function start(s,roll){const p=s.players[s.active];delete s.rogueRoll;delete s.rogueGain;if(!p.knockdown&&p.influence){s.rogueRoll={kind:'influence',seat:s.active,count:p.influence,dice:rollBatch(roll,p.influence)};s.stage='rogueInfluence';}}
+ function start(s,roll){const p=s.players[s.active];delete s.rogueRoll;delete s.rogueGain;if(!p.knockdown&&p.influence){s.rogueRoll={kind:'influence',seat:s.active,count:p.influence,dice:rollToken(roll,'influence',s.active,p.influence)};s.stage='rogueInfluence';}}
  function ability(s){const h=s.pending;if(!h.rogue||h.roguePrepared)return false;h.roguePrepared=true;const p=s.players[s.active],r=h.rogue;if(r.brawl&&r.cp)gainCP(p,1);if(r.skyward)grantStatus(p,'skyward',r.skyward);s.stage='rogueAbility';gain(s,s.active,r.ionic??0,r.ionic2??0);return true;}
  function leach(s){const p=s.players[s.active],c=tally(effectiveDice(s.pending.effectDice,p),id);const n=c.Touch?2:c.Soar?3:c.Ion?4:0;if(c.Soar||c.Ion)gain(s,s.active,1);return stealNecroHealth(s,s.active,n);}
  function cloudy(s,seat){const r=s.pending?.skywardResult;return !!(r&&r.seat===seat&&r.amount&&!r.doubled&&!busy(s)&&['defence','defenceResponse','damage'].includes(s.stage));}

@@ -368,11 +368,15 @@ function heroStatuses(seat) {
     p.concussion && status('concussion','Concussion')].filter(Boolean);
 }
 
+function tokenSymbol(label, icon) {
+  return icon || `<span class="token-initial" aria-hidden="true">${label.slice(0,2)}</span>`;
+}
+
 function mobileTokens(seat, statuses) {
   if (!statuses.length) return '';
   return `<div class="hero-token-strip" aria-label="${names[seat]}’s attached tokens">
     ${statuses.map(({icon, label, count},index)=>{
-      const symbol = icon || `<span class="token-initial" aria-hidden="true">${label.slice(0,2)}</span>`;
+      const symbol = tokenSymbol(label,icon);
       const badge = count>0 ? `<small class="token-count" aria-hidden="true">${count}</small>` : '';
       return button('inspect-token',symbol+badge,
         `class="hero-token-button" data-seat="${seat}" data-index="${index}" aria-label="${label}" aria-haspopup="dialog" aria-controls="token-info"`);
@@ -711,7 +715,8 @@ function diceEditorPanel(editor) {
     <div class="phase"><span>${names[seat]} · ${picks.size} of ${limit} selected</span></div>
     <h2 tabindex="-1" id="action-title">${title}</h2>
     <p>${instruction}${cost?` ${cost}`:''}</p>
-    ${cardRollReference(state.cardRoll,title) || defenceReference()+effectAbilityReference()}
+    ${(effect && tokenRollReference(tokenRollForAction(state,editor.options[0]?.action,seat),title)) ||
+      cardRollReference(state.cardRoll,title) || defenceReference()+effectAbilityReference()}
     ${!context.owners&&context.seat!==seat?`<strong>${names[context.seat]}’s dice</strong>`:''}
     ${dice}${faces}
     <div class="controls">${ready.length>1
@@ -934,6 +939,87 @@ function printedDefence(seat, kind, name) {
 }
 
 const cardEffectBounds = [6, 52, 96, 98];
+
+const tokenRollActions = {
+  flight:'flight', spendAgility:'agility', spendSkyward:'skyward', rerollSkyward:'skyward',
+  spendDonut:'donut', spendEggNog:'eggNog', spendCosmicRay:'cosmicRay',
+  spendChargedGem:'chargedGem', evade:'evasive', evadeReturn:'evasive', evadeUpkeep:'evasive', evadeSide:'evasive',
+  smoke:'smoke', ninjutsu:'ninjutsu', spendSneak:'sneak', mesmerize:'mesmerize', rerollMesmerized:'mesmerize',
+  backStrike:'backStrike', spendReload:'reload', rerollReload:'reload', spendGuardBreak:'guardBreak',
+  spendGrim:'grim', wellspring:'wellspring', widowBombRoll:'timeBomb', rollPhoenixBurn:'phoenixBurn',
+  clearNanites:'nanite', rollTrickBag:'bagOfTricks', rollNevermore:'nevermore', rollPrey:'prey',
+  seedling:'seedling', spendCheer:'cheer', spendSupport:'support', spendInfiltration:'infiltration',
+  spendAcuity:'acuity', spendTactical:'tactical', spiderSenseReroll:'invisibility', nyraReroll:'nyra',
+};
+
+function tokenRollForAction(view, action, seat) {
+  if (action?.type === 'passResponse') action = view.response?.action;
+  const type = action?.type;
+  if (!type) return null;
+  const token = type === 'artificerAction' && action.status === 'heal' ||
+    type === 'chooseFreeBot' && action.status === 'healbot' ? 'healbot'
+    : tokenRollActions[type];
+  if (!token) return null;
+  const roller = seat ?? action.effectSeat ?? cardActor(view);
+  const holder = {evade:1-view.active, evadeReturn:view.active, evadeUpkeep:view.active,
+    rollPrey:1-view.active, rollNevermore:view.active, rollPhoenixBurn:view.jeanBurnRoll?.seat,
+    rerollSkyward:view.rogueRoll?.seat, rerollReload:view.gunReload?.seat,
+    rerollMesmerized:view.mesmerizeRoll?.seat}[type] ?? roller;
+  return {token, seat:holder, bombId:token==='timeBomb'?action.index:undefined};
+}
+
+function currentTokenRoll(view, allowed) {
+  const {active, stage} = view;
+  if (view.retry || view.cardRoll?.id != null) return null;
+  if (view.cardRoll) return {token:'wellspring', seat:view.cardRoll.seat};
+  if (view.seraphRoll) {
+    const {kind, seat} = view.seraphRoll;
+    return {token:kind==='blinding'?'blindingLight':'flight', seat};
+  }
+  if (view.artRoll && view.artRoll.kind !== 'scrap') {
+    return {token:view.artRoll.kind==='nanites'?'nanite':'healbot', seat:view.artRoll.seat};
+  }
+  if (view.rogueRoll) return {token:view.rogueRoll.kind, seat:view.rogueRoll.seat};
+  if (view.lokiBag?.kind === 'roll' && !view.lokiBag.outwit || allowed.rollTrickBag) {
+    return {token:'bagOfTricks', seat:view.lokiBag?.seat ?? active};
+  }
+  if (view.widowBombRoll) return {token:'timeBomb', seat:active, bombId:view.widowBombRoll.id};
+  if (view.preyRoll || stage==='prey' && allowed.rollPrey) return {token:'prey', seat:1-active};
+  if (view.bleedRoll) return {token:'bleed', seat:active};
+  if (view.nevermoreRoll || allowed.rollNevermore) return {token:'nevermore', seat:active};
+  if (stage==='evasion') return {token:view.evasionToken??'evasive', seat:view.evasionSeat??1-active};
+
+  const roll = [
+    ['deadpoolDonutRoll','donut'], ['santaNogRoll','eggNog'], ['alphaRoll','alpha'],
+    ['jeanBurnRoll','phoenixBurn'], ['cosmicRayRoll','cosmicRay'], ['widowAgility','agility'],
+    ['sunGemRoll','chargedGem'], ['mesmerizeRoll','mesmerize'], ['guardBreakRoll','guardBreak'],
+    ['woundRoll','wound'], ['gunReload','reload'], ['samuraiRoll','backStrike'], ['horseRoll','grim']
+  ].find(([key]) => view[key]);
+  if (roll) {
+    const [key,token] = roll;
+    const result = view[key];
+    return {token, seat:result.target ?? result.seat ?? active};
+  }
+  const token = {blind:'blind', pirateKegRoll:'powderKeg', sneakRoll:'sneak',
+    ninjutsuRoll:'ninjutsu', ninjutsuChoice:'ninjutsu'}[stage];
+  return token ? {token, seat:active} : null;
+}
+
+const tokenRollLabel = token => ({healbot:'Heal Bot'}[token] ?? statusLabel(token));
+
+function tokenRollReference(source, heading) {
+  if (!source) return '';
+  const {token, seat, bombId} = source;
+  const label = tokenRollLabel(token);
+  const note = token==='healbot'?botNotes.healbot:token==='nyra'?'Nyra takes 1 damage to reroll a die.':statusNotes[token];
+  const image = token==='healbot'?art.artificerBots.healbot[(state.players[seat].bots?.healbot??1)-1]
+    : token==='nyra'?art.nyraDials[0]:null;
+  const icon = image ? `<img src="${image}" alt="">` : tokenImage(state,seat,token,bombId);
+  return `<div class="token-roll-reference" role="group" aria-label="${label} token effect">
+    <span class="large-token-icon">${tokenSymbol(label,icon)}</span>
+    <div>${heading===label?'':`<strong>${label}</strong>`}${note?`<p>${note}</p>`:''}</div>
+  </div>`;
+}
 
 function cardRollReference(source, heading) {
   if (!Number.isInteger(source?.id)) return '';
@@ -1176,6 +1262,8 @@ function rollResultTray(request) {
 
 function rollRequestPanel(request) {
   const {setup, owners, initiative, reveal} = request;
+  const token = setup ? null : testRoll?.token ?? request.token ?? tokenRollForAction(state,request.action);
+  const heading = token ? tokenRollLabel(token.token) : request.description;
   const playerNames = setup ? setup.heroes.map((id, seat) =>
     setup.heroes[0] === setup.heroes[1] ? `${HEROES[id].name} (P${seat + 1})` : HEROES[id].name) : names;
   const tied = initiative && initiative[0] === initiative[1];
@@ -1188,15 +1276,15 @@ function rollRequestPanel(request) {
   if (setup) dice = initiativeTray(request, playerNames);
   else if (reveal) dice = rollResultTray(request);
   else dice = testToggle.checked && !testRoll
-    ? testDraftTray(request, {count:request.count, seat:rollTestSeat(request), owners})
+    ? testDraftTray(request, {count:request.count, seat:rollTestSeat(request), owners, token})
     : blankRoll(request.count, owners);
   return `<section class="arena" aria-label="${readyToAdvance?'Roll result':'Pending roll'}">
     <div class="phase"><span>${phase}</span></div>
-    <h2 tabindex="-1" id="action-title">${request.description}</h2>
+    <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${tied ? '<p>Tied initiative. Roll again to break the tie.</p>' : ''}
-    ${setup ? '' : cardRollReference(request.card ?? rollCardSource(request.action), request.description) ||
+    ${setup ? '' : tokenRollReference(token,heading) || cardRollReference(request.card ?? rollCardSource(request.action), heading) ||
       defenceReference() + (abilityRollActions.has(request.rollType) || rerollActions.has(request.rollType)
-        ? effectAbilityReference(request.description) : '')}
+        ? effectAbilityReference(heading) : '')}
     ${testRoll ? testRollControls(testRoll) : dice + button(readyToAdvance ? 'advance-roll' : 'roll-request',label,'class="primary"')}
     ${setup ? '' : matchTools(cardActor(state))}
   </section>`;
@@ -1334,10 +1422,10 @@ function revealRoll(request, random = Math.random, roller = roll) {
   record.onReroll = () => {
     (singles.rerolled ??= []).push(singles.dice.length-1);
   };
-  record.requestBatch = (count, owners) => {
+  record.requestBatch = (count, owners, source) => {
     singles = undefined;
     const dice = Array.from({length: count}, roller);
-    batches.push({dice, owners});
+    batches.push({dice, owners, token:source?.token ? source : undefined});
     return dice;
   };
   const {next, context, rerolled} = transitionWithRerolls(action,record,random);
@@ -1350,7 +1438,8 @@ function revealRoll(request, random = Math.random, roller = roll) {
   const reveal = context?.dice.length && (rerolled.length || rerollActions.has(rollType))
     ? [{...context, rerolled, current: true, primary: context.dice === next.dice}]
     : batches.map(batch => ({...batch, seat}));
-  rollRequest = {...request, reveal, next};
+  const token = batches.find(batch=>batch.token)?.token ?? request.token ?? tokenRollForAction(state,action);
+  rollRequest = {...request, token, reveal, next};
   return state;
 }
 
@@ -1367,11 +1456,13 @@ function applyMatchAction(action, description, inline = false) {
     return revealRoll({action, description, rollType});
   }
   const randomPrefix = [];
-  return beforeDice(action, (count, owners, card) => {
-    const source = card ?? rollCardSource(action);
-    const title = Number.isInteger(source?.id) ? seatCard(state,source.seat,source.id).name
-      : owners ? state.pending?.name ?? description : description;
-    rollRequest = {action, rollType, description: title, count, owners, randomPrefix, card};
+  return beforeDice(action, (count, owners, source) => {
+    const token = source?.token ? source : tokenRollForAction(state,action);
+    const card = source?.token ? undefined : source;
+    const reference = card ?? rollCardSource(action);
+    const title = token ? tokenRollLabel(token.token) : Number.isInteger(reference?.id)
+      ? seatCard(state,reference.seat,reference.id).name : owners ? state.pending?.name ?? description : description;
+    rollRequest = {action, rollType, description:title, count, owners, randomPrefix, card, token};
   }, () => {
     const value = Math.random();
     randomPrefix.push(value);
@@ -1415,12 +1506,14 @@ function planTestRoll(request) {
   const offenceSlots = request.rollType === 'roll'
     ? offenceDice().map((_, index) => index).filter(index => !state.held[index] && !iceman.locked(state, state.active, index))
     : [];
-  const readFaces = (count, owners, card, context) => {
+  const readFaces = (count, owners, source, context) => {
     if (faceIndex + count > request.faces.length && faceIndex + count <= (request.preset?.count ?? 0)) {
       for (let i = faceIndex; i < faceIndex + count; i++) request.faces[i] = request.preset.picks[i] ?? roll();
     }
     if (faceIndex + count > request.faces.length) {
-      testRoll = {...request, count, owners, card: card ?? request.card, picks: [], open: undefined, slots: undefined,
+      const token = source?.token ? source : tokenRollForAction(state,request.action);
+      const card = source?.token ? undefined : source ?? request.card;
+      testRoll = {...request, count, owners, card, token, picks: [], open: undefined, slots: undefined,
         manifestIndex: undefined, context};
       throw waiting;
     }
@@ -1450,8 +1543,8 @@ function planTestRoll(request) {
     randomIndex = 0;
     const roller = () => request.faces[faceIndex++];
     if (request.inline) return transitionWithRerolls(request.action, roller, random).next;
-    const {action, rollType, description, card, randomPrefix} = request;
-    return revealRoll({action, rollType, description, card, randomPrefix}, random, roller);
+    const {action, rollType, description, card, token, randomPrefix} = request;
+    return revealRoll({action, rollType, description, card, token, randomPrefix}, random, roller);
   } catch (error) {
     if (error !== waiting) throw error;
     if (offenceSlots.length && !request.faces.length && !offenceFaces) testRoll.slots = offenceSlots;
@@ -1465,11 +1558,16 @@ function planTestRoll(request) {
 
 function rollTestSeat(request) {
   const action = request.action?.type === 'passResponse' ? state.response?.action : request.action;
-  return request.card?.seat ?? rollCardSource(action)?.seat ?? action?.effectSeat ??
+  return request.card?.seat ?? action?.effectSeat ?? (request.token && !['prey','nevermore'].includes(request.token.token)
+    ? request.token.seat : undefined) ?? rollCardSource(action)?.seat ??
     (request.rollType === 'defend' ? 1-state.active : rollContext(state)?.seat ?? actor(state));
 }
 
 function testDieFace(selection, index, face) {
+  if ((selection.token ?? tokenRollForAction(state,selection.action))?.token === 'eggNog') {
+    const label = `${face} ${HEROES[santa.id].symbols[face-1]}`;
+    return {label, picture:`<img src="${art.dice[santa.id][face-1]}" alt="${label}">`};
+  }
   if (selection.manifestIndex === index) {
     const label = `Manifest die · ${face}`;
     return {label, picture:`<img src="${art.manifestDice[face-1]}" alt="${label}">`};
@@ -2733,6 +2831,8 @@ function arena(seat, responding, decisionSeat) {
     ? `${activeName} · effects before the defence roll` : `Available effects · ${names[otherSeat]}`;
   const playing = state.stage !== 'finished';
   const decisionName = names[decisionSeat];
+  const tokenRoll = testRoll ? testRoll.token : currentTokenRoll(state,allowed);
+  if (testRoll?.token) heading = tokenRollLabel(testRoll.token.token);
   return `<section class="arena" aria-label="Match actions">
     <div class="phase"><span>Turn ${state.turn} · ${phase}</span><span>${state.stage==='offence' ? `Roll ${state.attempts}/${state.budget}` : ''}</span></div>
     ${playing?`<div class="decision-owner" data-player="${decisionSeat}">
@@ -2740,10 +2840,11 @@ function arena(seat, responding, decisionSeat) {
       ${decisionSeat!==state.active?`<span>${activeName}’s turn</span>`:''}
     </div>`:''}
     <h2 tabindex="-1" id="action-title">${heading}</h2>
-    ${detail?`<p>${detail}</p>`:''}
+    ${detail&&!testRoll?.token?`<p>${detail}</p>`:''}
     ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
     ${otherEffects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${otherSeat}"><summary>${otherEffectsTitle}</summary><div class="effect-options">${otherEffects}</div></details>`:''}
-    ${cardRollReference(testRoll?.card ?? (testRoll && rollCardSource(testRoll.action)) ?? state.cardRoll,heading) ||
+    ${tokenRollReference(tokenRoll,heading) ||
+      cardRollReference(testRoll?.card ?? (testRoll && rollCardSource(testRoll.action)) ?? state.cardRoll,heading) ||
       defenceReference()+effectAbilityReference(heading)}
     ${p?.paralyzePrevented?.length?`<p>Paralyze prevented: ${p.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}
     <div class="decision-actions">${testRoll ? testRollControls(testRoll) : content}</div>
@@ -3209,6 +3310,7 @@ function handleAction(event) {
     const entry = heroStatuses(Number(target.dataset.seat))[index];
     if(!entry)return;
     document.getElementById('token-info-title').textContent = entry.label;
+    document.getElementById('token-info-icon').innerHTML = tokenSymbol(entry.label,entry.icon);
     document.getElementById('token-info-note').textContent = entry.note || 'See the hero leaflet for this token’s ability.';
     document.getElementById('token-info').showModal();
     return;

@@ -244,8 +244,14 @@ function rerollDie(roll, dice, index, scalar = false) {
 
 // The app can pause an action at the first roll while the engine and its tests
 // continue to accept an ordinary synchronous die roller.
-function rollBatch(roll, count, owners, card) {
+function rollBatch(roll, count, owners, source) {
   if (!count) return [];
-  if (roll.requestBatch) return roll.requestBatch(count, owners, card);
+  if (roll.requestBatch) return roll.requestBatch(count, owners, source);
   return Array.from({length: count}, () => roll());
+}
+
+
+// Tag subsidiary rolls whose action can trigger several different effects.
+function rollToken(roll, token, seat, count = 1, owners) {
+  return rollBatch(roll, count, owners, {token, seat});
 }

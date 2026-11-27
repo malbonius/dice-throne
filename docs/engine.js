@@ -1074,7 +1074,7 @@ function legal(state) {
   }
 }
 function startSeraphRoll(s,seat,kind,count,roll){
- s.seraphRoll={seat,kind,dice:rollBatch(roll,count),resume:s.stage};
+ s.seraphRoll={seat,kind,dice:rollToken(roll,kind==='blinding'?'blindingLight':'flight',seat,count),resume:s.stage};
  s.stage='seraphRoll';
 }
 function startArtRoll(s,seat,kind,count,roll) {
@@ -2101,7 +2101,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
   function acceptAbility(){
     if(attacker.blind){
       attacker.blind=false;
-      state.effectDie=roll();
+      [state.effectDie]=rollToken(roll,'blind',state.active);
       state.stage='blind';
     }else checkBlindingLight();
   }
@@ -2811,7 +2811,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       }
       if(attacker.bleed&&!state.bleedChecked){
         state.bleedChecked=true;
-        state.bleedRoll=rollBatch(roll,attacker.bleed);
+        state.bleedRoll=rollToken(roll,'bleed',state.active,attacker.bleed);
         break;
       }
       if(attacker.holyPresence&&!state.holyPresenceChecked){
@@ -2821,7 +2821,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
       }
       if(attacker.powderKeg&&!state.pirateKegChecked){
         state.pirateKegChecked=true;
-        state.effectDie=roll();
+        [state.effectDie]=rollToken(roll,'powderKeg',state.active);
         state.stage='pirateKegRoll';
         break;
       }
@@ -3687,7 +3687,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         state.stage=event.resume;
         if(event.lokiBagResume)state.lokiBag=event.lokiBagResume;
         if(event.jeanBurnCheck!==undefined){state.jeanBurnRoll={seat:event.seat,epoch:event.jeanBurnCheck};state.stage='jeanBurnRoll';}
-        if(event.woundCheck){state.woundRoll=[roll()];state.stage='woundRoll';}
+        if(event.woundCheck){state.woundRoll=rollToken(roll,'wound',event.seat);state.stage='woundRoll';}
         if(event.ravenActivation)finishNevermore(state.ravenActivation);
         if(event.ravage){
           state.cardRoll={seat:event.seat,id:20,dice:rollBatch(roll,5,undefined,{seat:event.seat,id:20}),ninjaRerolls:5};
