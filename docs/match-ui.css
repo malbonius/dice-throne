@@ -559,7 +559,8 @@ button.draw-count:hover {
 }
 
 .ability .ability-requirement,
-.ability:disabled .ability-requirement {
+.ability:disabled .ability-requirement,
+.ability[data-test-ready="false"] .ability-requirement {
   margin-top: 4px;
   color: var(--requirement-ink, var(--gold));
   font-weight: 650;
@@ -733,7 +734,8 @@ button.card-preview:hover:not(:disabled) {
   line-height: 1.35;
 }
 
-.ability:disabled {
+.ability:disabled,
+.ability[data-test-ready="false"]:not(:hover) {
   opacity: 1;
   background: #192125;
   border-color: #364349;

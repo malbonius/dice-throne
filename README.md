@@ -1,6 +1,6 @@
 # Dice Throne Offline Engine
 
-**Playtest 0.53.33**
+**Playtest 0.53.34**
 
 An offline Dice Throne engine for playing and testing two-hero matches. Play both sides in a browser or install the game as a web app on supported Windows and Android browsers. The roster includes 45 heroes from Season One Rerolled, Season Two, Outcasts, Vanguard, Marvel, X-Men and Singles.
 
@@ -14,13 +14,15 @@ python -m http.server 8000 --directory docs
 
 Open [http://localhost:8000/](http://localhost:8000/), choose both heroes in **Match setup** and select **Set up initiative**. Wait for **Ready for offline play** before disconnecting. If your browser offers **Install app**, you can install from an HTTPS deployment or localhost. The game saves your current match automatically. Open the same address with the same browser profile to resume it after an update.
 
-## Test mode in 0.53.33
+## Test mode
 
 Tick **Test mode** in the header during a match. Use **Edit Health / CP** beneath either hero’s totals to type a value or step it up and down. Changes apply to the current match and are autosaved.
 
 Use **Play** in the draw or discard pile, or choose the source in the full deck list. The card still needs enough CP, legal timing and valid targets.
 
-Start a roll as usual and tap each dice slot to set its face. Empty slots roll randomly when you choose **Resolve roll**. This works with initiative, roll attempts, defence and rolls triggered by cards and abilities. Reloading the app starts with Test mode off.
+Tap a blank dice slot to choose its face before rolling. Use the illustrated picker that also appears when playing **So Wild!**. Empty slots roll randomly. If a card, ability or reroll needs another choice of dice, the picker appears in the current match panel.
+
+After an Offensive Roll Attempt, tap dice to hold or release them. Choose **Edit dice faces** to change rolled values directly, then **Done editing dice** to return to holding. Select any offensive ability in the list to set the dice to a matching roll and announce it. Abilities still need the right dice and any applicable rules conditions, such as a sixth die for Maelstrom. Reloading the app starts with Test mode off.
 
 ## What changed in 0.53.32
 

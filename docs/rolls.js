@@ -237,7 +237,7 @@ function cardActor(state) {
 }
 
 function rerollDie(roll, dice, index, scalar = false) {
-  const face = roll();
+  const face = roll.forDie ? roll.forDie(dice,index,scalar) : roll();
   roll.onReroll?.(dice, index, scalar);
   return face;
 }

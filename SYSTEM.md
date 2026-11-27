@@ -1,8 +1,10 @@
 # Dice Throne offline engine — current handover
 
-Current version is Playtest 0.53.33.
+Current version is Playtest 0.53.34.
 
 ## Test mode
+
+Playtest 0.53.34 uses the shared illustrated face picker in the roll tray. Unrolled dice accept face selections before rolling, and rolls requested during a transition offer the same picker in the current match panel. The Offensive Roll Phase has a separate **Edit dice faces** switch for editing rolled dice while preserving holds. Clicking an offensive ability in Test mode finds dice that satisfy the engine’s requirement, then announces the ability through the normal action. This respects frozen dice, unusable symbols and Spellbound. On the first attempt it runs the ordinary roll before announcing the ability.
 
 Playtest 0.53.33 adds a header checkbox. Health (1–60) and CP (0–15) can be edited for both heroes while a match is active. Applied changes appear in the action log and save with the match. Pile plays temporarily supply the actual card copy to the normal hand-play path, which checks timing, cost and targets. Opening a card from a pile leaves its position intact until playing it.
 
@@ -294,7 +296,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.33.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.34.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
