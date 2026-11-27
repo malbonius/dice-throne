@@ -12,6 +12,13 @@ function cardArtwork(match,seat,cardId) {
 const match = document.getElementById('match');
 const storageKey = 'dice-throne-card-pilot-v2';
 const roll = () => 1 + Math.floor(Math.random()*6);
+const testToggle = document.getElementById('test-mode');
+testToggle.checked = false;
+const testVitals = document.getElementById('test-vitals');
+const testVitalsForm = document.getElementById('test-vitals-form');
+let testRoll;
+let testCard;
+let testVitalsSeat;
 let state;
 let rollRequest;
 let selectedDefence;
@@ -412,6 +419,8 @@ function hero(seat, decisionSeat, responding) {
           <span class="seat-label">Player ${seat + 1}</span>
           <h2>${names[seat]}</h2>
           <div class="vitals"><span><strong>${p.hp}</strong> Health</span><span><strong>${p.cp}</strong> CP</span></div>
+          ${canEditTestVitals() ? button('test-vitals', 'Edit Health / CP',
+            `class="test-vitals-button" data-index="${seat}" aria-label="Edit ${names[seat]}’s Health and CP" aria-haspopup="dialog"`) : ''}
         </div>
       </div>
       <div class="hero-links">
@@ -500,9 +509,9 @@ function tray(values,seat,editable,held=[],view=state,rerolled=values.rerolled) 
       : `<span class="die${held[i]?' kept':''}${fresh?' rerolled':''}"${held[i]||fresh?` aria-label="${description}${held[i]?', held':''}"`:''}>${face}</span>`;
   }).join('')}</div>`;
 }
-function handCardChoices(choices, seat) {
+function handCardChoices(choices, seat, view = state) {
   if (!choices.length || (choices.length===1 && choices[0].label==='Play')) return '';
-  const labels=choices.map(choice=>tokenChoiceLabel(state,choice,seat));
+  const labels=choices.map(choice=>tokenChoiceLabel(view,choice,seat));
   if (labels.some((label,index)=>label!==choices[index].label)) {
     return `<fieldset class="card-token-choices"><legend>Choose effect</legend>
       ${labels.map((label,index)=>`<label><input type="radio" name="card-choice" value="${index}" ${index===0?'checked':''}>${label}</label>`).join('')}
@@ -722,6 +731,7 @@ function handleDiceEditor(type, index, alternate) {
     } else {
       handSeat = editor.seat;
       selectedCard = editor.id;
+      testCard = editor.testCard;
       renderHand();
       handDialog.showModal();
     }
@@ -734,12 +744,13 @@ function handleDiceEditor(type, index, alternate) {
     if (!option) return;
     const action = editor.effect
       ? {...option.action,effectSeat:editor.effect.seat}
-      : {type:'playCard',id:editor.id,seat:editor.seat,choice:option.choiceIndex};
+      : {type:'playCard',id:editor.id,seat:editor.seat,choice:option.choiceIndex,testPile:editor.testCard?.pile};
     diceEdit=null;
     dicePicks.clear();
     selectedCard=null;
-    state=mode==='reroll' ? transitionWithRerolls(action,roll,Math.random).next
-      : applyMatchAction(action,editor.title ?? seatCard(state,editor.seat,editor.id).name);
+    testCard=null;
+    state=mode==='reroll' && !testToggle.checked ? transitionWithRerolls(action,roll,Math.random).next
+      : applyMatchAction(action,editor.title ?? seatCard(state,editor.seat,editor.id).name,mode==='reroll');
     render();
     focusRollAction();
     return;
@@ -1197,6 +1208,13 @@ function effectPriorityView(view, seat) {
 }
 
 function transitionOnMatchScreen(view, action, roller, random) {
+  if (action.testPile) {
+    const {testPile, ...play} = action;
+    const withCard = viewWithPileCard(view, play.seat, testPile, play.id);
+    if (!withCard) return view;
+    const next = transitionOnMatchScreen(withCard, play, roller, random);
+    return next === withCard ? view : next;
+  }
   if (action.type === 'defend') return transition(view, action, roller, random, true);
   const effectSeat = action.attackerEffect ? view.active : action.effectSeat;
   if (effectSeat === undefined) return transition(view, action, roller, random, 'inlineCards');
@@ -1260,11 +1278,11 @@ function beforeDice(action, onRoll, random) {
   }
 }
 
-function revealRoll(request, random = Math.random) {
+function revealRoll(request, random = Math.random, roller = roll) {
   const {action, rollType} = request;
   if (rollsOnCurrentScreen(state, rollType)) {
     rollRequest = null;
-    return transitionWithRerolls(action,roll,random).next;
+    return transitionWithRerolls(action,roller,random).next;
   }
   const batches = [];
   let singles;
@@ -1273,7 +1291,7 @@ function revealRoll(request, random = Math.random) {
       singles = {dice: []};
       batches.push(singles);
     }
-    const face = roll();
+    const face = roller();
     singles.dice.push(face);
     return face;
   };
@@ -1282,7 +1300,7 @@ function revealRoll(request, random = Math.random) {
   };
   record.requestBatch = (count, owners) => {
     singles = undefined;
-    const dice = Array.from({length: count}, roll);
+    const dice = Array.from({length: count}, roller);
     batches.push({dice, owners});
     return dice;
   };
@@ -1300,9 +1318,10 @@ function revealRoll(request, random = Math.random) {
   return state;
 }
 
-function applyMatchAction(action, description) {
+function applyMatchAction(action, description, inline = false) {
   const rollAction = action.type === 'passResponse' ? state.response?.action : action;
   const rollType = rollAction?.type;
+  if (testToggle.checked) return planTestRoll({action, description, rollType, inline, faces: [], randomPrefix: []});
   if (manualRollActions.has(rollType)) {
     if (action.type === 'passResponse') description = state.pending?.name ?? 'Roll dice';
     return revealRoll({action, description, rollType});
@@ -1322,13 +1341,134 @@ function applyMatchAction(action, description) {
 
 function resolveRollRequest() {
   const request = rollRequest;
-  if (request.setup) {
+  if (testToggle.checked) {
+    if (request.setup) {
+      testRoll = {...request, faces: [], count: 2, picks: []};
+    } else {
+      state = planTestRoll({...request, faces: [], randomPrefix: request.randomPrefix?.slice() ?? []});
+    }
+  } else if (request.setup) {
     rollRequest = {...request, initiative: [roll(), roll()]};
   } else {
     let index = 0;
     const random = () => request.randomPrefix[index++] ?? Math.random();
     state = revealRoll(request, random);
   }
+  render();
+  focusRollAction();
+}
+
+// Replay from the same state when an action needs another choice of dice.
+// Keep shuffles and other random decisions stable across those replays.
+function planTestRoll(request) {
+  let faceIndex = 0;
+  let randomIndex = 0;
+  const random = () => {
+    if (randomIndex === request.randomPrefix.length) request.randomPrefix.push(Math.random());
+    return request.randomPrefix[randomIndex++];
+  };
+  const waiting = Symbol('select test dice');
+  const offenceSlots = request.rollType === 'roll'
+    ? offenceDice().map((_, index) => index).filter(index => !state.held[index] && !iceman.locked(state, state.active, index))
+    : [];
+  const readFaces = (count, owners, card) => {
+    if (faceIndex + count > request.faces.length) {
+      testRoll = {...request, count, owners, card: card ?? request.card, picks: [], open: undefined, slots: undefined, manifest: false};
+      throw waiting;
+    }
+    const dice = request.faces.slice(faceIndex, faceIndex + count);
+    faceIndex += count;
+    return dice;
+  };
+  let offenceFaces;
+  const probe = () => {
+    if (offenceSlots.length && !offenceFaces) {
+      offenceFaces = readFaces(offenceSlots.length);
+    }
+    if (offenceFaces?.length) return offenceFaces.shift();
+    return readFaces(1)[0];
+  };
+  probe.requestBatch = readFaces;
+  const before = structuredClone(state);
+  try {
+    const next = transitionOnMatchScreen(before, request.action, probe, random);
+    testRoll = null;
+    if (!request.faces.length) {
+      rollRequest = null;
+      return next === before ? state : next;
+    }
+    faceIndex = 0;
+    randomIndex = 0;
+    const roller = () => request.faces[faceIndex++];
+    if (request.inline) return transitionWithRerolls(request.action, roller, random).next;
+    return revealRoll(request, random, roller);
+  } catch (error) {
+    if (error !== waiting) throw error;
+    if (offenceSlots.length && !request.faces.length && !offenceFaces) testRoll.slots = offenceSlots;
+    else if (offenceSlots.length && request.faces.length === offenceSlots.length &&
+      request.rollType === 'roll' && heroId(state, state.active) === psylocke.id && !state.attempts) {
+      testRoll.manifest = true;
+    }
+    return state;
+  }
+}
+
+function testRollPanel(request) {
+  const playerNames = request.setup ? request.setup.heroes.map((id, seat) =>
+    request.setup.heroes[0] === request.setup.heroes[1] ? `${HEROES[id].name} (P${seat + 1})` : HEROES[id].name) : names;
+  const renderSlot = i => {
+    const label = request.manifest ? 'Manifest die'
+      : request.owners ? `${playerNames[request.owners[i]]} die`
+      : `Die ${(request.slots?.[i] ?? i) + 1}`;
+    const face = request.picks[i];
+    return button('test-die-slot', face ?? '·',
+      `class="die" data-index="${i}" aria-pressed="${request.open === i}" aria-label="${label}, ${face ?? 'choose face'}"`);
+  };
+  const slots = Array.from({length: request.count}, (_, i) => renderSlot(i));
+  const dice = request.owners
+    ? opposedTray(slots, request.owners, request.setup ? 0 : state.active, playerNames,
+      slot => `<div class="dice">${slot}</div>`)
+    : `<div class="dice" role="group" aria-label="Test dice">${slots.join('')}</div>`;
+  const faces = request.open === undefined ? '' : `<div class="face-picker">
+    <strong>Choose a face</strong><div class="face-picker-options">${[1, 2, 3, 4, 5, 6].map(value =>
+      button('test-die-face', value, `class="die" data-index="${value}" aria-pressed="${request.picks[request.open] === value}"`)
+    ).join('')}</div></div>`;
+  return `<section class="arena dice-editor" aria-label="Choose test roll">
+    <div class="phase"><span>Test mode</span></div>
+    <h2 tabindex="-1" id="action-title">${request.description}</h2>
+    <p>Select a dice slot and choose its face. Empty slots roll randomly.</p>
+    ${request.manifest ? '<strong>Manifest die</strong>' : ''}
+    ${dice}${faces}
+    <div class="controls">${button('test-dice-confirm','Resolve roll','class="primary"')}
+    ${button('test-dice-cancel','Cancel')}</div></section>`;
+}
+
+function handleTestRoll(type, index) {
+  if (type === 'test-die-slot' && index >= 0 && index < testRoll.count) {
+    testRoll.open = testRoll.open === index ? undefined : index;
+    render();
+    match.querySelector(testRoll.open === undefined
+      ? `button[data-action="test-die-slot"][data-index="${index}"]`
+      : 'button[data-action="test-die-face"]')?.focus();
+    return;
+  }
+  if (type === 'test-die-face' && testRoll.open !== undefined && index >= 1 && index <= 6) {
+    const slot = testRoll.open;
+    testRoll.picks[slot] = index;
+    testRoll.open = undefined;
+    render();
+    match.querySelector(`button[data-action="test-die-slot"][data-index="${slot}"]`)?.focus();
+    return;
+  }
+  if (type === 'test-dice-confirm') {
+    const request = testRoll;
+    const selected = Array.from({length: request.count}, (_, i) => request.picks[i] ?? roll());
+    testRoll = null;
+    if (request.setup) rollRequest = {...rollRequest, initiative: selected};
+    else state = planTestRoll({...request, faces: [...request.faces, ...selected]});
+  } else if (type === 'test-dice-cancel') {
+    testRoll = null;
+  } else return;
   render();
   focusRollAction();
 }
@@ -1355,7 +1495,7 @@ function advanceRollRequest() {
 }
 
 function focusRollAction() {
-  (match.querySelector('button[data-action="advance-roll"], button[data-action="roll-request"]')
+  (match.querySelector('button[data-action="test-die-slot"], button[data-action="advance-roll"], button[data-action="roll-request"]')
     ?? document.getElementById('action-title'))?.focus();
 }
 
@@ -2631,14 +2771,15 @@ function render() {
   effectDicePlans.length = 0;
   const open = new Set(Array.from(match.querySelectorAll('details[data-disclosure][open]'), detail => detail.dataset.disclosure));
   if (!state || rollRequest?.setup) {
-    match.innerHTML = rollRequest ? rollRequestPanel(rollRequest) :
+    match.innerHTML = testRoll ? testRollPanel(testRoll) : rollRequest ? rollRequestPanel(rollRequest) :
       '<section class="arena"><h2 id="action-title">Set up a match</h2><p>Choose both heroes in Match setup.</p></section>';
   } else {
     const seat = actor(state);
     const responding = cardActor(state);
     const decisionSeat = diceEdit?.seat ?? (state.response ? responding : seat);
     match.innerHTML = hero(0, decisionSeat, responding) + hero(1, decisionSeat, responding) +
-      (rollRequest ? rollRequestPanel(rollRequest) : diceEdit ? diceEditorPanel(diceEdit) : arena(seat, responding, decisionSeat));
+      (testRoll ? testRollPanel(testRoll) : rollRequest ? rollRequestPanel(rollRequest) :
+        diceEdit ? diceEditorPanel(diceEdit) : arena(seat, responding, decisionSeat));
   }
   for (const image of match.querySelectorAll('[data-ability-scan]')) {
     const seat = Number(image.dataset.seat), card = image.dataset.card;
@@ -2655,8 +2796,86 @@ function render() {
     }
   } catch {}
 }
+function viewWithPileCard(view, seat, pile, id) {
+  if (pile !== 'deck' && pile !== 'discard') return null;
+  const original = view.players[seat];
+  const index = original[pile].indexOf(id);
+  if (index < 0 || original.hand.includes(id)) return null;
+  const player = {...original, [pile]: original[pile].slice(), hand: [...original.hand, id]};
+  player[pile].splice(index, 1);
+  const players = view.players.slice();
+  players[seat] = player;
+  return {...view, players};
+}
+
+function pileCardChoices(seat, pile, id) {
+  const view = viewWithPileCard(state, seat, pile, id);
+  return view && canPlayFromHand(view, seat) ? cardChoices(view, seat, id) : [];
+}
+
+function canPlayTestCard() {
+  return testToggle.checked && state?.cards && state.stage !== 'finished' &&
+    !testRoll && !rollRequest && !diceEdit;
+}
+
+function canEditTestVitals() {
+  return testToggle.checked && state && state.stage !== 'finished' && !testRoll && !rollRequest && !diceEdit;
+}
+
+function openTestVitals(seat) {
+  testVitalsSeat = seat;
+  const player = state.players[seat];
+  document.getElementById('test-vitals-title').textContent = `Edit ${names[seat]}’s Health and CP`;
+  document.getElementById('test-hp').value = player.hp;
+  document.getElementById('test-cp').value = player.cp;
+  testVitals.showModal();
+}
+
+testVitalsForm.addEventListener('click', event => {
+  const step = event.target.closest('button[data-step]');
+  if (!step) return;
+  const input = document.getElementById(step.dataset.field);
+  if (step.dataset.step === 'up') input.stepUp();
+  else input.stepDown();
+});
+
+testVitalsForm.addEventListener('submit', event => {
+  event.preventDefault();
+  if (!canEditTestVitals()) return;
+  const hp = document.getElementById('test-hp').valueAsNumber;
+  const cp = document.getElementById('test-cp').valueAsNumber;
+  if (!Number.isInteger(hp) || hp < 1 || hp > 60 || !Number.isInteger(cp) || cp < 0 || cp > 15) return;
+  const player = state.players[testVitalsSeat];
+  if (player.hp !== hp || player.cp !== cp) {
+    player.hp = hp;
+    player.cp = cp;
+    state.log.unshift(`Test mode sets ${names[testVitalsSeat]} to ${hp} Health and ${cp} CP.`);
+  }
+  testVitals.close();
+  render();
+  match.querySelector(`button[data-action="test-vitals"][data-index="${testVitalsSeat}"]`)?.focus();
+});
+
+testToggle.addEventListener('change', () => {
+  if (!testToggle.checked) {
+    testRoll = null;
+    if (diceEdit?.testCard) diceEdit = null;
+    testCard = null;
+  }
+  render();
+});
+
 function renderHand() {
   const seat=handSeat;
+  if (testCard) {
+    const {id, pile} = testCard;
+    const choices = pileCardChoices(seat, pile, id);
+    handTitle.textContent = seatCard(state, seat, id).name;
+    handContent.innerHTML = `<p>${names[seat]} · ${pile === 'deck' ? 'Draw pile' : 'Discard pile'}</p>
+      ${choices.length && !cardDicePlan(seat, id, choices) ? handCardChoices(choices, seat, viewWithPileCard(state, seat, pile, id)) : ''}
+      ${choices.length ? button('playCard','Play card',`class="primary" data-index="${id}"`) : '<p>Unavailable in this window.</p>'}`;
+    return;
+  }
   handTitle.textContent=`${names[seat]}’s hand · ${state.players[seat].hand.length}`;
   handContent.innerHTML=handPanel();
 }
@@ -2692,7 +2911,7 @@ function renderDeck(seat, location) {
   const cards = [...copies.values()].flatMap(({ids, name, phase}) => {
     if (pile) {
       const entries = ids.filter(id => pile.includes(id));
-      return entries.length ? [{id:entries[0], name, count:entries.length, section:phase}] : [];
+      return entries.length ? [{id:entries[0], ids:entries, name, count:entries.length, section:phase}] : [];
     }
     const count = ids.length;
     const current = locations
@@ -2702,13 +2921,28 @@ function renderDeck(seat, location) {
     if (outside > 0) current.push(['Outside draw pile', outside]);
     const status = current.map(([label, quantity]) => count > 1 ? `${label} ×${quantity}` : label).join(' · ');
     const section = ids.every(id => player.discard.includes(id)) ? 'discard' : phase;
-    return [{id: ids[0], name, count, status, section}];
+    return [{id: ids[0], ids, name, count, status, section}];
   }).sort((a,b) => a.name.localeCompare(b.name));
+  const testButtons = ids => {
+    if (!canPlayTestCard()) return '';
+    const sources = [['deck', 'Draw pile'], ['discard', 'Discard pile']];
+    return sources.filter(([key]) => !pile || player[key] === pile).map(([key, label]) => {
+      const id = ids.find(cardId => player[key].includes(cardId));
+      if (id === undefined) return '';
+      const enabled = pileCardChoices(seat, key, id).length > 0;
+      return button('test-pile-card', pile ? 'Play' : `Play from ${label.toLowerCase()}`,
+        `data-index="${id}" data-pile="${key}" ${enabled ? '' : 'disabled title="Unavailable in this window"'}`);
+    }).join('');
+  };
   const cardList = entries => `<ul class="deck-card-list" role="list">
-      ${entries.map(({id, name, count, status}) => `<li class="deck-entry">
+      ${entries.map(({id, ids, name, count, status}) => {
+        const controls = testButtons(ids);
+        return `<li class="deck-entry">
         <span>${name}${count>1 ? ` ×${count}` : ''}${status ? `<small>${status}</small>` : ''}${id===startingSpell ? '<small>Starts prepared</small>' : id===promoId ? '<small>Promo</small>' : ''}</span>
         ${previewCard(state,seat,id)}
-      </li>`).join('')}
+        ${controls ? `<div class="controls test-deck-actions">${controls}</div>` : ''}
+      </li>`;
+      }).join('')}
     </ul>`;
   deckTitle.textContent = pile ? `${names[seat]} · ${pileLabel} (${pile.length})` : `${names[seat]}’s deck list`;
   fullDeckButton.hidden = !pile;
@@ -2737,7 +2971,32 @@ function openHeroSheet(seat) {
 function handleAction(event) {
   const target=event.target.closest('button[data-action]');
   if (!target) return;
-  const type=target.dataset.action, index=Number(target.dataset.index);
+  let type=target.dataset.action;
+  const index=Number(target.dataset.index);
+  if (testRoll) {
+    handleTestRoll(type, index);
+    return;
+  }
+  if (type === 'test-vitals') {
+    if (canEditTestVitals() && [0,1].includes(index)) openTestVitals(index);
+    return;
+  }
+  if (type === 'test-pile-card') {
+    const {pile} = target.dataset;
+    if (!canPlayTestCard()) return;
+    const choices = pileCardChoices(deckSeat, pile, index);
+    if (!choices.length) return;
+    handSeat = deckSeat;
+    testCard = {id: index, pile};
+    selectedCard = null;
+    deckDialog.close();
+    if (choices.length > 1 && !cardDicePlan(deckSeat, index, choices)) {
+      renderHand();
+      handDialog.showModal();
+      return;
+    }
+    type = 'playCard';
+  }
   if (type==='roll-request' && rollRequest && !rollRequest.initiative && !rollRequest.reveal) {
     resolveRollRequest();
     return;
@@ -2766,6 +3025,7 @@ function handleAction(event) {
   if(type==='open-hand') {
     if(!state.cards||![0,1].includes(index)||state.stage==='finished')return;
     handSeat=index;
+    testCard=null;
     selectedCard=null;
     renderHand();
     handDialog.showModal();
@@ -2878,23 +3138,30 @@ function handleAction(event) {
   if(type==='playCard') {
     if(!canPlayFromHand(state, handSeat))return;
     action.seat=handSeat;
-    action.choice=Number(handContent.querySelector('input[name="card-choice"]:checked')?.value
-      ?? document.getElementById('card-choice')?.value ?? 0);
-    const plan=cardDicePlan(handSeat,index,cardChoices(state,handSeat,index));
+    action.choice = target.dataset.action === 'test-pile-card' ? 0
+      : Number(handContent.querySelector('input[name="card-choice"]:checked')?.value
+        ?? document.getElementById('card-choice')?.value ?? 0);
+    const source = testCard;
+    const choices = source ? pileCardChoices(handSeat, source.pile, index) : cardChoices(state,handSeat,index);
+    if (source && (!canPlayTestCard() || source.id !== index || !choices[action.choice])) return;
+    if (source) action.testPile = source.pile;
+    testCard = null;
+    const plan=cardDicePlan(handSeat,index,choices);
     if(plan){
-      diceEdit={...plan,picks:new Map()};
+      diceEdit={...plan,picks:new Map(),testCard:source};
       handDialog.close();
       render();
       document.getElementById('action-title')?.focus();
       return;
     }
+    if (source) handDialog.close();
   }
   if(type==='deadpoolLuckyHope')action.amount=Number(document.getElementById('deadpool-lucky-hope').value);
   const rollTitle = type === 'playCard' ? seatCard(state, handSeat, action.id).name : target.textContent?.trim();
   const safeTitle = rollTitle?.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   state = applyMatchAction(action, safeTitle || 'Roll dice');
   if(state!==oldState)selectedPotion=undefined;
-  if (rollRequest) {
+  if (rollRequest || testRoll) {
     if (handDialog.open) handDialog.close();
     selectedCard = null;
     render();
@@ -3174,6 +3441,8 @@ document.getElementById('reset').addEventListener('click',()=>{
       !confirm('Start a new match and replace the current one?')) return;
   if (handDialog.open) handDialog.close();
   diceEdit=undefined;
+  testRoll=null;
+  testCard=null;
   dicePicks.clear();
   selectedPotion=undefined;
   rollRequest = {

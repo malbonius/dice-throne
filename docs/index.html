@@ -86,7 +86,8 @@ body:has(#hero-picker[open]){overflow:hidden}
  <div>
   <div>
    <h1><img class="header-logo" src="./dice-throne-logo.png" alt="Dice Throne" width="1024" height="612"></h1>
-   <small>Playtest 0.53.32</small>
+   <small>Playtest 0.53.33</small>
+   <label class="test-mode-label"><input id="test-mode" type="checkbox" autocomplete="off"> Test mode</label>
   </div>
   <div class="header-actions">
   <button id="open-player-aid" type="button" aria-haspopup="dialog" aria-controls="viewer">Player aid</button>
@@ -124,6 +125,24 @@ body:has(#hero-picker[open]){overflow:hidden}
   <div id="hero-groups"></div>
   <p id="hero-no-results" role="status"></p>
  </div>
+</dialog>
+<dialog id="test-vitals" aria-labelledby="test-vitals-title">
+ <div class="viewer-head"><h2 id="test-vitals-title"></h2><form method="dialog"><button>Cancel</button></form></div>
+ <form id="test-vitals-form">
+  <label for="test-hp">Health</label>
+  <div class="test-vitals-step">
+   <button type="button" data-step="down" data-field="test-hp" aria-label="Decrease Health">−</button>
+   <input id="test-hp" type="number" inputmode="numeric" min="1" max="60" step="1" required>
+   <button type="button" data-step="up" data-field="test-hp" aria-label="Increase Health">+</button>
+  </div>
+  <label for="test-cp">CP</label>
+  <div class="test-vitals-step">
+   <button type="button" data-step="down" data-field="test-cp" aria-label="Decrease CP">−</button>
+   <input id="test-cp" type="number" inputmode="numeric" min="0" max="15" step="1" required>
+   <button type="button" data-step="up" data-field="test-cp" aria-label="Increase CP">+</button>
+  </div>
+  <button type="submit" class="primary">Apply</button>
+ </form>
 </dialog>
 <dialog id="hand-dialog" aria-labelledby="hand-title">
  <div class="viewer-head"><h2 id="hand-title"></h2><form method="dialog"><button>Close hand</button></form></div>

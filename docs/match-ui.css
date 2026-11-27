@@ -1032,3 +1032,53 @@ button.card-preview:hover:not(:disabled) {
   width: min(100%, 64px);
   margin-top: 5px;
 }
+
+.test-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  font-size: .8rem;
+  white-space: nowrap;
+}
+
+.test-mode-label input {
+  accent-color: var(--gold);
+}
+
+.test-vitals-button {
+  display: block;
+  margin-top: 4px;
+  padding-inline: 7px;
+  font-size: .75rem;
+}
+
+#test-vitals {
+  width: min(340px, 94vw);
+}
+
+#test-vitals-form {
+  display: grid;
+  gap: 8px;
+}
+
+.test-vitals-step {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 8px;
+}
+
+.test-vitals-step input {
+  width: 100%;
+  padding: 8px;
+  color: inherit;
+  background: #10121a;
+  border: 1px solid #51566a;
+  border-radius: 8px;
+  text-align: center;
+  font: inherit;
+}
+
+.test-deck-actions {
+  grid-column: 1 / -1;
+}
