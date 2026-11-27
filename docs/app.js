@@ -25,6 +25,7 @@ let testCard;
 let testVitalsSeat;
 let state;
 let rollRequest;
+let lastTokenResult;
 let selectedDefence;
 try {
   const saved = JSON.parse(localStorage.getItem(storageKey));
@@ -958,17 +959,18 @@ function tokenRollForAction(view, action, seat) {
   if (!type) return null;
   const token = type === 'artificerAction' && action.status === 'heal' ||
     type === 'chooseFreeBot' && action.status === 'healbot' ? 'healbot'
-    : tokenRollActions[type];
+    : type === 'effectRetry' && view.pending?.tempestChi ? 'chi'
+    : type === 'spendFeather' && action.status==='reroll' ? 'feather' : tokenRollActions[type];
   if (!token) return null;
   const roller = seat ?? action.effectSeat ?? cardActor(view);
   const holder = {evade:1-view.active, evadeReturn:view.active, evadeUpkeep:view.active,
     rollPrey:1-view.active, rollNevermore:view.active, rollPhoenixBurn:view.jeanBurnRoll?.seat,
     rerollSkyward:view.rogueRoll?.seat, rerollReload:view.gunReload?.seat,
-    rerollMesmerized:view.mesmerizeRoll?.seat}[type] ?? roller;
+    rerollMesmerized:view.mesmerizeRoll?.seat, spendFeather:action.target}[type] ?? roller;
   return {token, seat:holder, bombId:token==='timeBomb'?action.index:undefined};
 }
 
-function currentTokenRoll(view, allowed) {
+function currentTokenRoll(view, allowed = {}) {
   const {active, stage} = view;
   if (view.retry || view.cardRoll?.id != null) return null;
   if (view.cardRoll) return {token:'wellspring', seat:view.cardRoll.seat};
@@ -1313,18 +1315,48 @@ const manualRollActions = new Set([
   ...rerollActions
 ]);
 
+function upcomingTokenRoll(view, type) {
+  const seat = view.active;
+  const player = view.players[seat];
+  if (type==='accept' && view.stage==='announce') {
+    const token = player.blind ? 'blind' : player.blindingLight && !view.pending?.ultimate ? 'blindingLight' : null;
+    return token ? {token,seat,count:1} : null;
+  }
+  if (type==='resolveUpkeep' && view.stage==='upkeep') {
+    if (player.bleed && !view.bleedChecked) return {token:'bleed',seat,count:player.bleed};
+    if (player.holyPresence && !view.holyPresenceChecked) return null;
+    if (player.powderKeg && !view.pirateKegChecked) return {token:'powderKeg',seat,count:1};
+  }
+  return null;
+}
+
+function showdownPending(view) {
+  return view.stage==='targeting' && !!view.pending?.showdown;
+}
+
 function effectRollOnCurrentScreen(view, type) {
   return inlineEffectRolls.has(type) || type === 'rollEffect' && view.cards ||
-    type === 'rollSantaAbility' && !view.pending?.santa?.contest;
+    type === 'rollSantaAbility' && !view.pending?.santa?.contest ||
+    type === 'resolveTarget' && showdownPending(view) || !!upcomingTokenRoll(view,type);
 }
 
 function rollsOnCurrentScreen(view, type) {
   if (['roll','defend','retryDie','gambitMagicReroll','rerollUndead','rerollMesmerized','stormOppReroll'].includes(type) ||
       effectRollOnCurrentScreen(view,type)) return true;
+  if (type==='effectRetry' && view.pending?.tempestChi) return true;
   if (!rerollActions.has(type)) return false;
   const context = rollContext(view);
   return !!context && (context.dice === view.dice || context.dice === view.defenceDice ||
     view.gunContest?.kind === 'duel' && context.dice === view.gunContest.dice);
+}
+
+function hasRollOnResolutionScreen(view, request, next, token) {
+  if (!next || !rollContext(next)?.dice.length) return false;
+  if (next.gunContest?.kind==='showdown' && request.rollType==='resolveTarget' ||
+      next.nevermoreRoll && request.rollType==='spendFeather') return true;
+  const activeToken = currentTokenRoll(next);
+  return !!activeToken &&
+    (token ? activeToken.token===token.token : currentTokenRoll(view)?.token!==activeToken.token);
 }
 
 function effectPriorityView(view, seat) {
@@ -1429,8 +1461,10 @@ function revealRoll(request, random = Math.random, roller = roll) {
     return dice;
   };
   const {next, context, rerolled} = transitionWithRerolls(action,record,random);
+  const token = batches.find(batch=>batch.token)?.token ?? request.token ?? tokenRollForAction(state,action);
   if (!batches.length || next === state ||
-      batches.length===1 && next.cardRoll?.dice===batches[0].dice) {
+      batches.length===1 && next.cardRoll?.dice===batches[0].dice ||
+      hasRollOnResolutionScreen(state,request,next,token)) {
     rollRequest = null;
     return next;
   }
@@ -1438,8 +1472,14 @@ function revealRoll(request, random = Math.random, roller = roll) {
   const reveal = context?.dice.length && (rerolled.length || rerollActions.has(rollType))
     ? [{...context, rerolled, current: true, primary: context.dice === next.dice}]
     : batches.map(batch => ({...batch, seat}));
-  const token = batches.find(batch=>batch.token)?.token ?? request.token ?? tokenRollForAction(state,action);
-  rollRequest = {...request, token, reveal, next};
+  // A token can also apply its result immediately, such as Heal Bot during an Ultimate.
+  // Keep the result beside the following match action without another acknowledgement.
+  if (token) {
+    lastTokenResult = {token, reveal, next};
+    rollRequest = null;
+    return next;
+  }
+  rollRequest = {...request, reveal, next};
   return state;
 }
 
@@ -1451,7 +1491,7 @@ function applyMatchAction(action, description, inline = false) {
     testDraft = undefined;
     return planTestRoll({action, description, rollType, inline, preset, faces: [], randomPrefix: []});
   }
-  if (manualRollActions.has(rollType)) {
+  if (manualRollActions.has(rollType) || effectRollOnCurrentScreen(state,rollType)) {
     if (action.type === 'passResponse') description = state.pending?.name ?? 'Roll dice';
     return revealRoll({action, description, rollType});
   }
@@ -1626,7 +1666,7 @@ function testRollControls(request) {
   return `<div class="test-roll-controls">
     <p>Tap a die to set its face. Empty slots roll randomly.</p>
     ${testDiceTray(request)}
-    <div class="controls">${button('test-dice-confirm','Resolve roll','class="primary"')}
+    <div class="controls">${button('test-dice-confirm',request.owners?'Roll both dice':request.count===1?'Roll die':'Roll dice','class="primary"')}
     ${button('test-dice-cancel','Cancel')}</div></div>`;
 }
 
@@ -1777,7 +1817,7 @@ function arena(seat, responding, decisionSeat) {
   const allowed=legal(state), p=state.pending;
   const pendingAbility=p?.name ? abilityName(p.name) : '';
   const activeName=names[state.active], actingName=names[seat];
-  let heading, phase, detail='', content='';
+  let heading, phase, detail='', content='', preparedToken;
   const stageEffects = [[],[]];
   const addEffect = (action, label, attrs = '', owner = seat) =>
     stageEffects[owner].push(button(action,label,attrs));
@@ -2225,11 +2265,16 @@ function arena(seat, responding, decisionSeat) {
         + offenceAbilities(seat, allowed.declare);
       break;
     case 'announce':
-      phase='Ability response'; heading=`${actingName} responds`;
+      preparedToken = upcomingTokenRoll(state,'accept');
+      phase=preparedToken?'Status effect roll':'Ability response';
+      heading=preparedToken?tokenRollLabel(preparedToken.token):`${actingName} responds`;
       detail=`${activeName} announces ${pendingAbility}.`;
-      content=tray(state.dice,state.active,false)+button('accept','Accept roll','class="primary"'); break;
+      content=preparedToken
+        ? testBlankRoll('accept',1,state.active)+button('accept','Roll die','class="primary"')
+        : tray(state.dice,state.active,false)+button('accept','Accept roll','class="primary"');
+      break;
     case 'blind':
-      phase='Blind check'; heading=`${actingName} checks Blind`;
+      phase='Status effect roll'; heading='Blind';
       detail='A 1 or 2 cancels the ability.';
       content=scalarTray(seat)+button('resolveBlind','Resolve Blind','class="primary"'); break;
     case 'gunDuelChoice':
@@ -2468,6 +2513,14 @@ function arena(seat, responding, decisionSeat) {
         break;
       }
       detail=[hero.sunDial!==undefined&&!hero.sunDawn&&!state.sunUpkeep?'Dusk increases the Sun Dial by 1.':'',hero.moonShard===3&&!hero.werewolf?'Twilight flips Pale Lady to Werewolf.':'',heroId(state,state.active)===gunslinger.id&&hero.reload!==2&&!state.quickDrawChecked?'Quick Draw grants Reload.':'',hero.nyra?.downed?(hero.nyra.hp>=5?'Nyra becomes Active.':'Nyra heals 1 and remains Downed.'):'',hero.bleed&&!state.bleedChecked?`Roll for ${hero.bleed} Bleed.`:'',hero.holyPresence&&!state.holyPresenceChecked?`Holy Presence deals ${hero.holyPresence} damage to ${names[1-state.active]}.`:'',heroId(state,state.active)===7&&!state.fertilized?'Fertilize grows one Spirit.':'',hero.fireMastery?'Lose 1 Fire Mastery.':'',hero.cursed?'Cursed deals 4 unpreventable damage.':'',hero.powderKeg&&!state.pirateKegChecked?'Roll for Powder Keg.':'',cursedPirate.foreignCoins(state,state.active)?'Opponent’s Doubloons deal upkeep damage.':'',hero.burn&&!state.upkeepEvaded?'Burn deals 2 damage.':'',hero.poison&&!state.upkeepEvaded?`Poison deals ${hero.poison} damage.`:'',state.upkeepPrevention?`Chi prevents ${state.upkeepPrevention} damage.`:''].filter(Boolean).join(' ');
+      preparedToken = allowed.resolveUpkeep ? upcomingTokenRoll(state,'resolveUpkeep') : null;
+      if (preparedToken) {
+        heading = tokenRollLabel(preparedToken.token);
+        detail = '';
+        content = testBlankRoll('resolveUpkeep',preparedToken.count,state.active) +
+          button('resolveUpkeep',preparedToken.count===1?'Roll die':'Roll dice','class="primary"');
+        break;
+      }
       content=(allowed.checkWound?button('checkWound','Resolve a Wound token'):'')+
         (allowed.checkRegenerate?button('checkRegenerate','Resolve Regenerate'):'')+(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Check Nanites'):'')+
         (allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
@@ -2615,8 +2668,15 @@ function arena(seat, responding, decisionSeat) {
       content=rerollTray(roll,rerolls)+button('resolveEffect','Resolve effect roll','class="primary"');
       break;
     case 'targeting':
-      phase='Targeting'; heading=`${pendingAbility} targets ${names[1-seat]}`;
-      content=button('resolveTarget','Apply ability effects','class="primary"'); break;
+      if (showdownPending(state)) {
+        phase='Ability roll'; heading=pendingAbility;
+        content=testBlankRoll('resolveTarget',2,state.active,[state.active,1-state.active])+
+          button('resolveTarget','Roll both dice','class="primary"');
+      } else {
+        phase='Targeting'; heading=`${pendingAbility} targets ${names[1-seat]}`;
+        content=button('resolveTarget','Apply ability effects','class="primary"');
+      }
+      break;
     case 'choice':
       phase='Ability choice'; heading=pendingAbility;
       content=p.ninjaTarget?names.map((name,target)=>button('chooseEffect',`Give Smoke Bomb and Ninjutsu to ${name}`,`data-target="${target}"`)).join('')
@@ -2685,7 +2745,7 @@ function arena(seat, responding, decisionSeat) {
       content=(state.defenceDice.length ? tray(state.defenceDice,seat,false):'')
         +`<div class="controls">${allowed.reopenPrey?button('reopenPrey','Use Prey'):''}${button('settle',footworkPending?'Apply Footwork bonus':nyraIncoming(state)?'Assign damage':'Resolve damage','class="primary"')}</div>`; break;
     case 'evasion':
-      phase='Avoid damage'; heading=`${actingName} checks ${statusLabel(state.evasionToken??'evasive')}`;
+      phase='Avoid damage'; heading=tokenRollLabel(state.evasionToken??'evasive');
       detail=state.evasionToken==='smoke'?'A 1–3 avoids the incoming damage.':'A 1 or 2 avoids the incoming damage.';
       content=scalarTray(seat)+button('resolveEvade','Resolve roll','class="primary"'); break;
     case 'spiderAfter':
@@ -2831,7 +2891,9 @@ function arena(seat, responding, decisionSeat) {
     ? `${activeName} · effects before the defence roll` : `Available effects · ${names[otherSeat]}`;
   const playing = state.stage !== 'finished';
   const decisionName = names[decisionSeat];
-  const tokenRoll = testRoll ? testRoll.token : currentTokenRoll(state,allowed);
+  const tokenRoll = testRoll ? testRoll.token : preparedToken ?? currentTokenRoll(state,allowed);
+  const recentTokenResult = !testRoll && lastTokenResult?.next === state
+    ? tokenRollReference(lastTokenResult.token) + rollResultTray(lastTokenResult) : '';
   if (testRoll?.token) heading = tokenRollLabel(testRoll.token.token);
   return `<section class="arena" aria-label="Match actions">
     <div class="phase"><span>Turn ${state.turn} · ${phase}</span><span>${state.stage==='offence' ? `Roll ${state.attempts}/${state.budget}` : ''}</span></div>
@@ -2841,13 +2903,14 @@ function arena(seat, responding, decisionSeat) {
     </div>`:''}
     <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${detail&&!testRoll?.token?`<p>${detail}</p>`:''}
+    ${preparedToken&&state.stage==='announce'&&state.dice.length ? tray(state.dice,state.active,false) : ''}
     ${effects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${responding}" ${!content?'open':''}><summary>Available effects · ${names[responding]}</summary><div class="effect-options">${effects}</div></details>`:''}
     ${otherEffects?`<details class="match-effects" data-disclosure="effects-${state.stage}-${otherSeat}"><summary>${otherEffectsTitle}</summary><div class="effect-options">${otherEffects}</div></details>`:''}
     ${tokenRollReference(tokenRoll,heading) ||
       cardRollReference(testRoll?.card ?? (testRoll && rollCardSource(testRoll.action)) ?? state.cardRoll,heading) ||
       defenceReference()+effectAbilityReference(heading)}
     ${p?.paralyzePrevented?.length?`<p>Paralyze prevented: ${p.paralyzePrevented.map(statusLabel).join(', ')}.</p>`:''}
-    <div class="decision-actions">${testRoll ? testRollControls(testRoll) : content}</div>
+    <div class="decision-actions">${recentTokenResult}${testRoll ? testRollControls(testRoll) : content}</div>
     <details class="action-log" data-disclosure="action-log"><summary>Action log</summary><ol reversed>${state.log.slice(0,35).map(event=>`<li>${event}</li>`).join('')}</ol></details>
     ${matchTools(responding)}
     </section>`;
@@ -3045,6 +3108,7 @@ function matchTools(responding) {
   </nav>`;
 }
 function render() {
+  if (lastTokenResult?.next !== state) lastTokenResult = undefined;
   if (state?.stage !== 'offence' || rollRequest?.setup) {
     editTestFaces = false;
     testAbilityMessage = undefined;
@@ -3628,7 +3692,8 @@ viewerScroll.addEventListener('touchmove',event=>{
 for(const type of ['touchend','touchcancel']) viewerScroll.addEventListener(type,()=>{pinch=null;});
 window.addEventListener('resize',()=>{if(viewer.open)setZoom(zoom);});
 // Older in-progress rolls that now use the match screen already have their final dice saved.
-if (rollRequest?.reveal && rollsOnCurrentScreen(state, rollRequest.rollType)) {
+if (rollRequest?.reveal && (rollsOnCurrentScreen(state,rollRequest.rollType) ||
+    hasRollOnResolutionScreen(state,rollRequest,rollRequest.next,rollRequest.token ?? tokenRollForAction(state,rollRequest.action)))) {
   state = rollRequest.next;
   names = heroNames(state);
   rollRequest = null;
