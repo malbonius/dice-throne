@@ -250,7 +250,8 @@ function tokenImage(view,seat,key,bombId) {
     if (bombId===undefined && timers.some(bomb=>bomb.ticks!==timer?.ticks)) return '';
     if (timer?.ticks===1) image=art.timeBomb1;
   }
-  return image?`<img class="token-icon${key==='donut'?' donut-icon':''}" src="${image}" alt="">`:'';
+  const circular = key==='donut'||key==='cheer'||key==='eggNog';
+  return image?`<img class="token-icon${circular?' circular-token-art':''}" src="${image}" alt="">`:'';
 }
 
 const tokenButtonNames = Object.entries({
