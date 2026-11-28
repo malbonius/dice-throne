@@ -90,7 +90,7 @@ const santa=(()=>{
    if(a.type==='rollSantaAbility'&&(previous.stage!=='santaTarget'||previous.response||previous.cardRoll||previous.retry))return previous;
    if(a.type==='resolveSantaRoll'&&(previous.stage!=='santaRoll'||!previous.santaRoll||previous.response||previous.cardRoll||previous.retry))return previous;
    if(a.type==='santaGiftHide'&&(!previous.santaGift||previous.santaGift.stage!=='hide'||!['left','right'].includes(a.status)))return previous;
-   if(a.type==='santaGiftGuess'&&(!previous.santaGift||previous.santaGift.stage!=='guess'||!['left','right'].includes(a.status)))return previous;
+   if(a.type==='santaGiftGuess'&&(!previous.santaGift||previous.santaGift.stage!=='guess'||!['left','right','random'].includes(a.status)))return previous;
    if(['rollSantaAbility','resolveSantaRoll','resolveEggNog'].includes(a.type)&&!bypassResponse&&!attackLocked(previous)&&hasResponse(previous,1-seat))return {...previous,response:{seat:1-seat,action:a}};
    const s=structuredClone(previous),p=s.players[seat];psylocke.setState(s);s.response=null;
    if(a.type==='santaRemovalReady')s.santaRemoval.choosing=true;
@@ -103,7 +103,14 @@ const santa=(()=>{
    if(a.type==='rollSantaAbility'){s.pending.santaTargeted=true;s.santaRoll={seat,dice:s.pending.santa.contest?rollBatch(roll,2,[seat,1-seat]):[roll()]};s.stage='santaRoll';}
    if(a.type==='resolveSantaRoll'){const r=s.santaRoll,i=s.pending.santa,n=dieValue(r.dice[0],s.players[r.seat]);i.rolled=true;if(i.contest){const win=n>=dieValue(r.dice[1],s.players[1-r.seat]);s.pending.damage+=win?0:2;s.pending.undefendable=win;i.cheer=win?1:0;i.nog=win?0:1;}else{const bad=n>=(i.naughtyUp?4:5);i.bad=bad;i.nice=n>0&&!bad;if(!n){s.pending.damage=0;s.pending.abilityDamage=0;s.pending.santaModifiers=0;s.pending.nonAttack=true;}else s.pending.damage+=bad?2:0;}delete s.santaRoll;s.stage='santaAbility';}
    if(a.type==='santaGiftHide'){s.santaGift.hand=a.status;s.santaGift.stage='guess';}
-   if(a.type==='santaGiftGuess'){const g=s.santaGift,win=a.status!==g.hand;delete s.santaGift;s.stage=g.resume;s.log.unshift(`White Elephant Gift: the ${g.hand} hand held the gift; the ${a.status} hand was chosen. ${win?'Santa gains the gift.':'No tokens gained.'}`);if(win)begin(s,g.seat,[{kind:'gain',key:'cheer',amount:1},{kind:'gain',key:'eggNog',amount:3}],s.stage,random);}
+   if(a.type==='santaGiftGuess'){
+    const g=s.santaGift;
+    const hand=a.status==='random'?(random()<.5?'left':'right'):a.status;
+    const win=hand!==g.hand;
+    delete s.santaGift;s.stage=g.resume;
+    s.log.unshift(`White Elephant Gift: the ${g.hand} hand held the gift; the ${hand} hand was chosen${a.status==='random'?' at random':''}. ${win?'Santa gains the gift.':'No tokens gained.'}`);
+    if(win)begin(s,g.seat,[{kind:'gain',key:'cheer',amount:1},{kind:'gain',key:'eggNog',amount:3}],s.stage,random);
+   }
    pump(s,random);return s;
   }
  };
