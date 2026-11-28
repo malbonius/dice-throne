@@ -674,11 +674,18 @@ button.draw-count:hover {
   color: var(--gold);
 }
 
-.storm-charge-heading {
+.storm-charge-heading,
+.unearthed-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 6px;
+}
+
+.unearthed-heading small {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 650;
 }
 
 .storm-charge-icon,
@@ -712,6 +719,12 @@ button.draw-count:hover {
 }
 
 .ability-reference small { color: var(--muted); }
+
+.nevermore-outcomes {
+  margin-block: 6px;
+  padding-inline-start: 1.4rem;
+  line-height: 1.45;
+}
 
 .ability-reference > div > button {
   display: block;

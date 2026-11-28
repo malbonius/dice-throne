@@ -132,10 +132,10 @@ function cardsFor(seat,p,includePromo,random){
  p.hand=[];p.upgrades={};p.discard=[];
  drawCards(p,4,random);
 }
-function abilitiesFor(state,seat){
+function abilitiesFor(state,seat,{includeCovered=false}={}){
  const equipped=state.players[seat].upgrades??{};
  return boardFor(state,seat).abilities.flatMap(base=>{
-  if((base.upgradeSlot??base.name)===state.players[seat].covered)return [];
+  if(!includeCovered&&(base.upgradeSlot??base.name)===state.players[seat].covered)return [];
   const id=equipped[base.upgradeSlot??base.name];
   if(!id)return [base];
   const c=seatCard(state,seat,id);
@@ -1141,6 +1141,7 @@ function transitionStep(previous, action, roll, random, responseMode){
  }
  psylocke.setState(next,true);if(next!==previous)psylocke.flush(next);
  if(next!==previous&&action.type!=='manifestSwap'&&!iceman.permitted(previous,next))return previous;
+ if(next!==previous&&previous.resurrectNotices)delete next.resurrectNotices;
  if(next!==previous)next.players.forEach((player,seat)=>{
    if(next.stage==='finished'&&player.nevermoreSeat!==undefined){
      if(!player.hp)delete player.nevermoreSeat;
@@ -1148,7 +1149,11 @@ function transitionStep(previous, action, roll, random, responseMode){
    }
    if(!player.resurrected)return;
    player.cp=0;
-   if(previous.players[seat].resurrect&&!player.resurrect)next.log.unshift(`${heroNames(next)[seat]} returns with 5 Health through Resurrect.`);
+   if(previous.players[seat].resurrect&&!player.resurrect){
+     const message=`${heroNames(next)[seat]} returns with 5 Health through Resurrect.`;
+     next.log.unshift(message);
+     (next.resurrectNotices??=[]).push(message);
+   }
  });
  if(next!==previous){
    if(previous.thorWillNotice && next.thorWillNotice?.logLength===previous.thorWillNotice.logLength)delete next.thorWillNotice;
@@ -3621,7 +3626,7 @@ function transitionCore(previous, action, roll, random, bypassResponse) {
         const count=(used.rolled??0)-(used.resolved??0);
         if(count)attacker.undeadUsed={...used,resolved:used.rolled};
         if(count&&attacker.undeadFreeTurn!==state.turn){
-          state.undeadRoll={seat:state.active,dice:rollBatch(roll,count),resume:state.stage};
+          state.undeadRoll={seat:state.active,dice:rollToken(roll,'undead',state.active,count),resume:state.stage};
           state.stage='undeadRoll';
           break;
         }

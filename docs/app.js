@@ -277,11 +277,19 @@ const tokenButtonActions = {
   santaMistletoe:['cheer'], reopenPrey:['prey'],
 };
 
+const undeadArt = {warrior:'skeletalWarrior',mage:'skeletalMage',golem:'boneGolem'};
+const undeadAbilityOwners = {spear:'warrior',withering:'mage',scything:'mage',spur:'golem',spikes:'golem'};
+
 function tokenButtonLabel(action,label,attrs,seat) {
   const reference = /^(inspect-|select-|open-|test-)/.test(action) && action!=='open-effect-dice';
   if (!state || reference || label.includes('<') || action==='pick-card-recipient' || action==='resolveMainChoice') return label;
   const status = tokenButtonStatus.has(action) ? attrs.match(/data-status="([^"]+)"/)?.[1] : undefined;
   const keys = new Set(tokenButtonActions[action]);
+  if (['necroAction','necroChoice','removeUndead'].includes(action)) {
+    const kind = attrs.match(/data-status="([^"]+)"/)?.[1];
+    const undead = undeadArt[undeadAbilityOwners[kind]??kind];
+    if (undead) keys.add(undead);
+  }
   if (action==='resolveEvade') keys.add(state.evasionToken??'evasive');
   if (action==='resolveSeraphRoll') keys.add(state.seraphRoll?.kind==='blinding'?'blindingLight':'flight');
   if (status && Object.hasOwn(statusNotes,status)) keys.add(status);
@@ -322,8 +330,8 @@ const urgentStatuses = new Set(['timeBomb','phoenixBurn','poison','burn','delaye
   'bleed','wound','powderKeg','concussion','knockdown','disarm','blind','blindingLight']);
 const undeadNotes = {
   warrior: 'Bone Spear adds 1 damage to your attack.',
-  mage: 'Withering inflicts Decrep-ify. After using three Bone Spears, Scything Touch can steal 1 Health.',
-  golem: 'Bone Spur adds 2 damage to your attack. When defending, you can remove the Golem to prevent 2 damage and deal 2 damage back.'
+  mage: 'Use one ability per turn. Withering inflicts Decrep-ify. Scything Touch steals 1 Health after you have activated three Skeletal Warriors this turn.',
+  golem: 'Bone Spur adds 2 damage to your attack. Bone Spikes removes the Bone Golem when attacked to deal 2 damage and prevent 2 damage, without rolling for its activation.'
 };
 const botNotes = {
   nanobot: 'Detonate Nanites during your Upkeep. Deal 1, 3 or 5 damage for 1, 2 or 3 Nanites on each affected hero.',
@@ -384,8 +392,9 @@ function heroStatuses(seat) {
     p.moonShard>0&&status('moonShard',`Moon Shards ×${p.moonShard}`),
     p.prey>0&&status('prey',`Prey ×${p.prey}`),
     ...Object.entries(p.undead??{}).filter(([,count])=>count).map(([kind,count])=>{
-      const {name}=necromancer.undead[kind], key={warrior:'skeletalWarrior',mage:'skeletalMage',golem:'boneGolem'}[kind];
-      return {label:`${name} ×${count}`, count, icon:`<img src="${art[key]}" alt="">`, note:undeadNotes[kind]};
+      const {name}=necromancer.undead[kind];
+      return {label:`${name} ×${count}`, suffix:kind, count, companion:true,
+        icon:`<img class="companion-art" src="${art[undeadArt[kind]]}" alt="">`, note:undeadNotes[kind]};
     }),
     p.resurrect&&status('resurrect','Resurrect'),
     p.decrepify&&status('decrepify','Decrep-ify'),
@@ -1067,15 +1076,19 @@ const defenceUpgradeBottom = {
   15:{27:69}, 16:{25:74}, 25:{25:69}, 29:{26:87}, 32:{24:75}, 34:{24:72}
 };
 
-function printedAbility(seat, name, bounds, card) {
-  const fromCard = Number.isInteger(card);
+function abilityScan(name,bounds,scale,source) {
   const [left, top, right, bottom] = bounds;
   const width = right - left, height = bottom - top;
-  const scale = fromCard ? .635 : 1.64;
-  const scan = `<span class="ability-scan" style="aspect-ratio:${width * scale}/${height}">
-    <img data-ability-scan data-seat="${seat}" data-card="${card ?? ''}" alt="Printed ${name} effects"
+  return `<span class="ability-scan" style="aspect-ratio:${width * scale}/${height}">
+    <img ${source} alt="Printed ${name} effects"
       style="width:${10000 / width}%;height:${10000 / height}%;left:${-100 * left / width}%;top:${-100 * top / height}%">
     </span>`;
+}
+
+function printedAbility(seat, name, bounds, card) {
+  const fromCard = Number.isInteger(card);
+  const source = `data-ability-scan data-seat="${seat}" data-card="${card ?? ''}"`;
+  const scan = abilityScan(name,bounds,fromCard ? .635 : 1.64,source);
   return fromCard
     ? previewCard(state,seat,card,scan)
     : button('inspect-board',scan,`data-index="${seat}" aria-label="View ${name} on ${names[seat]}’s board" aria-haspopup="dialog"`);
@@ -1096,6 +1109,7 @@ const tokenRollActions = {
   spendChargedGem:'chargedGem', evade:'evasive', evadeReturn:'evasive', evadeUpkeep:'evasive', evadeSide:'evasive',
   smoke:'smoke', ninjutsu:'ninjutsu', spendSneak:'sneak', mesmerize:'mesmerize', rerollMesmerized:'mesmerize',
   backStrike:'backStrike', spendReload:'reload', rerollReload:'reload', spendGuardBreak:'guardBreak',
+  rerollUndead:'undead',
   spendGrim:'grim', wellspring:'wellspring', widowBombRoll:'timeBomb', rollPhoenixBurn:'phoenixBurn',
   clearNanites:'nanite', rollTrickBag:'bagOfTricks', rollNevermore:'nevermore', rollPrey:'prey',
   seedling:'seedling', spendCheer:'cheer', spendSupport:'support', spendInfiltration:'infiltration',
@@ -1109,7 +1123,7 @@ function tokenRollForAction(view, action, seat) {
   const token = type === 'artificerAction' && action.status === 'heal' ||
     type === 'chooseFreeBot' && action.status === 'healbot' ? 'healbot'
     : type === 'effectRetry' && view.pending?.tempestChi ? 'chi'
-    : type === 'spendFeather' && action.status==='reroll' ? 'feather' : tokenRollActions[type];
+    : type === 'spendFeather' && action.status==='reroll' ? 'nevermore' : tokenRollActions[type];
   if (!token) return null;
   const roller = seat ?? action.effectSeat ?? cardActor(view);
   const holder = {evade:1-view.active, evadeReturn:view.active, evadeUpkeep:view.active,
@@ -1144,7 +1158,8 @@ function currentTokenRoll(view, allowed = {}) {
     ['deadpoolDonutRoll','donut'], ['santaNogRoll','eggNog'], ['alphaRoll','alpha'],
     ['jeanBurnRoll','phoenixBurn'], ['cosmicRayRoll','cosmicRay'], ['widowAgility','agility'],
     ['sunGemRoll','chargedGem'], ['mesmerizeRoll','mesmerize'], ['guardBreakRoll','guardBreak'],
-    ['woundRoll','wound'], ['gunReload','reload'], ['samuraiRoll','backStrike'], ['horseRoll','grim']
+    ['woundRoll','wound'], ['gunReload','reload'], ['samuraiRoll','backStrike'], ['horseRoll','grim'],
+    ['undeadRoll','undead']
   ].find(([key]) => view[key]);
   if (roll) {
     const [key,token] = roll;
@@ -1156,11 +1171,40 @@ function currentTokenRoll(view, allowed = {}) {
   return token ? {token, seat:active} : null;
 }
 
-const tokenRollLabel = token => ({healbot:'Heal Bot'}[token] ?? statusLabel(token));
+const tokenRollLabel = token => ({healbot:'Heal Bot',undead:'Undead'}[token] ?? statusLabel(token));
+
+function undeadRollReference() {
+  const scan = abilityScan('Undead',[2.1,18.5,47.7,31.7],1361/1247,`src="${art.undeadLeaflet}"`);
+  return `<div class="ability-reference" role="group" aria-label="Undead ability effects"><div>
+    <div>${abilityName('Activating Undead','strong')}</div>
+    <p>Roll one die for each Undead activated. For every Bones rolled, remove one Undead of your choice.</p>
+    ${button('inspect-undead',scan,`aria-label="View the Undead reference" aria-haspopup="dialog"`)}
+  </div></div>`;
+}
+
+const nevermoreOutcomes = [
+  'That opponent gains Hex.',
+  'The Raveness may activate Nevermore two times.',
+  'The Raveness may activate Nevermore.',
+  'That opponent discards 1 card of their choice.',
+  'That opponent loses 1 CP. The Raveness gains 1 CP.',
+  'Reduce Nevermore’s dial to 0. Then return Nevermore to the Raveness.'
+];
+
+function nevermoreRollReference() {
+  const owner = state.nevermoreRoll?.owner ?? nevermoreOwner(state);
+  return `<div class="ability-reference" role="group" aria-label="Nevermore Die Roll effects"><div>
+    <div>${tokenChoiceLabel(state,{key:'nevermore',label:abilityName('Nevermore Die Roll','strong')},owner)}<small>1 die</small></div>
+    <ol class="nevermore-outcomes">${nevermoreOutcomes.map(text=>`<li>${text}</li>`).join('')}</ol>
+    ${button('inspect-leaflet','View leaflet',`data-index="${owner}" aria-label="View Nevermore on ${names[owner]}’s leaflet" aria-haspopup="dialog"`)}
+  </div></div>`;
+}
 
 function tokenRollReference(source, heading) {
   if (!source) return '';
   const {token, seat, bombId} = source;
+  if (token==='undead') return undeadRollReference();
+  if (token==='nevermore') return nevermoreRollReference();
   const label = tokenRollLabel(token);
   const note = token==='healbot'?botNotes.healbot:token==='nyra'?'Nyra takes 1 damage to reroll a die.':statusNotes[token];
   const icon = token==='healbot'?botIcon('healbot',state.players[seat].bots?.healbot??1)
@@ -1394,8 +1438,11 @@ function potionAttachmentChoices(seat, choices) {
 }
 
 function offenceAbilities(seat, available = []) {
-  const charges = state.players[seat].lightningCharges;
-  return `<div class="abilities">${abilitiesFor(state,seat).map((a,i)=>{
+  const {covered,lightningCharges:charges} = state.players[seat];
+  const selectable = abilitiesFor(state,seat);
+  const abilities = covered ? abilitiesFor(state,seat,{includeCovered:true}) : selectable;
+  const indices = covered ? new Map(selectable.map((ability,i)=>[ability.name,i])) : null;
+  return `<div class="abilities">${abilities.map((a,index)=>{
     // Legacy ability copy puts the printed roll requirement before the first middle dot.
     const separator=a.text.indexOf(' · ');
     const prefix=separator<0?'':a.text.slice(0,separator);
@@ -1403,14 +1450,19 @@ function offenceAbilities(seat, available = []) {
     const requirement=usesMultipleCounts?prefix:abilityRequirement(a);
     const text=separator<0?a.text:a.text.slice(separator+3);
     const effect=text.charAt(0).toUpperCase()+text.slice(1);
-    const ready = available.includes(a.name);
+    const i = indices ? indices.get(a.name) : index;
+    const unearthed = i===undefined;
+    const ready = !unearthed && available.includes(a.name);
     const name = abilityName(a.label??a.name,'strong');
     const chargeSlot = a.upgradeSlot??a.name;
-    const title = charges && storm.slots.includes(chargeSlot)
+    const title = unearthed ? `<span class="unearthed-heading">${name}<small>Unearthed</small></span>`
+      : charges && storm.slots.includes(chargeSlot)
       ? `<span class="storm-charge-heading">${name}${lightningIndicator(charges[chargeSlot])}</span>` : name;
-    return button(testToggle.checked ? 'test-ability' : 'declare',`${title}<small class="ability-requirement">${requirement}</small><small class="ability-effect">${effect}</small>`,
-      `class="ability" data-ability="${i}" ${testToggle.checked
-        ? `data-index="${i}" data-test-ready="${ready}"` : ready ? '' : 'disabled'}`);
+    const action = testToggle.checked ? 'test-ability' : 'declare';
+    const attrs = unearthed ? 'disabled' : `data-ability="${i}" ${testToggle.checked
+      ? `data-index="${i}" data-test-ready="${ready}"` : ready ? '' : 'disabled'}`;
+    return button(action,`${title}<small class="ability-requirement">${requirement}</small><small class="ability-effect">${effect}</small>`,
+      `class="ability" ${attrs}`);
   }).join('')}</div>`;
 }
 
@@ -1983,13 +2035,23 @@ function focusRollAction() {
     ?? document.getElementById('action-title'))?.focus();
 }
 
+function resurrectWarning(seat,damage,health=state.players[seat].hp) {
+  const {resurrect,blessing} = state.players[seat];
+  return resurrect && !blessing && health>0 && damage>=health
+    ? `<p role="status">If the incoming damage is still lethal at resolution, ${names[seat]} will return with 5 Health through Resurrect.</p>` : '';
+}
+
+function attackResurrectWarnings() {
+  return resurrectWarning(1-state.active,incomingDamage(state)) + resurrectWarning(state.active,returnDamageFor(state));
+}
+
 function arena(seat, responding, decisionSeat) {
   const allowed=legal(state), p=state.pending;
   const pendingAbility=p?.name ? abilityName(p.name) : '';
   const activeName=names[state.active], actingName=names[seat];
   const indomitableWill = p?.thorWill
     ? ` Indomitable Will! will leave ${names[1-state.active]} at 1 Health if the final damage is lethal.` : '';
-  let heading, phase, detail='', content='', highStakes='', preparedToken;
+  let heading, phase, detail='', content='', highStakes='', resurrectPending='', preparedToken;
   const stageEffects = [[],[]];
   const addEffect = (action, label, attrs = '', owner = seat) =>
     stageEffects[owner].push(button(action,label,attrs,owner));
@@ -2506,7 +2568,6 @@ function arena(seat, responding, decisionSeat) {
     case 'undeadRoll': {
       const pending=state.undeadRoll;
       phase='Undead';heading='Roll for activated Undead';
-      detail='Remove one Undead of your choice for each Bones result.';
       const rerolls = pending.rerolls
         ? [{type:'rerollUndead',limit:1,label:`Reroll selected die · ${pending.rerolls} left`}] : [];
       content=rerollTray({dice:pending.dice,seat},rerolls)+button('resolveUndead','Resolve Undead roll','class="primary"');
@@ -2714,6 +2775,11 @@ function arena(seat, responding, decisionSeat) {
           button('resolveUpkeep',preparedToken.count===1?'Roll die':'Roll dice','class="primary"');
         break;
       }
+      if (allowed.resolveUpkeep && !(hero.holyPresence && !state.holyPresenceChecked)) {
+        const damage = (state.upkeepEvaded ? 0 : upkeepIncoming(state)) + (hero.cursed ? 4 : 0);
+        const health = hero.hp + (state.upkeepBagHeal??0) + (state.upkeepDonutHeal??0) + (state.upkeepOceanHeal??0);
+        resurrectPending=resurrectWarning(state.active,damage,health)+resurrectWarning(1-state.active,state.upkeepFlareDamage??0);
+      }
       content=(allowed.checkWound?button('checkWound','Resolve a Wound token'):'')+
         (allowed.checkRegenerate?button('checkRegenerate','Resolve Regenerate'):'')+(allowed.collectSynth?button('collectSynth','Use Scrap Collector'):'')+(allowed.clearNanites?button('clearNanites','Check Nanites'):'')+
         (allowed.resolveUpkeep?button('resolveUpkeep','Resolve upkeep','class="primary"'):'');
@@ -2742,9 +2808,8 @@ function arena(seat, responding, decisionSeat) {
       const titles={coins:'Gain Cursed Doubloons',remove:'Shiver Me Timbers',plank:'Walk the Plank',discard:'Choose a card to discard',inspect:'Crow’s Nest!',yoHo:'Yo Ho!',ransom:'Ransom!',passKeg:'Powder Keg'};
       phase='Choice'; heading=titles[kind]; detail=`${actingName} chooses.`;
       if(kind==='inspect'){
-        const cards=state.players[1-chooser].hand;
-        detail=cards.length?'':'Opponent’s hand is empty.';
-        content=cards.map(id=>previewCard(state,1-chooser,id,seatCard(state,1-chooser,id).name)).join('');
+        detail='';
+        content=revealedCardRows(1-chooser,state.players[1-chooser].hand);
       }
       content+=cursedPirate.choices(state).map((label,i)=>{
         if(kind==='remove')label=tokenChoiceLabel(state,{key:'doubloon',label},chooser);
@@ -2821,6 +2886,7 @@ function arena(seat, responding, decisionSeat) {
       phase=state.sideDamage.strangeSpell?'Spell damage':state.sideDamage.cosmicFlare?'Upkeep damage':state.sideDamage.endTurn?'End of turn':state.sideDamage.source==='Barbed Vine'?'End of Roll Phase':state.sideDamage.source==='Powder Keg'?'Powder Keg damage':'Main Phase damage';
       heading=state.sideDamage.source;
       detail=`${actingName} has ${sideIncoming(state.sideDamage)} incoming damage.${state.sideDamage.cosmicFlare?' This applies with the other damage at the end of Upkeep.':''}`;
+      resurrectPending=resurrectWarning(state.sideDamage.seat,sideIncoming(state.sideDamage));
       content=button('resolveSideDamage',state.sideDamage.cosmicFlare?'Confirm Cosmic Flare damage':'Resolve damage','class="primary"'); break;
     case 'paladinReward':
       phase='After damage'; heading='Offensive Stance';
@@ -2891,11 +2957,13 @@ function arena(seat, responding, decisionSeat) {
       phase=p.ultimate ? 'Ultimate damage' : 'Stunned defender';
       heading=`${activeName} resolves ${pendingAbility}`;
       detail=`${p.damage?`${p.damage} incoming damage. `:''}${names[1-state.active]} cannot respond.${vineDamage(state)?` Barbed Vine deals up to ${vineDamage(state)} to ${activeName}.`:''}`;
+      resurrectPending=attackResurrectWarnings();
       content=(allowed.reopenPrey?button('reopenPrey','Use Prey'):'')+button('settle',footworkPending?'Apply Footwork bonus':p.damage?'Resolve damage':'Resolve ability','class="primary"'); break;
     case 'defenceResponse':
     case 'defence':
       phase='Defensive Roll'; heading=`${actingName} defends`;
       detail=`${pendingAbility} brings ${p.damage} incoming damage.${indomitableWill}`;
+      resurrectPending=attackResurrectWarnings();
       if(state.stage==='defenceResponse'){
         const rerolls=[];
         if (allowed.abilityReroll) rerolls.push({type:'abilityReroll',limit:p.seraphDefenceReroll||p.ninjaDefenceRerolls});
@@ -2937,6 +3005,7 @@ function arena(seat, responding, decisionSeat) {
       phase='Damage response'; heading=`${actingName} responds`;
       detail=`${pendingAbility ? `${pendingAbility} · ` : ''}${incomingDamage(state)} incoming damage${shadowAvoids(state)&&p.damage?' after Shadows':p.pure?' (pure)':p.undefendable?' (undefendable)':''}${returnDamageFor(state) ? ` · ${returnDamageFor(state)} return damage` : ''}.${p.recoil && incomingDamage(state) ? ` Barbarian takes ${p.recoil} recoil damage if this attack hits.` : ''}`;
       detail+=indomitableWill;
+      resurrectPending=attackResurrectWarnings();
       content=(state.defenceDice.length ? tray(state.defenceDice,seat,false):'')
         +`<div class="controls">${allowed.reopenPrey?button('reopenPrey','Use Prey'):''}${button('settle',footworkPending?'Apply Footwork bonus':nyraIncoming(state)?'Assign damage':'Resolve damage','class="primary"')}</div>`; break;
     case 'evasion':
@@ -3100,6 +3169,8 @@ function arena(seat, responding, decisionSeat) {
     </div>`:''}
     <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${detail&&!testRoll?.token?`<p>${detail}</p>`:''}
+    ${testRoll?.token?'':resurrectPending}
+    ${state.resurrectNotices?.map(message=>`<p role="status">${message}</p>`).join('')??''}
     ${state.log[0]?.startsWith('Crow’s Nest! · ') ? `<p role="status">${state.log[0]}</p>` : ''}
     ${state.thorWillNotice ? `<p role="status">${state.thorWillNotice.message}</p>` : ''}
     ${preparedToken&&state.stage==='announce'&&state.dice.length ? tray(state.dice,state.active,false) : ''}

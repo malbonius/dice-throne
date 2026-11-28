@@ -1,6 +1,6 @@
 # Dice Throne offline engine — current handover
 
-Current version is Playtest 0.53.41.
+Current version is Playtest 0.53.42.
 
 ## Test mode
 
@@ -23,6 +23,14 @@ Playtest 0.53.3 fixes Wild Shadow! resolving as Concuss! through a legacy branch
 Regression checks cover Mighty Blow against Shadow Defense, a single change with and without enough Daggers for Poison, two changes while in Shadows and Barbarian's Concuss!.
 
 ## Match interface
+
+### Playtest 0.53.42
+
+Necromancer’s offensive ability list includes the Unearth-covered slot and any covered upgrade sub-abilities as disabled entries marked Unearthed. Action indices still address the filtered list. The Undead use the shared companion token disclosures and mobile viewer, and their summon, ability and removal buttons use the appropriate piece artwork. The Undead roll shows the printed activation rules and moves straight to the resolution choices after rolling.
+
+Damage panels show a Resurrect warning when the displayed damage is lethal and Resurrect would apply. The damage rules record the actual return with 5 Health. The match panel displays that event until the next successful action and retains it across a reload. It remains in the action log.
+
+Nevermore’s Upkeep roll shows its six printed outcomes and links to the Raveness’s leaflet. Crow’s Nest! also uses the shared card examination rows.
 
 ### Playtest 0.53.41
 
@@ -338,7 +346,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.41.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.42.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
