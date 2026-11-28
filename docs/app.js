@@ -356,7 +356,7 @@ function heroStatuses(seat) {
       const imageKey=name.split(' ')[0].toLowerCase()+(slot==='helm'?'Helm':'Shield');
       const note = slot==='helm' ? `When defending against a normal attack, deal ${tier} damage back.`
         : `Prevent ${Math.min(2,tier)} incoming damage from ${tier===3?'a normal, undefendable or pure attack':'a normal attack'}.`;
-      return {label:name, note, icon:`<img src="${art[imageKey]}" alt="">`};
+      return {label:name, suffix:`armour-${slot}`, note, icon:tokenImage(state,seat,imageKey)};
     }),
     p.combo&&status('combo','Combo'),
     p.invisibility&&status('invisibility','Invisibility'),
@@ -575,7 +575,9 @@ function heroInformation(seat, statuses, compact = false) {
           : `<span class="token">${icon}${label}</span>`).join('') || 'No tokens'}</div>
         <div class="inventory">
           ${button('open-deck',`<img src="${art.back}" alt="">Draw ${drawCount}`,`class="draw-count" data-index="${seat}" aria-label="Draw ${drawCount}. View ${names[seat]}’s ${compact?'draw pile':'deck list'}" aria-haspopup="dialog"${compact?' data-location="draw"':''}`)}
-          ${compact?button('open-deck',`Discard ${discardCount}`,`data-index="${seat}" data-location="discard" aria-label="Discard ${discardCount}. View ${names[seat]}’s discard pile" aria-haspopup="dialog"`):`<span>Discard ${discardCount}</span><span>${p.hand.length ?? p.hand} in hand</span>`}
+          <a href="#deck-dialog" class="discard-link" data-action="open-deck" data-index="${seat}" data-location="discard"
+            aria-label="Discard ${discardCount}. View ${names[seat]}’s discard pile" aria-haspopup="dialog">Discard ${discardCount}</a>
+          ${compact?'':`<span>${p.hand.length ?? p.hand} in hand</span>`}
         </div>
         ${p.undead?`<div class="hero-reference-row">${button('inspect-undead','Undead reference',`class="hero-component-link" data-index="${seat}" aria-haspopup="dialog"`)}</div>`:''}
         ${heroComponents(seat)}
@@ -658,7 +660,18 @@ function recipientPanel(seat,id,choices,fields,task) {
     `class="primary" data-choice="${choice}" ${choice<0?'disabled':''}`)}</div>`;
 }
 
+function footworkChoices(seat,choices,action) {
+  const position = state.players[seat].footwork;
+  const ordered = choices.map((choice,index)=>({...choice,index})).sort((a,b)=>b.steps-a.steps);
+  return `<div class="card-choice-list footwork-choices">${ordered.map(({steps,label,index})=>
+    button(action,`<span>${label}</span><small>${duelist.positions[position+steps+2]}</small>`, `data-choice="${index}"`)
+  ).join('')}</div>`;
+}
+
 function cardChoiceButtons(seat,choices,action) {
+  if (heroId(state,seat)===duelist.id && choices.length && choices.every(({steps})=>Number.isInteger(steps))) {
+    return footworkChoices(seat,choices,action);
+  }
   return `<div class="card-choice-list">${choices.map((choice,index)=>{
     const select = button(action,tokenChoiceLabel(state,choice,seat),`data-choice="${index}"`);
     return Number.isInteger(choice.card) ? previewableOption(state,seat,choice.card,select) : select;
@@ -2663,7 +2676,7 @@ function arena(seat, responding, decisionSeat) {
       phase='Footwork';heading=`${actingName} can take up to ${max} ${max===1?'Step':'Steps'}`;
       const player=state.players[seat];
       detail=`Current position · ${duelist.positions[player.footwork+2]}`;
-      content=duelist.steps(player,max).map(({label},i)=>button('duelMove',label,`data-choice="${i}"`)).join('');
+      content=footworkChoices(seat,duelist.steps(player,max),'duelMove');
       break;
     }
     case 'duelAbility':
@@ -2747,7 +2760,7 @@ function arena(seat, responding, decisionSeat) {
       }
       if(allowed.reposition){
         heading='Reposition';detail=`Current position · ${duelist.positions[hero.footwork+2]}. Moving backward grants one Guard Break.`;
-        content=duelist.steps(hero,2,1).map(({label},i)=>button('reposition',label,`data-choice="${i}"`)).join('');
+        content=footworkChoices(state.active,duelist.steps(hero,2,1),'reposition');
         break;
       }
       if(allowed.alchemistUpkeep){heading=state.players[state.active].upgrades['The Lab']?'The Lab II':'The Lab';detail='Resolve the mandatory Upkeep attachment before continuing.';content=button('alchemistUpkeep',state.players[state.active].upgrades['The Lab']?'Roll for The Lab II':'Attach 1 Potion','class="primary"');break;}
@@ -3595,8 +3608,9 @@ function openHeroSheet(seat) {
 }
 
 function handleAction(event) {
-  const target=event.target.closest('button[data-action]');
+  const target=event.target.closest('button[data-action], a.discard-link');
   if (!target) return;
+  if (target.tagName==='A') event.preventDefault();
   let type=target.dataset.action;
   const index=Number(target.dataset.index);
   if (testToggle.checked && (type.startsWith('test-die-') || type.startsWith('test-dice-'))) {

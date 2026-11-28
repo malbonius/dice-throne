@@ -390,6 +390,7 @@ body:has(#hero-sheet[open]) {
 }
 
 #hero-sheet .inventory button,
+#hero-sheet .discard-link,
 #hero-sheet summary,
 #hero-sheet .token-help button { min-height: 44px; }
 
@@ -431,6 +432,18 @@ body:has(#hero-sheet[open]) {
   gap: 6px;
   padding: 0;
   border: 0;
+}
+
+.discard-link {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  text-underline-offset: .2em;
+}
+
+.discard-link:hover,
+.discard-link:focus-visible {
+  color: var(--gold);
 }
 
 button.draw-count,
@@ -1365,6 +1378,19 @@ button.card-preview:hover:not(:disabled) {
 .card-choice-list {
   display: grid;
   gap: 6px;
+}
+
+.footwork-choices > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  text-align: start;
+}
+
+.footwork-choices > button small {
+  color: var(--gold);
+  text-align: end;
 }
 
 .card-choice-list + .controls,
