@@ -1,6 +1,6 @@
 # Dice Throne offline engine — current handover
 
-Current version is Playtest 0.53.43.
+Current version is Playtest 0.53.44.
 
 ## Test mode
 
@@ -23,6 +23,12 @@ Playtest 0.53.3 fixes Wild Shadow! resolving as Concuss! through a legacy branch
 Regression checks cover Mighty Blow against Shadow Defense, a single change with and without enough Daggers for Poison, two changes while in Shadows and Barbarian's Concuss!.
 
 ## Match interface
+
+### Playtest 0.53.44
+
+The Sun Dial is in the standard token list and uses a numeric badge even at zero. Its artwork follows Dawn or Dusk. Alchemist’s Potion icons are read from the saved attachments, including on Passivation. Hero details labels each attachment with the current ability name.
+
+White Elephant Gift! offers a uniform random guess on the opponent’s screen. Do You Feel Lucky?! starts with a blank die and lets the opponent choose and confirm a face in the same panel. The Donut icon is clipped to the token outline. Donut roll confirmation displays the healing amount and Upkeep shows the accumulated healing until it resolves. The January 2027 timing change remains deferred.
 
 ### Playtest 0.53.43
 
@@ -354,7 +360,7 @@ A service-worker simulation installed all 99 listed files, replaced the 0.51.1 c
 - `docs/art-shared.js`: standard shared cards and shared assets.
 - `docs/art-shared-marvel.js`: the supplied Marvel/X-Men shared cards. `cardArtwork()` selects these for heroes in the Marvel or X-Men sets.
 - `docs/art-hero-1.js` through `art-hero-45.js`: embedded per-hero artwork. Arrays must remain aligned with hero IDs. Black Widow uses art bundle 26; Captain Marvel uses bundle 27; Doctor Strange uses bundle 28; Loki uses bundle 29; Scarlet Witch uses bundle 30; Spider-Man uses bundle 31; Thor uses bundle 32; Cyclops uses bundle 33; Gambit uses bundle 34; Iceman uses bundle 35; Jean Grey uses bundle 36; Psylocke uses bundle 37; Rogue uses bundle 38; Storm uses bundle 39; Wolverine uses bundle 40; Alchemist uses bundle 41; Krampus uses bundle 42; Mystic Brawler uses bundle 43; Santa uses bundle 44; Deadpool uses bundle 45.
-- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.43.
+- `docs/service-worker.js`: complete offline cache manifest, versioned 0.53.44.
 - `tests/architecture.test.cjs`: Node-based regression checks. An optional baseline path enables differential checks.
 
 ## Compatibility
@@ -802,7 +808,7 @@ Appended as hero ID 43 in Singles. Module `docs/heroes/santa.js`; artwork `docs/
 - Comfort and Joy! gains 4 Egg Nog and deals 10 Ultimate damage. If both players survive, normal end-of-Roll-Phase cleanup finishes, then `santaExtraRoll` starts another Offensive Roll Phase against the same opponent without Income or changing the turn. Expiring statuses clear before the new phase. A defeated opponent forfeits the additional phase, and lethal damage to Santa also ends the match. Barbed Vine and other existing end-of-phase handling are retained.
 - Rude-olph! snapshots +1 damage per own Cheer. Gang-deer! rolls 5, adds 1 per Axe and gains Cheer on at least two Bells. Both require an eligible Attack and reject pure/collateral damage. Ho, Ho, Ho! rolls one and gains half its final value as Cheer, rounded up. Nogtastic! gains 5 Egg Nog as an Instant card, independently of Paralyze.
 - Santa's Helper! discards 5 Egg Nog to heal 2, draw 1, gain Cheer and deal a separate 2 undefendable damage. Extremely Naughty! can be committed after activating Naughty or Nice: if the final result is naughty, the Attack becomes undefendable and the opponent explicitly chooses to apologise or receive a separate 2-damage event. It also works after the naughty result is known; it cannot be applied twice to the same activation.
-- White Elephant Gift! uses Cheer and 3 Egg Nog from the supply. Santa privately selects a left/right hand; the opponent's guess screen does not reveal the stored hand. An empty-hand guess awards the gift to Santa through the normal batch/cap handling; a full-hand guess gains nothing. The guess stage cannot be interrupted. The hand is hidden in the interface, while a local JSON save necessarily retains it for resumption.
+- White Elephant Gift! uses Cheer and 3 Egg Nog from the supply. Santa privately selects a left/right hand. The opponent chooses left, right or a random hand without seeing the gift location. An empty-hand guess awards the gift to Santa through the normal batch/cap handling. A full-hand guess gains nothing. The guess stage cannot be interrupted. The local save retains the hidden hand for resumption.
 - Rebel Without a Claus! rolls one: Star gains 2 Cheer and 4 Egg Nog; otherwise draw 1, including a Hex-blanked 6. The action cards and optional promo use their supplied costs and artwork.
 
 Validation: 93 Santa rules groups and all 1,194 previous groups passed (1,287 total), together with 435 simulated interface states, 44 artwork bundles, 94 JavaScript syntax checks, offline script references and saved-state JSON round-trips. Exact comparisons against 0.49.0 passed 5,959 checks across all 43 previous heroes (2,777 transitions). All fifteen card crops and six dice faces were inspected; 27 new WebP payloads validate and both supplied token images preserve their source bytes. Browser layout, touch controls and installed-PWA update/offline launch remain manual checks. Existing Upkeep fixes, legacy timing, Income and primary-deck reshuffling remain enabled. January 2027 global rules remain disabled. Deadpool alone remains before the agreed architecture pass, pending the user's replacement scans of his unique cards; no ID is reserved or module registered for him.
@@ -828,7 +834,7 @@ The deck has 32 standard cards or 33 with the optional promo. Shoot and the thre
 - Fourth Wall! chooses a Positive effect from the other player's leaflet, or Donut, then restores an inactive Shoot and deals 14 Ultimate damage. Unique effects are excluded. Foreign gain helpers are reused; `deadpoolFourthResume` preserves the remaining sequence and Ultimate lock when another hero's gain requires choices or overflow handling. Every registered Positive from all other hero leaflets has been checked, including an overflowing Rage gain. Shoot restoration occurs after the gain has completed.
 - Whatsamata Pea Ya?! gains Onomatopoeia. Ro-Sham-Bo! gains RPS. Finger Gun Reload! reactivates Shoot. Chimichanga! is available only as the player's last hand card and gains one of the three effects on Deadpool's own leaflet; Donut still permits choosing any recipient. Buffet! gains 2 Donut.
 - He Who Smelt It… rolls 4 and adds 1 per Pew. …Dealt It! adds 2, or 3 with the other card during the same Attack. Pairing the cards grants 1 CP, using the Coal-aware helper, in either order. Dealt may also be played while Smelt's dice are pending without replacing that roll. Printed ability damage remains separate from these Attack Modifiers, which reject pure/collateral damage.
-- Do You Feel Lucky?! lets the opponent commit a hoped-for number (default 6, any 1–6 permitted), then roll one owned modifiable die. A final match heals that opponent 3; otherwise a separate preventable 3-damage event is created. Its die can be modified during Main Phase, with actual ownership and Hex applied. The Sound of an Eclaire! rolls one: Mask gains 2 Donut and 2 Onomatopoeia; otherwise draw 1.
+- Do You Feel Lucky?! lets the opponent commit a hoped-for number from 1 to 6 through their illustrated die, then roll one owned modifiable die. A final match heals that opponent 3; otherwise a separate preventable 3-damage event is created. Its die can be modified during Main Phase, with actual ownership and Hex applied. The Sound of an Eclaire! rolls one: Mask gains 2 Donut and 2 Onomatopoeia; otherwise draw 1.
 
 Validation: 90 Deadpool rules groups and all 1,287 previous groups passed (1,377 total), together with 471 simulated interface states, 45 artwork bundles, 96 JavaScript syntax checks, offline script references and saved-state JSON round-trips. Exact comparisons against 0.50.0 passed 6,237 checks across all 44 previous heroes (2,921 transitions). All fifteen unique-card crops, six dice faces, three RPS references and the Shoot sides were inspected; 33 new WebP payloads validate and all three supplied token images preserve their source bytes. Checks cover Donut entry for every hero, legacy healing, caps and gifting, card synergy, all board abilities/upgrades/cards, Paralyze, Hex, ownership, frozen dice, RPS ties/limits/Ultimates/mirror Shoot, concealed choices, every Fourth Wall Positive choice, foreign overflow, removal responses, Shoot zoom controls and JSON resumption. Browser layout, touch controls and installed-PWA update/offline launch remain manual playtesting checks.
 

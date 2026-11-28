@@ -1,6 +1,6 @@
 # Dice Throne Offline Engine
 
-**Playtest 0.53.43**
+**Playtest 0.53.44**
 
 An offline Dice Throne engine for playing and testing two-hero matches. Play both sides in a browser or install the game as a web app on supported Windows and Android browsers. The roster includes 45 heroes from Season One Rerolled, Season Two, Outcasts, Vanguard, Marvel, X-Men and Singles.
 
@@ -13,6 +13,13 @@ python -m http.server 8000 --directory docs
 ```
 
 Open [http://localhost:8000/](http://localhost:8000/), choose both heroes in **Match setup** and select **Set up initiative**. Wait for **Ready for offline play** before disconnecting. If your browser offers **Install app**, you can install from an HTTPS deployment or localhost. The game saves your current match automatically. Open the same address with the same browser profile to resume it after an update.
+
+## What changed in 0.53.44
+
+- Sun Elf’s Sun Dial opens in the token viewer. The mobile token strip shows its value, including zero.
+- Alchemist’s ability panels show the attached Potion icons. Hero details names the ability each Potion is attached to.
+- White Elephant Gift! can randomly pick the opponent’s hand guess.
+- Deadpool’s Donut icon has a transparent surround. The roll shows how much healing will apply at the end of Upkeep. Do You Feel Lucky?! uses an illustrated die to choose and confirm the hoped-for number.
 
 ## What changed in 0.53.43
 
