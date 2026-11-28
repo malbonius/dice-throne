@@ -27,6 +27,7 @@ let state;
 let rollRequest;
 let lastTokenResult;
 let selectedDefence;
+let luckyHopeDraft;
 try {
   const saved = JSON.parse(localStorage.getItem(storageKey));
   if (saved?.version === 2 && saved.cards && saved.players?.length === 2 && Array.isArray(saved.log)) {
@@ -249,7 +250,7 @@ function tokenImage(view,seat,key,bombId) {
     if (bombId===undefined && timers.some(bomb=>bomb.ticks!==timer?.ticks)) return '';
     if (timer?.ticks===1) image=art.timeBomb1;
   }
-  return image?`<img class="token-icon" src="${image}" alt="">`:'';
+  return image?`<img class="token-icon${key==='donut'?' donut-icon':''}" src="${image}" alt="">`:'';
 }
 
 const tokenButtonNames = Object.entries({
@@ -345,6 +346,7 @@ function heroStatuses(seat) {
     ({key, label, suffix, bombId, count, note:statusNotes[key], icon:tokenImage(state,seat,key,bombId)});
   return [p.nyra && {label:'Nyra',suffix:'nyra',companion:true,icon:nyraIcon(p.nyra.downed),
     note:`${p.nyra.downed?'Downed':'Active'} · ${p.nyra.hp}/7 Health`},
+    p.sunDial!==undefined&&status('sunDial',`Sun Dial · ${p.sunDawn?'Dawn':'Dusk'} · ${p.sunDial}/5`),
     p.evasive && status('evasive',`Evasive ×${p.evasive}`),p.entangle && status('entangle','Entangle'),p.blind && status('blind','Blind'),p.targeted && status('targeted','Targeted'),
     p.pirateCoins?.[seat]&&status('doubloon',`Own Doubloons ×${p.pirateCoins[seat]}`,undefined,undefined,p.pirateCoins[seat]),
     p.pirateCoins?.[1-seat]&&status('doubloon',`Opponent’s Doubloons ×${p.pirateCoins[1-seat]}`,'opponent',undefined,p.pirateCoins[1-seat]),
@@ -402,7 +404,9 @@ function heroStatuses(seat) {
     p.grim&&status('grim',`Grim Pursuit ×${p.grim}`),
     ...state.players.map((owner,i)=>owner.hauntedHeadSeat===seat&&status('hauntedHead',i===seat?'Own Haunted Head':'Opponent’s Haunted Head',`hauntedHead-${i}`)),
     p.nyraBond&&status('nyraBond','Nyra’s Bond'),
-    ...alchemist.types.map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${alchemist.limits[key]}`)),
+    ...alchemist.tokens(state,seat).map(potion=>({suffix:`potion-${potion.id}`,
+      label:`${statusLabel(potion.key)} · ${potionSlotName(seat,potion.slot)}`,
+      icon:tokenImage(state,seat,potion.key), note:statusNotes[potion.key]})),
     p.coal&&status('coal',`Coal ${p.coal}/4`),
     p.gift&&status('gift',`Gift ${p.gift}/3`),
     ...['donut','onomatopoeia','rps'].map(key=>p[key]&&status(key,`${statusLabel(key)} ${p[key]}/${statusCap(p,key)}`)),
@@ -463,9 +467,9 @@ function tokenSymbol(label, icon) {
 function mobileTokens(seat, statuses) {
   if (!statuses.length) return '';
   return `<div class="hero-token-strip" aria-label="${names[seat]}’s attached tokens">
-    ${statuses.map(({icon, label, count, note},index)=>{
+    ${statuses.map(({key, icon, label, count, note},index)=>{
       const symbol = tokenSymbol(label,icon);
-      const badge = count>0 ? `<small class="token-count" aria-hidden="true">${count}</small>` : '';
+      const badge = count>0 || key==='sunDial' ? `<small class="token-count" aria-hidden="true">${count}</small>` : '';
       const title = note ? `title="${note.replaceAll('&','&amp;').replaceAll('"','&quot;')}"` : '';
       return button('inspect-token',symbol+badge,
         `class="hero-token-button" data-seat="${seat}" data-index="${index}" aria-label="${label}${label==='Nyra'?', '+note:''}" ${title} aria-haspopup="dialog" aria-controls="token-info"`);
@@ -508,7 +512,6 @@ function heroStateRows(seat, scope) {
     state.stage==='locked' && state.pending.stun && seat!==state.active && note('stun','Stun'),
     ...state.players.map((owner,i)=>owner.nevermoreSeat===seat &&
       note('nevermore',`Nevermore${heroId(state,1-i)===raveness.id?` (P${i+1})`:''} · ${owner.nevermoreVitality}/3`,`nevermore-${i}`)),
-    player.sunDial!==undefined && note('sunDial',`${player.sunDawn?'Dawn':'Dusk'} · ${player.sunDial}/5`),
     player.footwork!==undefined && note('footwork',`Footwork · ${duelist.positions[player.footwork+2]}`),
     player.corpses!==undefined && `<span class="token"><img src="${art.corpseDial}" alt="">Corpses ${player.corpses}/10</span>`,
     player.covered && `Unearth covers ${player.covered}`,
@@ -867,6 +870,17 @@ function facePicker(index, faces, renderFace, action, selected, extra = '') {
       const {label, picture} = renderFace(value);
       return button(action, picture, `class="die" data-index="${value}" aria-label="${label}" aria-pressed="${selected===value}"`);
     }).join('')}${extra}</div></div>`;
+}
+
+function luckyHopePicker(roll) {
+  const {face,open} = luckyHopeDraft ?? {};
+  const dice = [face];
+  const artFace = value=>dieFace(dice,roll.target,0,state,value,true);
+  const slot = button('deadpool-hope-slot',face ? artFace(face).picture : '—',
+    `class="die${face?'':' empty'}" aria-label="${face?`Hoped-for number ${face}`:'Choose the hoped-for number'}" aria-expanded="${!!open}"`);
+  return `<div class="dice">${slot}</div>`+
+    facePicker(open ? 0 : undefined,dieFaces,artFace,'deadpool-hope-face',face)+
+    button('deadpoolLuckyHope','Confirm number',`class="primary" data-amount="${face??''}" ${face?'':'disabled'}`);
 }
 
 function diceEditorPanel(editor) {
@@ -1253,7 +1267,8 @@ function defenceReference() {
     const count = hero.defenceDiceCount(player,kind);
     const dice = hero.id===gunslinger.id ? '1 die each' : count===1 ? '1 die' : `${count} dice`;
     const name = defenceName(state,seat,kind);
-    return `<div><div>${abilityName(name,'strong')}<small>${dice}</small></div>
+    const potions = hero.id===alchemist.id ? potionAbilityIcons(seat,'defence') : '';
+    return `<div><div>${abilityName(name,'strong')}<small>${dice}</small>${potions}</div>
       ${printedDefence(seat,kind,name)}</div>`;
   }).join('')}</div>`;
 }
@@ -1392,10 +1407,18 @@ function effectAbilityReference(heading) {
     ${printedAbility(seat,name,bounds,upgrade)}</div></div>`;
 }
 
-function potionSlotName(seat, slot, abilities) {
+function potionSlotName(seat, slot, abilities=abilitiesFor(state,seat)) {
   if (slot==='defence') return defenceName(state,seat);
   const ability=abilities.find(ability=>(ability.upgradeSlot??ability.name)===slot);
-  return ability?.label??slot;
+  return ability?.label??ability?.name??slot;
+}
+
+function potionAbilityIcons(seat,slot) {
+  const attached = alchemist.tokens(state,seat).filter(potion=>potion.slot===slot).sort((a,b)=>a.index-b.index);
+  return attached.length ? `<span class="ability-potions">${attached.map(({key})=>{
+    const label = statusLabel(key);
+    return `<span role="img" aria-label="${label}" title="${label}">${tokenImage(state,seat,key)}</span>`;
+  }).join('')}</span>` : '';
 }
 
 function attachedPotions(seat) {
@@ -1452,6 +1475,7 @@ function potionAttachmentChoices(seat, choices) {
 
 function offenceAbilities(seat, available = []) {
   const {covered,lightningCharges:charges} = state.players[seat];
+  const showPotions = heroId(state,seat)===alchemist.id;
   const selectable = abilitiesFor(state,seat);
   const abilities = covered ? abilitiesFor(state,seat,{includeCovered:true}) : selectable;
   const indices = covered ? new Map(selectable.map((ability,i)=>[ability.name,i])) : null;
@@ -1468,9 +1492,11 @@ function offenceAbilities(seat, available = []) {
     const ready = !unearthed && available.includes(a.name);
     const name = abilityName(a.label??a.name,'strong');
     const chargeSlot = a.upgradeSlot??a.name;
+    const potions = showPotions ? potionAbilityIcons(seat,chargeSlot) : '';
     const title = unearthed ? `<span class="unearthed-heading">${name}<small>Unearthed</small></span>`
       : charges && storm.slots.includes(chargeSlot)
-      ? `<span class="storm-charge-heading">${name}${lightningIndicator(charges[chargeSlot])}</span>` : name;
+      ? `<span class="storm-charge-heading">${name}${lightningIndicator(charges[chargeSlot])}</span>`
+      : potions ? `<span class="potion-ability-heading">${name}${potions}</span>` : name;
     const action = testToggle.checked ? 'test-ability' : 'declare';
     const attrs = unearthed ? 'disabled' : `data-ability="${i}" ${testToggle.checked
       ? `data-index="${i}" data-test-ready="${ready}"` : ready ? '' : 'disabled'}`;
@@ -2090,13 +2116,16 @@ function arena(seat, responding, decisionSeat) {
     if(h.kind==='fourth'){heading='Fourth Wall! · choose a Positive status';content=`<div class="controls">${deadpool.fourthChoices(state,t.seat).map((choice,i)=>
       button('deadpoolFourth',tokenChoiceLabel(state,choice,choice.key==='donut'?t.seat:1-t.seat),`data-choice="${i}"`)).join('')}</div>`;}
   } else if(state.deadpoolDonutRoll&&!state.response&&!state.retry){
-    phase='Donut';heading='Roll for Donut healing';detail='Heal half the final die value, rounded up. Healing is accumulated with the existing end-of-Upkeep effects.';content=rollDisplay(rollContext(state))+button('resolveDonut','Resolve Donut healing','class="primary"');
+    const {dice,seat:owner} = state.deadpoolDonutRoll;
+    const healing = Math.ceil(dieValue(dice[0],state.players[owner])/2);
+    phase='Donut';heading='Roll for Donut healing';detail='Heal half the final die value, rounded up, at the end of Upkeep.';
+    content=rollDisplay(rollContext(state))+button('resolveDonut',healing?`Confirm ${healing} healing`:'Confirm roll · no healing','class="primary"');
   } else if(state.deadpoolLucky&&!state.response&&!state.retry){
     const r=state.deadpoolLucky;phase='Do You Feel Lucky?!';heading=`${names[r.target]} · hope for a number`;
-    if(r.step==='hope'){content=`<label>Hope for <select id="deadpool-lucky-hope">${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${n===6?'selected':''}>${n}</option>`).join('')}</select></label>`+button('deadpoolLuckyHope','Commit the hoped-for number','class="primary"');}
+    if(r.step==='hope'){detail='Select the die to choose a number, then confirm.';content=luckyHopePicker(r);}
     else {
       detail=`Hope: ${r.hope}. Match it to heal 3; otherwise receive 3 isolated damage. The die belongs to ${names[r.target]} and can be altered before resolution.`;
-      content=r.step==='ready'?testBlankRoll('deadpoolLuckyRoll',1,1-seat)+button('deadpoolLuckyRoll','Roll the opponent’s die','class="primary"'):
+      content=r.step==='ready'?testBlankRoll('deadpoolLuckyRoll',1,r.target)+button('deadpoolLuckyRoll','Roll the opponent’s die','class="primary"'):
         rollDisplay(rollContext(state))+button('deadpoolLuckyResolve','Resolve the hoped-for roll','class="primary"');
     }
   } else if(state.santaRemoval&&!state.santaNogRoll&&!state.sideDamage&&!state.retry){
@@ -2107,7 +2136,11 @@ function arena(seat, responding, decisionSeat) {
       button('resolveSantaRemoval',tokenChoiceLabel(state,choice,removal.seat),`data-choice="${i}"`)).join('')}</div>`
       :button('santaRemovalReady','Finish token response','class="primary"');
   } else if(state.santaGift){
-    const g=state.santaGift;phase='White Elephant Gift';heading=g.stage==='hide'?'Santa · conceal the gift':'Opponent · choose a hand';detail=g.stage==='hide'?'Privately choose which hand holds Cheer and 3 Egg Nog from the supply, then let the opponent guess.':'Choose a hand. If it is empty, Santa gains the gift; otherwise no tokens are gained.';content=['left','right'].map(hand=>button(g.stage==='hide'?'santaGiftHide':'santaGiftGuess',`${hand==='left'?'Left':'Right'} hand`,`data-status="${hand}"`)).join('');
+    const hiding = state.santaGift.stage==='hide';
+    phase='White Elephant Gift';heading=hiding?'Santa · conceal the gift':'Opponent · choose a hand';
+    detail=hiding?'Privately choose which hand holds Cheer and 3 Egg Nog from the supply, then let the opponent guess.':'Choose a hand. If it is empty, Santa gains the gift; otherwise no tokens are gained.';
+    content=['left','right'].map(hand=>button(hiding?'santaGiftHide':'santaGiftGuess',`${hand==='left'?'Left':'Right'} hand`,`data-status="${hand}"`)).join('')+
+      (hiding?'':button('santaGiftGuess','Random hand','data-status="random"'));
   } else if(state.santaTask&&state.stage==='santaChoices'){
     const t=state.santaTask,h=t.queue[0];phase='Santa';heading=names[responding];
     if(h.kind==='gain'){heading=`Gain ${h.amount} ${statusLabel(h.key)}`;detail='Spend existing tokens first if desired, then collect this whole batch. Excess tokens are lost at the stack limit.';content=button('collectSantaTokens','Collect the whole batch','class="primary"');}
@@ -3182,6 +3215,8 @@ function arena(seat, responding, decisionSeat) {
     </div>`:''}
     <h2 tabindex="-1" id="action-title">${heading}</h2>
     ${detail&&!testRoll?.token?`<p>${detail}</p>`:''}
+    ${state.stage==='upkeep'&&state.upkeepDonutHeal!==undefined ? `<p role="status">${state.upkeepDonutHeal
+      ? `Donut · ${state.upkeepDonutHeal} healing queued for the end of Upkeep.` : 'Donut · no healing from the roll.'}</p>` : ''}
     ${testRoll?.token?'':resurrectPending}
     ${state.resurrectNotices?.map(message=>`<p role="status">${message}</p>`).join('')??''}
     ${state.log[0]?.startsWith('Crow’s Nest! · ') ? `<p role="status">${state.log[0]}</p>` : ''}
@@ -3394,6 +3429,7 @@ function matchTools(responding) {
   </nav>`;
 }
 function render() {
+  if (state?.deadpoolLucky?.step!=='hope') luckyHopeDraft = undefined;
   if (lastTokenResult?.next !== state) lastTokenResult = undefined;
   if (cardRecipientPicks?.task !== (cardChoiceDraft ?? state?.mainChoice)) cardRecipientPicks = undefined;
   if (state?.stage !== 'offence' || rollRequest?.setup) {
@@ -3618,6 +3654,15 @@ function handleAction(event) {
     return;
   }
   if (testRoll) return;
+  if (type==='deadpool-hope-slot'||type==='deadpool-hope-face') {
+    if (state?.deadpoolLucky?.step!=='hope') return;
+    const draft = luckyHopeDraft ??= {};
+    if (type==='deadpool-hope-slot') draft.open = !draft.open;
+    else if (draft.open && dieFaces.includes(index)) Object.assign(draft,{face:index,open:false});
+    render();
+    match.querySelector(`button[data-action="${draft.open?'deadpool-hope-face':'deadpool-hope-slot'}"]`)?.focus();
+    return;
+  }
   if (type === 'pick-card-recipient' && cardRecipientPicks?.task === (cardChoiceDraft ?? state?.mainChoice)) {
     const task = cardChoiceDraft ?? state.mainChoice;
     if (!task) return;
@@ -3856,7 +3901,6 @@ function handleAction(event) {
     Object.assign(action,{type:'playCard',seat:draft.seat,id:draft.id,choice,confirmedChoice:true,testPile:draft.source?.pile});
     cardChoiceDraft = undefined;
   }
-  if(type==='deadpoolLuckyHope')action.amount=Number(document.getElementById('deadpool-lucky-hope').value);
   const rollTitle = action.type === 'playCard' ? seatCard(state, action.seat, action.id).name : target.textContent?.trim();
   const safeTitle = rollTitle?.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   state = applyMatchAction(action, safeTitle || 'Roll dice');

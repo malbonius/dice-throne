@@ -296,6 +296,10 @@ button.hero-sheet-trigger,
   object-fit: contain;
 }
 
+.donut-icon {
+  clip-path: circle(49.5%);
+}
+
 .large-token-icon .token-initial {
   font-size: 1.15rem;
 }
@@ -688,11 +692,27 @@ button.draw-count:hover {
 }
 
 .storm-charge-heading,
+.potion-ability-heading,
 .unearthed-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 6px;
+}
+
+.ability-potions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-inline-start: auto;
+}
+
+.ability-potions img {
+  display: block;
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
 .unearthed-heading small {

@@ -187,7 +187,8 @@ function finishUpkeep(state, roll, random) {
   const add = message => state.log.unshift(message);
   if(state.upkeepBagHeal){attacker.hp+=state.upkeepBagHeal;add(`${names[state.active]} heals ${state.upkeepBagHeal} from Bag of Tricks at the end of Upkeep.`);}
   delete state.upkeepBagHeal;
-  if(state.upkeepDonutHeal){attacker.hp+=state.upkeepDonutHeal;add(`${names[state.active]} heals ${state.upkeepDonutHeal} from Donut at the end of Upkeep.`);delete state.upkeepDonutHeal;}
+  if(state.upkeepDonutHeal){attacker.hp+=state.upkeepDonutHeal;add(`${names[state.active]} heals ${state.upkeepDonutHeal} from Donut at the end of Upkeep.`);}
+  delete state.upkeepDonutHeal;
   if(state.upkeepOceanHeal){attacker.hp+=state.upkeepOceanHeal;add(`${names[state.active]} heals ${state.upkeepOceanHeal} from Strength of the Ocean at the end of Upkeep.`);delete state.upkeepOceanHeal;}
   const nyraUpdate=huntress.upkeep(attacker);
   if(nyraUpdate)add(nyraUpdate);
